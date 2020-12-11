@@ -138,9 +138,9 @@ class DialogControl(Control):
 
     self.fields = []
     if confirm_text is not None:
-      fields.append(DialogFieldButton(confirm_text, ok_action if ok_action is not None else self.nop, color, selected_color))
+      self.fields.append(DialogFieldButton(confirm_text, ok_action if ok_action is not None else self.nop, color, selected_color))
     if cancel_text is not None:
-      fields.append(DialogFieldButton(cancel_text, cancel_action if cancel_action is not None else self.nop, color, selected_color))
+      self.fields.append(DialogFieldButton(cancel_text, cancel_action if cancel_action is not None else self.nop, color, selected_color))
 
   def nop(self):
     Commons.UIInstance.log('WARN: DialogControl NOP action executed.')

@@ -38,7 +38,7 @@ class AWS:
         pass
       Common.Session.info_display['UserId'] = w['UserId']
       Common.Session.info_display['Account'] = w['Account']
-    except exceptions.ClientError as e:
+    except (exceptions.ClientError, KeyError) as e:
       Common.Session.info_display.special_colors['UserId'] = Common.color('error')
       Common.Session.info_display.special_colors['Account'] = Common.color('error')
       Common.Session.info_display['UserId'] = 'ERROR'

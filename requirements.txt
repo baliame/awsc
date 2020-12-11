@@ -5,3 +5,4 @@ pyyaml
 boto3
 jq
 pyperclip
+numpy
