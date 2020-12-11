@@ -1,0 +1,7 @@
+blessed>=1.17.12
+gnupg
+cryptography>=3.1
+pyyaml
+boto3
+jq
+pyperclip
