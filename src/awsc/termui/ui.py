@@ -1,5 +1,7 @@
 import curses
 from blessed import Terminal
+import termios
+import tty
 import signal
 import time
 from .alignment import TopLeftAnchor, Dimension, CenterAnchor
@@ -133,8 +135,26 @@ class UI:
     with self.term.location(0, 0):
       self.buf.output()
 
+  def unraw(self, cmd, *args, **kwargs):
+    termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
+    self.term._line_buffered = True
+    self.term.stream.write(self.term.normal_cursor)
+    self.term.stream.flush()
+    self.term.stream.write(self.term.exit_fullscreen)
+    self.term.stream.flush()
+    try:
+      return cmd(*args, **kwargs)
+    finally:
+      self.term.stream.write(self.term.enter_fullscreen)
+      self.term.stream.flush()
+      self.term.stream.write(self.term.hide_cursor)
+      self.term.stream.flush()
+      tty.setraw(self.term._keyboard_fd, termios.TCSANOW)
+      self.term._line_buffered = False
+
   def main(self):
     global FrameRate
+    self.restore = termios.tcgetattr(self.term._keyboard_fd)
     try:
       with self.term.fullscreen():
         with self.term.hidden_cursor():
@@ -145,13 +165,17 @@ class UI:
               for func in self.tickers:
                 func()
               self.paint()
-              key = self.term.inkey(FrameRate, FrameRate)
-              if key:
+              while key := self.term.inkey(FrameRate, FrameRate):
+#              key = self.term.inkey(FrameRate, FrameRate)
+#              if key:
                 if key == '\x03':
                   raise KeyboardInterrupt
                 self.top_block.input(key)
+                ct = time.time()
+                if ct - st > FrameRate:
+                  break
               t2 = time.time()
-              self.log('Frame time: {0}'.format(t2 - st), level=2)
+              self.log('Frame time: {0}'.format(t2 - st), level=1)
               d = FrameRate - (t2 - st)
               if d > 0:
                 time.sleep(d)

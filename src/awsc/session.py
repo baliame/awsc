@@ -1,5 +1,5 @@
-from .info import InfoDisplay, NeutralDialog
-from .termui.ui import UI
+from .info import InfoDisplay, NeutralDialog, HotkeyDisplay
+from .termui.ui import UI, ControlCodes
 from .termui.dialog import DialogFieldLabel
 from .termui.alignment import TopLeftAnchor, BottomLeftAnchor, Dimension
 import time
@@ -7,6 +7,7 @@ import time
 class Session:
   def __init__(self, config, highlight_color, generic_color):
     self.ui = UI()
+    self.config = config
     self.context_update_hooks = []
     self.info_display = InfoDisplay(
       self.ui.top_block,
@@ -14,9 +15,10 @@ class Session:
       Dimension('50%', 8),
       highlight_color=highlight_color,
       generic_color=generic_color,
-      info=['Context', 'Region', 'UserId', 'Account'],
+      info=['Context', 'Region', 'UserId', 'Account', 'SSH Key', 'Default SSH username'],
       weight=-10
     )
+    self.global_hotkey_tooltips = {':': 'Command palette', '/': 'Filter / search', ControlCodes.C: 'Exit'}
     self.message_display = NeutralDialog(
       self.ui.top_block,
       BottomLeftAnchor(0, 0),
@@ -31,6 +33,7 @@ class Session:
     self._context = None
     self.context = config['default_context']
     self.region = config['default_region']
+    self.ssh_key = config['default_ssh_key']
     self.stack = []
     self.stack_frame = []
     self.resource_main = None
@@ -58,6 +61,9 @@ class Session:
   def push_frame(self, new_frame):
     self.stack.append(self.stack_frame[:])
     self.replace_frame(new_frame, drop_stack=False)
+    if hasattr(new_frame[0], 'add_hotkey'):
+      if 'KEY_ESCAPE' not in new_frame[0].tooltips:
+        new_frame[0].add_hotkey('KEY_ESCAPE', self.pop_frame, 'Back')
 
   def pop_frame(self, *args):
     if len(self.stack) > 0:
@@ -94,3 +100,13 @@ class Session:
   def region(self, value):
     self._region = value
     self.info_display['Region'] = value
+
+  @property
+  def ssh_key(self):
+    return self._ssh_key
+
+  @ssh_key.setter
+  def ssh_key(self, value):
+    self._ssh_key = value
+    self.info_display['SSH Key'] = value
+    self.info_display['Default SSH username'] = self.config['default_ssh_usernames'][value] if value in self.config['default_ssh_usernames'] else ''

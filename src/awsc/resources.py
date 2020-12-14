@@ -1,4 +1,11 @@
 from .resource_lister import ResourceLister, Describer
+from .common import Common
+from .termui.dialog import DialogControl, DialogFieldText
+from .termui.alignment import CenterAnchor, Dimension
+from .termui.control import Border
+import subprocess
+from pathlib import Path
+import time
 
 # EC2
 
@@ -38,12 +45,24 @@ class EC2ResourceLister(ResourceLister):
     self.imported_column_order = ['instance id', 'name', 'type', 'vpc', 'public ip', 'key name']
     self.sort_column = 'instance id'
     super().__init__(*args, **kwargs)
+    self.add_hotkey('s', self.ssh, 'Open SSH')
 
   def determine_name(self, instance):
     for tag in instance['Tags']:
       if tag['Key'] == 'Name':
         return tag['Value']
     return ''
+
+  def ssh(self, _):
+    p = Path.home() / '.ssh' / Common.Session.ssh_key
+    if not p.exists():
+      Common.Session.set_message('Selected SSH key does not exist', Common.color('message_error'))
+      return
+    if self.selection is not None:
+      if self.selection['public ip'] == '':
+        Common.Session.set_message('No public IP associated with instance', Common.color('message_error'))
+      else:
+        EC2SSHDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), instance_entry=self.selection, caller=self, weight=-500)
 
 class EC2Describer(Describer):
   prefix = 'ec2_browser'
@@ -60,9 +79,52 @@ class EC2Describer(Describer):
   def title_info(self):
     return self.instance_id
 
-# ASG
+class EC2SSHDialog(DialogControl):
+  def __init__(self, parent, alignment, dimensions, instance_entry=None, caller=None, *args, **kwargs):
+    kwargs['ok_action'] = self.accept_and_close
+    kwargs['cancel_action'] = self.close
+    kwargs['border'] = Border(
+      Common.border('ec2_ssh', 'default'),
+      Common.color('ec2_ssh_modal_dialog_border', 'modal_dialog_border'),
+      'SSH to instance',
+      Common.color('ec2_ssh_modal_dialog_border_title', 'modal_dialog_border_title'),
+      instance_entry['instance id'],
+      Common.color('ec2_ssh_modal_dialog_border_title_info', 'modal_dialog_border_title_info'),
+    )
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    self.instance_id = instance_entry['instance id']
+    self.ip = instance_entry['public ip']
+    def_text = Common.Configuration['default_ssh_usernames'][Common.Session.ssh_key] if Common.Session.ssh_key in Common.Configuration['default_ssh_usernames'] else ''
+    self.username_textfield = DialogFieldText(
+      'SSH username',
+      text=def_text,
+      color=Common.color('ec2_ssh_modal_dialog_textfield', 'modal_dialog_textfield'),
+      selected_color=Common.color('ec2_ssh_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'),
+      label_color=Common.color('ec2_ssh_modal_dialog_textfield_label', 'modal_dialog_textfield_label'),
+      label_min = 16,
+    )
+    self.add_field(self.username_textfield)
+    self.highlighted = 1 if def_text != '' else 0
+    self.caller = caller
 
-from .resource_lister import ResourceLister, Describer
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
+      self.close()
+      return True
+    return super().input(inkey)
+
+  def accept_and_close(self):
+    ph = Path.home() / '.ssh' / Common.Session.ssh_key
+    ssh_cmd = '{0}@{1}'.format(self.username_textfield.text, self.ip)
+    Common.Session.ui.log('SSH: {0}'.format(str(['ssh', '-o', 'StrictHostKeyChecking=no', '-i', str(ph.resolve()), ssh_cmd])))
+    ex = Common.Session.ui.unraw(subprocess.run, ['bash', '-c', 'ssh -o StrictHostKeyChecking=no -i {0} {1}'.format(str(ph.resolve()), ssh_cmd)])
+    Common.Session.set_message('ssh exited with code {0}'.format(ex.returncode), Common.color('message_info'))
+    self.close()
+
+  def close(self):
+    self.parent.remove_block(self)
+
+# ASG
 
 class ASGResourceLister(ResourceLister):
   prefix = 'asg_list'
@@ -111,13 +173,156 @@ class ASGDescriber(Describer):
   prefix = 'asg_browser'
   title = 'Autoscaling Group'
 
-  def __init__(self, parent, alignment, dimensions, instance_entry, *args, **kwargs):
-    self.instance_id = instance_entry['instance id']
-    self.resource_key = 'ec2'
-    self.describe_method = 'describe_instances'
-    self.describe_kwargs = {'InstanceIds': [self.instance_id]}
-    self.object_path='.Reservations[0].Instances[0]'
+  def __init__(self, parent, alignment, dimensions, asg_entry, *args, **kwargs):
+    self.asg_name = asg_entry['name']
+    self.resource_key = 'autoscaling'
+    self.describe_method = 'describe_auto_scaling_groups'
+    self.describe_kwargs = {'AutoScalingGroupNames': [self.asg_name]}
+    self.object_path='.AutoScalingGroups[0]'
     super().__init__(parent, alignment, dimensions, *args, **kwargs)
 
   def title_info(self):
-    return self.instance_id
+    return self.asg_name
+
+# SecGroup
+
+class SGResourceLister(ResourceLister):
+  prefix = 'sg_list'
+  title = 'Security Groups'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_security_groups'
+    self.item_path = '.SecurityGroups'
+    self.column_paths = {
+      'group id': '.GroupId',
+      'name': '.GroupName',
+      'vpc': '.VpcId',
+      'ingress rules': self.determine_ingress_rules,
+      'egress rules': self.determine_egress_rules,
+    }
+    self.imported_column_sizes = {
+      'group id': 30,
+      'name': 30,
+      'vpc': 15,
+      'ingress rules': 20,
+      'egress rules': 20,
+    }
+    self.describe_command = SGDescriber.opener
+    self.describe_selection_arg = 'sg_entry'
+    #self.open_command = EC2ResourceLister.opener
+    #self.open_selection_arg = 'asg'
+
+    self.imported_column_order = ['group id', 'name', 'vpc', 'ingress rules', 'egress rules']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+    self.add_hotkey('i', self.ingress, 'View ingress rules')
+    self.add_hotkey('e', self.egress, 'View egress rules')
+
+  def determine_ingress_rules(self, sg):
+    return len(sg['IpPermissions'])
+
+  def determine_egress_rules(self, sg):
+    return len(sg['IpPermissionsEgress'])
+
+  def ingress(self, *args):
+    if self.selection is not None:
+      Common.Session.push_frame(SGRuleLister.opener(sg_entry=self.selection))
+
+  def egress(self, *args):
+    if self.selection is not None:
+      Common.Session.push_frame(SGRuleLister.opener(sg_entry=self.selection, egress=True))
+
+class SGRuleLister(ResourceLister):
+  prefix = 'sg_rule_list'
+  title = 'SG Rules'
+  well_known = {
+    20: 'ftp',
+    22: 'ssh',
+    23: 'telnet',
+    25: 'smtp',
+    80: 'http',
+    110: 'pop3',
+    220: 'imap',
+    443: 'https',
+    989: 'ftps',
+    1443: 'mssql',
+    3306: 'mysql',
+    3389: 'rdp',
+    5432: 'pgsql',
+    6379: 'redis',
+    8983: 'solr',
+    9200: 'es',
+  }
+
+  def title_info(self):
+    return '{0}: {1}'.format('Egress' if self.egress else 'Ingress', self.sg_entry['group id'])
+
+  def __init__(self, parent, alignment, dimensions, sg_entry=None, egress=False, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_security_groups'
+    if sg_entry is None:
+      raise ValueError('sg_entry is required')
+    self.sg_entry = sg_entry
+    self.egress = egress
+    self.list_kwargs = {'GroupIds': [self.sg_entry['group id']]}
+    self.item_path = '.SecurityGroups[0].IpPermissions{0}'.format('Egress' if egress else '')
+    self.column_paths = {
+      'protocol': self.determine_protocol,
+      'name': self.determine_name,
+      'ip addresses': self.determine_ips,
+      'security groups': self.determine_sgs,
+      'port range': self.determine_port_range,
+    }
+    self.imported_column_sizes = {
+      'name': 10,
+      'protocol': 5,
+      'ip addresses': 40,
+      'security groups': 50,
+      'port range': 20,
+    }
+    self.imported_column_order = ['name', 'protocol', 'ip addresses', 'security groups', 'port range']
+    self.sort_column = 'port range'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def determine_name(self, rule):
+    if rule['FromPort'] != rule['ToPort']:
+      return ''
+    if rule['FromPort'] not in SGRuleLister.well_known:
+      return ''
+    return SGRuleLister.well_known[rule['FromPort']]
+
+  def determine_protocol(self, rule):
+    if rule['IpProtocol'] == '-1' or rule['IpProtocol'] == -1:
+      return 'all'
+    return rule['IpProtocol']
+
+  def determine_ips(self, rule):
+    if 'IpRanges' not in rule:
+      return ''
+    return ','.join(cidrs['CidrIp'] for cidrs in rule['IpRanges'])
+
+  def determine_sgs(self, rule):
+    if 'UserIdGroupPairs' not in rule:
+      return ''
+    return ','.join(pair['GroupId'] for pair in rule['UserIdGroupPairs'])
+
+  def determine_port_range(self, rule):
+    if rule['FromPort'] != rule['ToPort']:
+      return '{0}-{1}'.format(rule['FromPort'], rule['ToPort'])
+    return str(rule['FromPort'])
+
+class SGDescriber(Describer):
+  prefix = 'sg_browser'
+  title = 'Security Group'
+
+  def __init__(self, parent, alignment, dimensions, sg_entry, *args, **kwargs):
+    self.sg_id = sg_entry['group id']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_security_groups'
+    self.describe_kwargs = {'GroupIds': [self.sg_id]}
+    self.object_path='.SecurityGroups[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.sg_id

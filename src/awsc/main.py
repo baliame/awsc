@@ -3,10 +3,11 @@ from .termui.alignment import TopLeftAnchor, Dimension
 from .termui.control import Border
 from .context import ContextList
 from .region import RegionList
+from .ssh import SSHList
 from .info import InfoDisplay
 from .aws import AWS
 from .commander import Commander, Filterer
-from .resources import EC2ResourceLister, ASGResourceLister
+from .resources import EC2ResourceLister, ASGResourceLister, SGResourceLister
 
 def awscheck():
   return bool(Common.Session.context) and bool(Common.Session.region)
@@ -30,6 +31,16 @@ def open_region_lister():
     weight = 0,
   )
   return [regl, regl.hotkey_display]
+
+def open_ssh_lister():
+  sshl = SSHList(
+    Common.Session.ui.top_block,
+    DefaultAnchor,
+    DefaultDimension,
+    border=DefaultBorder('ssh_key_list', 'SSH Keys'),
+    weight = 0,
+  )
+  return [sshl, sshl.hotkey_display]
 
 def open_filterer():
   if Common.Session.filterer is None:
@@ -75,10 +86,13 @@ def main(*args, **kwargs):
     'ctx': open_context_lister,
     'context': open_context_lister,
     'region': open_region_lister,
+    'ssh': open_ssh_lister,
     'ec2': EC2ResourceLister.opener,
     'instance': EC2ResourceLister.opener,
     'asg': ASGResourceLister.opener,
     'autoscaling': ASGResourceLister.opener,
+    'sg': SGResourceLister.opener,
+    'securitygroup': SGResourceLister.opener,
   }
 
   Common.main()

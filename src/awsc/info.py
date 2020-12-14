@@ -100,16 +100,18 @@ class HotkeyDisplay(Control):
     'KEY_PGUP': 'pgup',
     'KEY_PGDOWN': 'pgdn',
     'KEY_INSERT': 'ins',
+    ControlCodes.C: 'ctrl-c',
     ControlCodes.D: 'ctrl-d',
     ControlCodes.R: 'ctrl-r',
   }
 
-  def __init__(self, parent, alignment, dimensions, holder, cols=2, highlight_color=None, generic_color=None, *args, **kwargs):
+  def __init__(self, parent, alignment, dimensions, holder, session=None, cols=2, highlight_color=None, generic_color=None, *args, **kwargs):
     super().__init__( parent, alignment, dimensions, *args, **kwargs)
     self.holder = holder
     self.cols = cols
     self.highlight_color = highlight_color
     self.generic_color = generic_color
+    self.session = session
 
   def paint(self):
     super().paint()
@@ -124,7 +126,8 @@ class HotkeyDisplay(Control):
     y = y0
     longest = []
     v = 0
-    for hotkey, tooltip in self.holder.tooltips.items():
+    tooltips = {**self.holder.tooltips, **self.session.global_hotkey_tooltips}
+    for hotkey, tooltip in tooltips.items():
       display = '<' + (HotkeyDisplay.translations[hotkey] if hotkey in HotkeyDisplay.translations else hotkey) + '> '
       if len(display) > v:
         v = len(display)
@@ -137,7 +140,7 @@ class HotkeyDisplay(Control):
       longest.append(v)
     y = y0
     col = 0
-    for hotkey, tooltip in self.holder.tooltips.items():
+    for hotkey, tooltip in tooltips.items():
       display = '<' + (HotkeyDisplay.translations[hotkey] if hotkey in HotkeyDisplay.translations else hotkey) + '> '
       if len(display) < longest[col]:
         display += ' ' * (longest[col] - len(display))

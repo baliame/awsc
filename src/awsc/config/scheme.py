@@ -71,6 +71,10 @@ class Scheme:
           'foreground': 111,
           'background': 0,
         },
+        'modal_dialog_border_title_info': {
+          'foreground': 70,
+          'background': 0,
+        },
         'column_title': {
           'foreground': 0,
           'background': 208,
@@ -181,6 +185,18 @@ class Scheme:
         },
         'command_bar_error_color': {
           'foreground': 124,
+          'background': 0,
+        },
+        'modal_dialog_textfield': {
+          'foreground': 0,
+          'background': 208,
+        },
+        'modal_dialog_textfield_selected': {
+          'foreground': 0,
+          'background': 220,
+        },
+        'modal_dialog_textfield_label': {
+          'foreground': 220,
           'background': 0,
         },
       },

@@ -7,7 +7,18 @@ class TextBrowser(Control):
   def __init__(self, parent, alignment, dimensions, color=ColorGold, filtered_color=ColorBlackOnOrange, *args, **kwargs):
     super().__init__(parent, alignment, dimensions, *args, **kwargs)
     self.entries = []
-    self.hotkeys = {'KEY_DOWN': self.scroll_down, 'KEY_UP': self.scroll_up, 'KEY_LEFT': self.scroll_left, 'KEY_RIGHT': self.scroll_right, 'c': self.copy_contents, 'w': self.toggle_wrap}
+    self.hotkeys = {
+      'KEY_DOWN': self.scroll_down,
+      'KEY_UP': self.scroll_up,
+      'KEY_LEFT': self.scroll_left,
+      'KEY_RIGHT': self.scroll_right,
+      'c': self.copy_contents,
+      'w': self.toggle_wrap,
+      'KEY_END': self.end,
+      'KEY_HOME': self.home,
+      'KEY_PGUP': self.pgup,
+      'KEY_PGDOWN': self.pgdown,
+    }
     self.tooltips = {'c': 'Copy', 'w': 'Toggle Wrap'}
     self.color = color
     self.filtered_color = filtered_color
@@ -123,6 +134,32 @@ class TextBrowser(Control):
       return
     if self.left > 0:
       self.left -= 1
+
+  def end(self, *args):
+    c = self.corners()
+    y0 = c[1][0] + (0 if self.border is None else 1)
+    y1 = c[1][1] - (0 if self.border is None else 1)
+    h = y1 - y0 + 1
+    limit = len(self.lines) - h if not self.wrap else len(self.lines) - 1
+    self.top = max(limit, 0)
+
+  def home(self, *args):
+    self.top = 0
+
+  def pgup(self, *args):
+    c = self.corners()
+    y0 = c[1][0] + (0 if self.border is None else 1)
+    y1 = c[1][1] - (0 if self.border is None else 1)
+    h = y1 - y0 + 1
+    self.top = max(self.top - h, 0)
+
+  def pgdown(self, *args):
+    c = self.corners()
+    y0 = c[1][0] + (0 if self.border is None else 1)
+    y1 = c[1][1] - (0 if self.border is None else 1)
+    h = y1 - y0 + 1
+    limit = len(self.lines) - h if not self.wrap else len(self.lines) - 1
+    self.top = max(min(limit, self.top + h), 0)
 
   def copy_contents(self, *args):
     pyperclip.copy(self.raw())

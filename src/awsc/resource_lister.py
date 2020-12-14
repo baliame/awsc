@@ -24,6 +24,9 @@ class ResourceLister(ListControl):
       DefaultAnchor,
       DefaultDimension,
       weight=0,
+      color=Common.color('{0}_generic'.format(cls.prefix), 'generic'),
+      selection_color=Common.color('{0}_selection'.format(cls.prefix), 'selection'),
+      title_color=Common.color('{0}_heading'.format(cls.prefix), 'column_title'),
       **kwargs
     )
     l.border=DefaultBorder(cls.prefix, cls.title, l.title_info())
@@ -74,10 +77,8 @@ class ResourceLister(ListControl):
       self.add_hotkey('d', self.describe, 'Describe')
       if self.open_command is None:
         self.add_hotkey('KEY_ENTER', self.describe, 'Describe')
-    if 'pushed' in kwargs and kwargs['pushed']:
-      self.add_hotkey('KEY_ESCAPE', Common.Session.pop_frame, 'Back')
     self.add_hotkey(ControlCodes.R, self.refresh_data, 'Refresh')
-    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
+    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
 
     if 'name' in self.imported_column_sizes:
       self.column_titles = {}
@@ -96,7 +97,10 @@ class ResourceLister(ListControl):
       Common.Session.push_frame(self.open_command(**{self.open_selection_arg: self.selection, 'pushed': True}))
 
   def refresh_data(self, *args, **kwargs):
-    provider = Common.Session.service_provider(self.resource_key)
+    try:
+      provider = Common.Session.service_provider(self.resource_key)
+    except KeyError:
+      return
     response = getattr(provider, self.list_method)(**self.list_kwargs)
     self.entries = []
 
@@ -127,6 +131,8 @@ class Describer(TextBrowser):
       DefaultAnchor,
       DefaultDimension,
       weight=0,
+      color=Common.color('{0}_generic'.format(cls.prefix), 'generic'),
+      filtered_color=Common.color('{0}_filtered'.format(cls.prefix), 'selection'),
       **kwargs,
     )
     l.border=DefaultBorder(cls.prefix, cls.title, l.title_info())
@@ -147,8 +153,7 @@ class Describer(TextBrowser):
       raise AttributeError('object_path is undefined')
 
     self.add_hotkey(ControlCodes.R, self.refresh_data, 'Refresh')
-    self.add_hotkey('KEY_ESCAPE', Common.Session.pop_frame, 'Back')
-    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
+    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
 
     self.refresh_data()
 
@@ -157,7 +162,10 @@ class Describer(TextBrowser):
     Common.Session.set_message('Text wrap {0}'.format('ON' if self.wrap else 'OFF'), Common.color('message_info'))
 
   def refresh_data(self, *args, **kwargs):
-    provider = Common.Session.service_provider(self.resource_key)
+    try:
+      provider = Common.Session.service_provider(self.resource_key)
+    except KeyError:
+      return
     response = getattr(provider, self.describe_method)(**self.describe_kwargs)
     self.clear()
     self.add_text(json.dumps(jq.compile(self.object_path).input(text=json.dumps(response, default=datetime_hack)).first(), sort_keys=True, indent=2))

@@ -45,13 +45,13 @@ class AddContextDialog(DialogControl):
     self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
     self.add_field(self.error_label)
     self.add_field(DialogFieldLabel(''))
-    self.name_field = DialogFieldText('Name:', label_min=16)
+    self.name_field = DialogFieldText('Name:', label_min=16, color=Common.color('context_add_modal_dialog_textfield', 'modal_dialog_textfield'), selected_color=Common.color('context_add_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'), label_color=Common.color('context_add_modal_dialog_textfield_label', 'modal_dialog_textfield_label'))
     self.add_field(self.name_field)
-    self.account_field = DialogFieldText('Account number:', label_min=16)
+    self.account_field = DialogFieldText('Account number:', label_min=16, color=Common.color('context_add_modal_dialog_textfield', 'modal_dialog_textfield'), selected_color=Common.color('context_add_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'), label_color=Common.color('context_add_modal_dialog_textfield_label', 'modal_dialog_textfield_label'))
     self.add_field(self.account_field)
-    self.access_key_field = DialogFieldText('Access key:', label_min=16)
+    self.access_key_field = DialogFieldText('Access key:', label_min=16, color=Common.color('context_add_modal_dialog_textfield', 'modal_dialog_textfield'), selected_color=Common.color('context_add_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'), label_color=Common.color('context_add_modal_dialog_textfield_label', 'modal_dialog_textfield_label'))
     self.add_field(self.access_key_field)
-    self.secret_key_field = DialogFieldText('Secret key:', label_min=16)
+    self.secret_key_field = DialogFieldText('Secret key:', label_min=16, color=Common.color('context_add_modal_dialog_textfield', 'modal_dialog_textfield'), selected_color=Common.color('context_add_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'), label_color=Common.color('context_add_modal_dialog_textfield_label', 'modal_dialog_textfield_label'))
     self.add_field(self.secret_key_field)
     self.caller = caller
 
@@ -104,7 +104,7 @@ class ContextList(ListControl):
       *args,
       **kwargs,
     )
-    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'), tag='context')
+    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'), tag='context')
     self.add_hotkey('a', self.add_new_context, 'Add new context')
     self.add_hotkey('d', self.set_default_context, 'Set as default')
     self.add_hotkey('KEY_ENTER', self.select_context, 'Select context')

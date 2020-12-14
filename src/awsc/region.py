@@ -19,7 +19,7 @@ class RegionList(ListControl):
       *args,
       **kwargs,
     )
-    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
+    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
     self.add_hotkey('d', self.set_default_region, 'Set as default')
     self.add_hotkey('KEY_ENTER', self.select_region, 'Select region')
     self.add_column('usage frequency', 12)
