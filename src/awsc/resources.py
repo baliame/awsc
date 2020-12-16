@@ -5,6 +5,7 @@ from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 import subprocess
 from pathlib import Path
+import botocore
 import time
 import datetime
 
@@ -637,3 +638,147 @@ class CFNRelated(MultiLister):
       },
     ]
     super().__init__(*args, **kwargs)
+
+# R53
+
+class R53ResourceLister(ResourceLister):
+  prefix = 'r53_list'
+  title = 'Route53 Hosted Zones'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'route53'
+    self.list_method = 'list_hosted_zones'
+    self.item_path = '.HostedZones'
+    self.column_paths = {
+      'id': '.Id',
+      'name': '.Name',
+      'records': '.ResourceRecordSetCount',
+    }
+    self.imported_column_sizes = {
+      'id': 30,
+      'name': 30,
+      'records': 5,
+    }
+    self.describe_command = R53Describer.opener
+    self.describe_selection_arg = 'r53_entry'
+    self.open_command = R53RecordLister.opener
+    self.open_selection_arg = 'r53_entry'
+
+    self.imported_column_order = ['id', 'name', 'records']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+
+class R53RecordLister(ResourceLister):
+  prefix = 'r53_record_list'
+  title = 'Route53 Records'
+
+  def title_info(self):
+    return self.r53_entry['name']
+
+  def __init__(self, *args, r53_entry, **kwargs):
+    self.r53_entry = r53_entry
+    self.resource_key = 'route53'
+    self.list_method = 'list_resource_record_sets'
+    self.list_kwargs={'HostedZoneId': self.r53_entry['id']}
+    self.item_path = '.ResourceRecordSets'
+    self.column_paths = {
+      'entry': '.Type',
+      'name': self.determine_name,
+      'records': self.determine_records,
+      'ttl': '.TTL',
+    }
+    self.hidden_columns = {
+      'hosted_zone_id': self.determine_hosted_zone_id,
+    }
+    self.imported_column_sizes = {
+      'entry': 5,
+      'name': 30,
+      'records': 60,
+      'ttl': 5,
+    }
+    self.describe_command = R53RecordDescriber.opener
+    self.describe_selection_arg = 'r53_entry'
+
+    self.imported_column_order = ['entry', 'name', 'records', 'ttl']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+    self.add_hotkey('e', self.edit, 'Edit')
+
+  def determine_hosted_zone_id(self, s):
+    return self.r53_entry['id']
+
+  def determine_name(self, s):
+    return s['Name'].replace('\\052', '*')
+
+  def edit(self, _):
+    if self.selection is not None:
+      raw = self.selection.controller_data
+      if not self.is_alias(raw):
+        content = '\n'.join(record['Value'] for record in raw['ResourceRecords'])
+        newcontent = Common.Session.textedit(content).strip(' \n\t')
+        if content == newcontent:
+          Common.Session.set_message('Input unchanged.', Common.color('message_info'))
+          return
+        newcontent = newcontent.split('\n')
+        try:
+          Common.Session.service_provider(self.resource_key).change_resource_record_sets(
+            HostedZoneId=self.selection['hosted_zone_id'],
+            ChangeBatch={
+              'Changes': [{
+                'Action': 'UPSERT',
+                'ResourceRecordSet': {
+                  'Name': self.selection['name'],
+                  'Type': self.selection['entry'],
+                  'ResourceRecords': [{'Value': line} for line in newcontent],
+                  'TTL': int(self.selection['ttl']),
+                },
+              }]
+            }
+          )
+        except botocore.errorfactory.InvalidInput as e:
+          Common.Session.ui.log(str(e))
+          Common.Session.set_message('AWS API returned error, logged.', Common.color('message_error'))
+          return
+          Common.Session.set_message('Entry modified, refreshing...', Common.color('message_success'))
+
+        self.refresh_data()
+      else:
+        Common.Session.set_message('Cannot edit aliased records', Common.color('message_info'))
+
+  def is_alias(self, s):
+    return 'AliasTarget' in s and s['AliasTarget']['DNSName'] != ''
+
+  def determine_records(self, s):
+    if self.is_alias(s):
+      return s['AliasTarget']['DNSName']
+    return ','.join([record['Value'] for record in s['ResourceRecords']])
+
+class R53Describer(Describer):
+  prefix = 'r53_browser'
+  title = 'Route53 Hosted Zone'
+
+  def __init__(self, parent, alignment, dimensions, r53_entry, *args, **kwargs):
+    self.r53_entry = r53_entry
+    self.resource_key = 'route53'
+    self.describe_method = 'get_hosted_zone'
+    self.describe_kwargs = {'Id': self.r53_entry['id']}
+    self.object_path='.'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.r53_entry['name']
+
+class R53RecordDescriber(Describer):
+  prefix = 'r53_record_browser'
+  title = 'Route53 Record'
+
+  def __init__(self, parent, alignment, dimensions, r53_entry, *args, **kwargs):
+    self.r53_entry = r53_entry
+    self.resource_key = 'route53'
+    self.describe_method = 'list_resource_record_sets'
+    self.describe_kwargs = {'HostedZoneId': self.r53_entry['hosted_zone_id'], 'StartRecordType': self.r53_entry['entry'], 'StartRecordName': self.r53_entry['name']}
+    self.object_path='.ResourceRecordSets[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return '{0} {1}'.format(self.r53_entry['entry'], self.r53_entry['name'])

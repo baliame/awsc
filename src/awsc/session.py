@@ -3,6 +3,9 @@ from .termui.ui import UI, ControlCodes
 from .termui.dialog import DialogFieldLabel
 from .termui.alignment import TopLeftAnchor, BottomLeftAnchor, Dimension
 import time
+import subprocess
+import tempfile
+import os
 
 class Session:
   def __init__(self, config, highlight_color, generic_color):
@@ -48,7 +51,8 @@ class Session:
 
   def set_message(self, text, color):
     self._message_label.texts = [(text, color)]
-    self.message_time = 3.0
+    self.message_time = 5.0
+    self.last_tick = time.time()
 
   def replace_frame(self, new_frame, drop_stack=True):
     for elem in self.stack_frame:
@@ -110,3 +114,16 @@ class Session:
     self._ssh_key = value
     self.info_display['SSH Key'] = value
     self.info_display['Default SSH username'] = self.config['default_ssh_usernames'][value] if value in self.config['default_ssh_usernames'] else ''
+
+  def textedit(self, value):
+    editor = self.config['editor_command']
+    temp = tempfile.NamedTemporaryFile('w', delete=False)
+    tf = temp.name
+    try:
+      temp.write(value)
+      temp.close()
+      self.ui.unraw(subprocess.run, ['bash', '-c', editor.format(tf)])
+      with open(tf, 'r') as temp:
+        return temp.read()
+    finally:
+      os.unlink(temp.name)
