@@ -72,7 +72,7 @@ class DialogFieldButton(DialogField):
     Commons.UIInstance.print('< {0} >'.format(self.text), xy=(x, y), color=self.selected_color if selected else self.color)
 
 class DialogFieldText(DialogField):
-  def __init__(self, label, text='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0):
+  def __init__(self, label, text='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0, password=False):
     super().__init__()
     self.highlightable = True
     self.left = 0
@@ -83,6 +83,7 @@ class DialogFieldText(DialogField):
     self.label_min = label_min
     self.selected_color = selected_color
     self.centered = True
+    self.password = password
     self.drawable = 0
     self.accepted_inputs = Commons.TextfieldInputs
 
@@ -125,6 +126,8 @@ class DialogFieldText(DialogField):
     if self.left >= len(self.text):
       self.left = 0
     text = self.text[self.left:(self.left+space if len(self.text) > self.left+space else len(self.text))]
+    if self.password:
+      text = '*' * len(text)
     if len(text) < space:
       text += ' ' * (space - len(text))
     Commons.UIInstance.print(text, xy=(x, y), color=self.selected_color if selected else self.color)

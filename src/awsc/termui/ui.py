@@ -128,6 +128,9 @@ class UI:
   def set_exit(self, *args, **kwargs):
     self.exit = True
 
+  def before_paint(self):
+    self.top_block.before_paint()
+
   def paint(self):
     row = ' ' * self.w
     self.buf.clear()
@@ -149,7 +152,7 @@ class UI:
       self.term.stream.flush()
       self.term.stream.write(self.term.hide_cursor)
       self.term.stream.flush()
-      tty.setraw(self.term._keyboard_fd, termios.TCSANOW)
+      tty.setraw(self.term. _keyboard_fd, termios.TCSANOW)
       self.term._line_buffered = False
 
   def main(self):
@@ -164,6 +167,7 @@ class UI:
               st = time.time()
               for func in self.tickers:
                 func()
+              self.before_paint()
               self.paint()
               while key := self.term.inkey(FrameRate, FrameRate):
 #              key = self.term.inkey(FrameRate, FrameRate)

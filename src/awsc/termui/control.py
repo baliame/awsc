@@ -1,5 +1,6 @@
 from .common import Commons
 from .block import Block
+import threading
 
 class BorderStyle:
   def __init__(self, chars=['-', '|', '-', '-', '-', '-']):
@@ -87,6 +88,8 @@ class Control(Block):
     Commons.UIInstance.log('Initializing Control', level=2)
     super().__init__(parent, alignment, dimensions, weight, tag, *args, **kwargs)
     self.border = border
+    self.thread_share = {}
+    self.mutex = threading.Lock()
 
   @property
   def inner(self):

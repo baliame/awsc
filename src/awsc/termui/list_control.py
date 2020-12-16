@@ -16,6 +16,8 @@ class ListControl(Control):
     self.column_order = ["name"]
     self.calculated = 0
     self._filter = None
+    self.thread_share['clear'] = False
+    self.thread_share['new_entries'] = []
 
   @property
   def filter(self):
@@ -43,7 +45,6 @@ class ListControl(Control):
       inkey = key.name
     else:
       inkey = inkey.lower()
-    Commons.UIInstance.log('ListControl inkey: {0}'.format(inkey))
     if inkey in self.hotkeys.keys():
       self.hotkeys[inkey](self)
       return True
@@ -71,6 +72,30 @@ class ListControl(Control):
     self.column_titles[column] = min_size
     self.calculated = 0
 
+  def before_paint_critical(self):
+    if self.thread_share['clear']:
+      self.entries = []
+      self.thread_share['clear'] = False
+    if len(self.thread_share['new_entries']) > 0:
+      self.entries.extend(self.thread_share['new_entries'])
+      self.thread_share['new_entries'] = []
+
+  def before_paint(self):
+    super().before_paint()
+    self.mutex.acquire()
+    try:
+      self.before_paint_critical()
+    finally:
+      self.mutex.release()
+    self.sort()
+    if self.selected >= len(self.entries):
+      self.selected = len(self.entries) - 1
+    if self.selected < 0:
+      self.selected = 0
+
+  def sort(self):
+    pass
+
   def paint(self):
     Commons.UIInstance.log('Painting ListControl', level=2)
     win = self.w_in
@@ -85,14 +110,20 @@ class ListControl(Control):
           self.column_titles[k] = int(float(self.column_titles[k]) / ratio)
           tot += self.column_titles[k]
         rem = win - tot
-        self.column_titles["name"] += rem
+        if 'name' in self.column_titles:
+          self.column_titles["name"] += rem
+        else:
+          self.column_titles[self.column_order[0]] += rem
       elif vals < win:
         diff = win - vals
         part = int(diff / len(self.column_titles))
         rem = diff - (part * len(self.column_titles))
         for k in self.column_titles.keys():
           self.column_titles[k] += part
-        self.column_titles["name"] += rem
+        if 'name' in self.column_titles:
+          self.column_titles["name"] += rem
+        else:
+          self.column_titles[self.column_order[0]] += rem
       self.calculated = win
 
     super().paint()
@@ -131,6 +162,7 @@ class ListEntry:
     self.name = name
     self.columns = {"name" : name}
     self.columns.update({k:str(v) for (k, v) in kwargs.items()})
+    self.controller_data = {}
 
   def __getitem__(self, item):
     return self.columns[item]

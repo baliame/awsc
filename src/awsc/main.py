@@ -7,7 +7,7 @@ from .ssh import SSHList
 from .info import InfoDisplay
 from .aws import AWS
 from .commander import Commander, Filterer
-from .resources import EC2ResourceLister, ASGResourceLister, SGResourceLister
+from .resources import EC2ResourceLister, ASGResourceLister, SGResourceLister, RDSResourceLister
 
 def awscheck():
   return bool(Common.Session.context) and bool(Common.Session.region)
@@ -87,6 +87,7 @@ def main(*args, **kwargs):
     'context': open_context_lister,
     'region': open_region_lister,
     'ssh': open_ssh_lister,
+    'rds': RDSResourceLister.opener,
     'ec2': EC2ResourceLister.opener,
     'instance': EC2ResourceLister.opener,
     'asg': ASGResourceLister.opener,

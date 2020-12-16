@@ -43,9 +43,11 @@ class Block:
     br = (tl[0]+self.dimensions[0] - 1, tl[1]+self.dimensions[1] - 1)
     return ((tl[0], br[0]), (tl[1], br[1]))
 
+  def before_paint(self):
+    for block in reversed(self.blocks):
+      block.before_paint()
+
   def paint(self):
-    Commons.UIInstance.log('Painting Block {0}'.format(self), level=2)
-    Commons.UIInstance.log(str(self.blocks), level=3)
     for block in reversed(self.blocks):
       block.paint()
 

@@ -1,4 +1,4 @@
-from .resource_lister import ResourceLister, Describer
+from .resource_lister import ResourceLister, Describer, MultiLister
 from .common import Common
 from .termui.dialog import DialogControl, DialogFieldText
 from .termui.alignment import CenterAnchor, Dimension
@@ -31,6 +31,7 @@ class EC2ResourceLister(ResourceLister):
       'vpc': '.VpcId',
       'public ip': '.PublicIpAddress',
       'key name': '.KeyName',
+      'state': '.State.Name',
     }
     self.imported_column_sizes = {
       'instance id': 11,
@@ -39,10 +40,11 @@ class EC2ResourceLister(ResourceLister):
       'vpc': 15,
       'public ip': 15,
       'key name': 30,
+      'state': 10,
     }
     self.describe_command = EC2Describer.opener
     self.describe_selection_arg = 'instance_entry'
-    self.imported_column_order = ['instance id', 'name', 'type', 'vpc', 'public ip', 'key name']
+    self.imported_column_order = ['instance id', 'name', 'type', 'vpc', 'public ip', 'key name', 'state']
     self.sort_column = 'instance id'
     super().__init__(*args, **kwargs)
     self.add_hotkey('s', self.ssh, 'Open SSH')
@@ -116,7 +118,6 @@ class EC2SSHDialog(DialogControl):
   def accept_and_close(self):
     ph = Path.home() / '.ssh' / Common.Session.ssh_key
     ssh_cmd = '{0}@{1}'.format(self.username_textfield.text, self.ip)
-    Common.Session.ui.log('SSH: {0}'.format(str(['ssh', '-o', 'StrictHostKeyChecking=no', '-i', str(ph.resolve()), ssh_cmd])))
     ex = Common.Session.ui.unraw(subprocess.run, ['bash', '-c', 'ssh -o StrictHostKeyChecking=no -i {0} {1}'.format(str(ph.resolve()), ssh_cmd)])
     Common.Session.set_message('ssh exited with code {0}'.format(ex.returncode), Common.color('message_info'))
     self.close()
@@ -210,8 +211,8 @@ class SGResourceLister(ResourceLister):
     }
     self.describe_command = SGDescriber.opener
     self.describe_selection_arg = 'sg_entry'
-    #self.open_command = EC2ResourceLister.opener
-    #self.open_selection_arg = 'asg'
+    self.open_command = SGRelated.opener
+    self.open_selection_arg = 'compare_value'
 
     self.imported_column_order = ['group id', 'name', 'vpc', 'ingress rules', 'egress rules']
     self.sort_column = 'name'
@@ -246,6 +247,7 @@ class SGRuleLister(ResourceLister):
     220: 'imap',
     443: 'https',
     989: 'ftps',
+    1437: 'dashboard-agent',
     1443: 'mssql',
     3306: 'mysql',
     3389: 'rdp',
@@ -326,3 +328,193 @@ class SGDescriber(Describer):
 
   def title_info(self):
     return self.sg_id
+
+class SGRelated(MultiLister):
+  prefix = 'sg_related'
+  title = 'Resources using Security Group'
+
+  def title_info(self):
+    return self.compare_value
+
+  def __init__(self, *args, **kwargs):
+    kwargs['compare_key'] = 'group id'
+    self.resource_descriptors = [
+      {
+        'resource_key': 'ec2',
+        'list_method': 'describe_instances',
+        'list_kwargs': {},
+        'item_path': '[.Reservations[].Instances[]]',
+        'column_paths': {
+          'type': lambda x: 'EC2 Instance',
+          'id': '.InstanceId',
+          'name': self.determine_ec2_name,
+        },
+        'hidden_columns': {},
+        'compare_as_list': True,
+        'compare_path': '[.SecurityGroups[].GroupId]',
+      },
+      {
+        'resource_key': 'rds',
+        'list_method': 'describe_db_instances',
+        'list_kwargs': {},
+        'item_path': '.DBInstances',
+        'column_paths': {
+          'type': lambda x: 'RDS Instance',
+          'id': '.DBInstanceIdentifier',
+          'name': self.determine_rds_name,
+        },
+        'hidden_columns': {},
+        'compare_as_list': True,
+        'compare_path': '[.VpcSecurityGroups[].VpcSecurityGroupId]',
+      },
+    ]
+    super().__init__(*args, **kwargs)
+
+  def determine_ec2_name(self, instance):
+    for tag in instance['Tags']:
+      if tag['Key'] == 'Name':
+        return tag['Value']
+    return ''
+
+  def determine_rds_name(self, instance):
+    return instance['Endpoint']['Address']
+
+# RDS
+
+class RDSResourceLister(ResourceLister):
+  prefix = 'rds_list'
+  title = 'RDS Instances'
+
+  def title_info(self):
+    return self.title_info_data
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'rds'
+    self.list_method = 'describe_db_instances'
+    self.title_info_data = None
+    self.item_path = '.DBInstances'
+    self.column_paths = {
+      'instance id': '.DBInstanceIdentifier',
+      'host': '.Endpoint.Address',
+      'engine': '.Engine',
+      'type': '.DBInstanceClass',
+      'vpc': '.DBSubnetGroup.VpcId',
+    }
+    self.hidden_columns = {
+      'public_access': '.PubliclyAccessible',
+      'db_name': '.DBName',
+      'name': self.determine_name,
+    }
+    self.imported_column_sizes = {
+      'instance id': 11,
+      'host': 45,
+      'engine': 10,
+      'type': 10,
+      'vpc': 15,
+    }
+    self.describe_command = RDSDescriber.opener
+    self.describe_selection_arg = 'instance_entry'
+    self.imported_column_order = ['instance id', 'host', 'engine', 'type', 'vpc']
+    self.sort_column = 'instance id'
+    super().__init__(*args, **kwargs)
+    self.add_hotkey('s', self.db_client, 'Open command line')
+
+  def determine_name(self, instance):
+    for tag in instance['TagList']:
+      if tag['Key'] == 'Name':
+        return tag['Value']
+    return ''
+
+  def db_client(self, _):
+    if self.selection is not None:
+      if self.selection['public_access'] != 'True':
+        Common.Session.set_message('No public IP associated with instance', Common.color('message_error'))
+      else:
+        RDSClientDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), instance_entry=self.selection, caller=self, weight=-500)
+
+class RDSDescriber(Describer):
+  prefix = 'rds_browser'
+  title = 'RDS Instance'
+
+  def __init__(self, parent, alignment, dimensions, instance_entry, *args, **kwargs):
+    self.instance_id = instance_entry['instance id']
+    self.resource_key = 'rds'
+    self.describe_method = 'describe_db_instances'
+    self.describe_kwargs = {'DBInstanceIdentifier': self.instance_id}
+    self.object_path='.DBInstances[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.instance_id
+
+class RDSClientDialog(DialogControl):
+  def __init__(self, parent, alignment, dimensions, instance_entry=None, caller=None, *args, **kwargs):
+    kwargs['ok_action'] = self.accept_and_close
+    kwargs['cancel_action'] = self.close
+    kwargs['border'] = Border(
+      Common.border('rds_client_modal', 'default'),
+      Common.color('rds_client_modal_dialog_border', 'modal_dialog_border'),
+      'SSH to instance',
+      Common.color('rds_client_modal_dialog_border_title', 'modal_dialog_border_title'),
+      instance_entry['instance id'],
+      Common.color('rds_client_modal_dialog_border_title_info', 'modal_dialog_border_title_info'),
+    )
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    self.instance_id = instance_entry['instance id']
+    self.db_name = instance_entry['db_name']
+    self.ip = instance_entry['host']
+    self.engine = instance_entry['engine']
+    self.username_textfield = DialogFieldText(
+      'Username',
+      text='',
+      color=Common.color('rds_client_modal_dialog_textfield', 'modal_dialog_textfield'),
+      selected_color=Common.color('rds_client_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'),
+      label_color=Common.color('rds_client_modal_dialog_textfield_label', 'modal_dialog_textfield_label'),
+      label_min = 16,
+    )
+    self.password_textfield = DialogFieldText(
+      'Password',
+      text='',
+      color=Common.color('rds_client_modal_dialog_textfield', 'modal_dialog_textfield'),
+      selected_color=Common.color('rds_client_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'),
+      label_color=Common.color('rds_client_modal_dialog_textfield_label', 'modal_dialog_textfield_label'),
+      label_min = 16,
+      password = True,
+    )
+    self.database_textfield = DialogFieldText(
+      'Database',
+      text=self.db_name,
+      color=Common.color('rds_client_modal_dialog_textfield', 'modal_dialog_textfield'),
+      selected_color=Common.color('rds_client_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'),
+      label_color=Common.color('rds_client_modal_dialog_textfield_label', 'modal_dialog_textfield_label'),
+      label_min = 16,
+    )
+    self.add_field(self.username_textfield)
+    self.add_field(self.password_textfield)
+    self.add_field(self.database_textfield)
+    self.highlighted = 1 if def_text != '' else 0
+    self.caller = caller
+
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
+      self.close()
+      return True
+    return super().input(inkey)
+
+  def accept_and_close(self):
+    if self.engine in ['aurora', 'aurora-mysql', 'mariadb', 'mysql']:
+      dollar_zero = 'mysql'
+      cmd = 'mysql -h {0} -D {1} -u {2} --password={3}'.format(self.ip, self.database_textfield.text, self.username_textfield.text, self.password_textfield.text)
+    elif self.engine in ['aurora-postgresql', 'postgres']:
+      dollar_zero = 'psql'
+      cmd = 'psql postgres://{2}:{3}@{0}/{1}'.format(self.ip, self.database_textfield.text, self.username_textfield.text, self.password_textfield.text)
+    else:
+      Common.Session.set_message('Unsupported engine: {0}'.format(self.engine), Common.color('message_info'))
+      self.close()
+      return
+    ex = Common.Session.ui.unraw(subprocess.run, ['bash', '-c', cmd])
+    Common.Session.set_message('{1} exited with code {0}'.format(ex.returncode, dollar_zero), Common.color('message_info'))
+    self.close()
+
+  def close(self):
+    self.parent.remove_block(self)
