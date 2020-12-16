@@ -6,7 +6,7 @@ class ListControl(Control):
   def __init__(self, parent, alignment, dimensions, color=ColorGold, selection_color=ColorBlackOnGold, title_color=ColorBlackOnOrange, *args, **kwargs):
     super().__init__(parent, alignment, dimensions, *args, **kwargs)
     self.entries = []
-    self.hotkeys = {'KEY_DOWN': self.list_down, 'KEY_UP': self.list_up}
+    self.hotkeys = {'KEY_DOWN': self.list_down, 'KEY_UP': self.list_up, 'KEY_PGUP': self.pageup, 'KEY_PGDOWN': self.pagedown, 'KEY_END': self.end, 'KEY_HOME': self.home}
     self.tooltips = {}
     self.color = color
     self.selection_color = selection_color
@@ -17,7 +17,9 @@ class ListControl(Control):
     self.calculated = 0
     self._filter = None
     self.thread_share['clear'] = False
+    self._cache = None
     self.thread_share['new_entries'] = []
+    self.top = 0
 
   @property
   def filter(self):
@@ -27,12 +29,13 @@ class ListControl(Control):
   def filter(self, value):
     sel = self.selection
     self._filter = value
-    unf = len([entry for entry in self.entries if entry.matches_filter(self._filter)])
-    if self.selected >= unf:
-      self.selected = unf - 1 if unf > 0 else 0
+    self.top = 0
+    self.selected = 0
+    self._cache = None
 
   def add_entry(self, entry):
     self.entries.append(entry)
+    self._cache = None
 
   def add_hotkey(self, hotkey, action, tooltip=None):
     self.hotkeys[hotkey] = action
@@ -50,19 +53,58 @@ class ListControl(Control):
       return True
     return False
 
+  @property
+  def filtered(self):
+    if self._cache is None:
+      self._cache = [e for e in self.entries if e.matches_filter(self._filter)]
+    return self._cache
+
   def list_down(self, *args):
-    if self.selected < len(self.entries) - 1:
+    if self.selected < len(self.filtered) - 1:
       self.selected += 1
+    rows = self.rows
+    if self.selected >= self.top + rows:
+      self.top = max(0, self.selected - rows + 1)
 
   def list_up(self, *args):
     if self.selected > 0:
       self.selected -= 1
+    if self.selected < self.top:
+      self.top = self.selected
+
+  def pagedown(self, *args):
+    self.selected += self.rows
+    self.selected = min(len(self.filtered), self.selected)
+    rows = self.rows
+    if self.selected >= self.top + rows:
+      self.top = max(0, self.selected - rows + 1)
+
+  def pageup(self, *args):
+    self.selected -= self.rows
+    self.selected = max(0, self.selected)
+    if self.selected < self.top:
+      self.top = self.selected
+
+  def home(self, *args):
+    self.selected = 0
+    self.top = 0
+
+  def end(self, *args):
+    self.selected = len(self.filtered) - 1
+    self.top = max(0, self.selected - self.rows + 1)
 
   @property
   def selection(self):
-    if len(self.entries) > self.selected:
-      return self.entries[self.selected]
+    if len(self.filtered) > self.selected:
+      return self.filtered[self.selected]
     return None
+
+  @property
+  def rows(self):
+    c = self.corners()
+    y = c[1][0] + (0 if self.border is None else 1)
+    y1 = c[1][1] - (0 if self.border is None else 1)
+    return y1 - y
 
   def add_column(self, column, min_size=0, index=None):
     if index is None:
@@ -78,6 +120,7 @@ class ListControl(Control):
       self.thread_share['clear'] = False
     if len(self.thread_share['new_entries']) > 0:
       self.entries.extend(self.thread_share['new_entries'])
+      self._cache = None
       self.thread_share['new_entries'] = []
 
   def before_paint(self):
@@ -130,6 +173,7 @@ class ListControl(Control):
     c = self.corners()
     y = c[1][0] + (0 if self.border is None else 1)
     x = c[0][0] + (0 if self.border is None else 1)
+    rows = self.rows
     for col in self.column_order:
       text = col
       m = self.column_titles[col]
@@ -139,11 +183,9 @@ class ListControl(Control):
         text = col + (int(m - len(col)) * ' ')
       Commons.UIInstance.print(text.upper(), xy=(x,y), color=self.title_color)
       x += m
-    idx = 0
     y += 1
-    for item in self.entries:
-      if not item.matches_filter(self.filter):
-        continue
+    for i in range(self.top, min(len(self.filtered), self.top + rows)):
+      item = self.filtered[i]
       x = c[0][0] + (0 if self.border is None else 1)
       for col in self.column_order:
         text = item.columns[col]
@@ -152,9 +194,8 @@ class ListControl(Control):
           text = text[:m]
         elif len(text) < m:
           text = text + ((m - len(text)) * ' ')
-        Commons.UIInstance.print(text, xy=(x,y), color=self.selection_color if idx == self.selected else self.color)
+        Commons.UIInstance.print(text, xy=(x,y), color=self.selection_color if i == self.selected else self.color)
         x += m
-      idx += 1
       y += 1
 
 class ListEntry:

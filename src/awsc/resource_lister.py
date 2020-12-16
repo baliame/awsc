@@ -163,6 +163,7 @@ class ResourceLister(ResourceListerBase):
 
   def sort(self):
     self.entries.sort(key=lambda x: x.columns[self.sort_column])
+    self._cache = None
 
 class MultiLister(ResourceListerBase):
   prefix = 'CHANGEME'
@@ -257,6 +258,7 @@ class MultiLister(ResourceListerBase):
 
   def sort(self):
     self.entries.sort(key=lambda x: x.columns['type'])
+    self._cache = None
 
   # AWS Convenience functions
   def determine_ec2_name(self, instance):
