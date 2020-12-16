@@ -235,15 +235,21 @@ class MultiLister(ResourceListerBase):
       if callable(elem['compare_path']):
         val = elem['compare_path'](raw_item)
       else:
-        val = jq.compile(elem['compare_path']).input(raw_item).first()
+        try:
+          val = jq.compile(elem['compare_path']).input(raw_item).first()
+        except StopIteration as e:
+          return False
       return val == self.compare_value
     else:
       if callable(elem['compare_path']):
         return self.compare_value in elem['compare_path'](raw_item)
       else:
-        for val in jq.compile(elem['compare_path']).input(raw_item).first():
-          if val == self.compare_value:
-            return True
+        try:
+          for val in jq.compile(elem['compare_path']).input(raw_item).first():
+            if val == self.compare_value:
+              return True
+        except StopIteration as e:
+          return False
     return False
 
   def refresh_data(self, *args, **kwargs):
@@ -251,6 +257,19 @@ class MultiLister(ResourceListerBase):
 
   def sort(self):
     self.entries.sort(key=lambda x: x.columns['type'])
+
+  # AWS Convenience functions
+  def determine_ec2_name(self, instance):
+    for tag in instance['Tags']:
+      if tag['Key'] == 'Name':
+        return tag['Value']
+    return ''
+
+  def determine_rds_name(self, instance):
+    return instance['Endpoint']['Address']
+
+  def empty(self, _):
+    return ''
 
 class GenericDescriber(TextBrowser):
   prefix = 'generic_describer'

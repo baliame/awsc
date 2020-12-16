@@ -6,6 +6,22 @@ from .termui.control import Border
 import subprocess
 from pathlib import Path
 import time
+import datetime
+
+def format_timedelta(delta):
+  hours = int(delta.seconds / 3600)
+  minutes = int(delta.seconds / 60) - hours * 60
+  seconds = delta.seconds - hours * 3600 - minutes * 60
+  if delta.days > 0:
+    return '{0}d{1}h ago'.format(delta.days, hours)
+  elif hours > 0:
+    return '{0}h{1}m ago'.format(hours, minutes)
+  elif minutes > 0:
+    return '{0}m{1}s ago'.format(minutes, seconds)
+  elif seconds > 0:
+    return '{0}s ago'.format(seconds)
+  else:
+    return '<1s ago'
 
 # EC2
 
@@ -370,15 +386,6 @@ class SGRelated(MultiLister):
     ]
     super().__init__(*args, **kwargs)
 
-  def determine_ec2_name(self, instance):
-    for tag in instance['Tags']:
-      if tag['Key'] == 'Name':
-        return tag['Value']
-    return ''
-
-  def determine_rds_name(self, instance):
-    return instance['Endpoint']['Address']
-
 # RDS
 
 class RDSResourceLister(ResourceLister):
@@ -518,3 +525,115 @@ class RDSClientDialog(DialogControl):
 
   def close(self):
     self.parent.remove_block(self)
+
+# CFN
+
+class CFNResourceLister(ResourceLister):
+  prefix = 'cfn_list'
+  title = 'CloudFormation Stacks'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'cloudformation'
+    self.list_method = 'describe_stacks'
+    self.item_path = '.Stacks'
+    self.column_paths = {
+      'name': '.StackName',
+      'status': '.StackStatus',
+      'drift': '.DriftInformation.StackDriftStatus',
+      'created': self.determine_created,
+      'updated': self.determine_updated,
+    }
+    self.hidden_columns = {
+      'arn': '.StackId',
+    }
+    self.imported_column_sizes = {
+      'name': 30,
+      'status': 15,
+      'drift': 15,
+      'created': 20,
+      'updated': 20,
+    }
+    self.describe_command = CFNDescriber.opener
+    self.describe_selection_arg = 'cfn_entry'
+    self.open_command = CFNRelated.opener
+    self.open_selection_arg = 'compare_value'
+
+    self.imported_column_order = ['name', 'status', 'drift', 'created', 'updated']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+
+  def determine_created(self, cfn):
+    return format_timedelta(datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(cfn['CreationTime']))
+
+  def determine_updated(self, cfn):
+    return format_timedelta(datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(cfn['LastUpdatedTime']))
+
+class CFNDescriber(Describer):
+  prefix = 'cfn_browser'
+  title = 'CloudFormation Stack'
+
+  def __init__(self, parent, alignment, dimensions, sg_entry, *args, **kwargs):
+    self.stack_name = sg_entry['name']
+    self.resource_key = 'cloudformation'
+    self.describe_method = 'describe_stacks'
+    self.describe_kwargs = {'StackName': self.stack_name}
+    self.object_path='.Stacks[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.stack_name
+
+class CFNRelated(MultiLister):
+  prefix = 'cfn_related'
+  title = 'Resources in CloudFormation Stack'
+
+  def title_info(self):
+    return self.compare_value
+
+  def __init__(self, *args, **kwargs):
+    kwargs['compare_key'] = 'arn'
+    self.resource_descriptors = [
+      {
+        'resource_key': 'ec2',
+        'list_method': 'describe_instances',
+        'list_kwargs': {},
+        'item_path': '[.Reservations[].Instances[]]',
+        'column_paths': {
+          'type': lambda x: 'EC2 Instance',
+          'id': '.InstanceId',
+          'name': self.determine_ec2_name,
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      },
+      {
+        'resource_key': 'autoscaling',
+        'list_method': 'describe_auto_scaling_groups',
+        'list_kwargs': {},
+        'item_path': '.AutoScalingGroups',
+        'column_paths': {
+          'type': lambda x: 'Autoscaling Group',
+          'id': self.empty,
+          'name': '.AutoScalingGroupName',
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      },
+      {
+        'resource_key': 'rds',
+        'list_method': 'describe_db_instances',
+        'list_kwargs': {},
+        'item_path': '.DBInstances',
+        'column_paths': {
+          'type': lambda x: 'RDS Instance',
+          'id': '.DBInstanceIdentifier',
+          'name': self.determine_rds_name,
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.TagList[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      },
+    ]
+    super().__init__(*args, **kwargs)
