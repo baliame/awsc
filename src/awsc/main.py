@@ -87,6 +87,8 @@ def main(*args, **kwargs):
     'context': open_context_lister,
     'region': open_region_lister,
     'ssh': open_ssh_lister,
+    'lc': LCResourceLister.opener,
+    'launchconfiguration': LCResourceLister.opener,
     'r53': R53ResourceLister.opener,
     'route53': R53ResourceLister.opener,
     'cfn': CFNResourceLister.opener,

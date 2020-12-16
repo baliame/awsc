@@ -185,7 +185,7 @@ class ASGResourceLister(ResourceLister):
       return ''
 
   def determine_instance_count(self, asg):
-    return str(len(asg['Instances']))
+    return '{0}/{1}'.format(len([h for h in asg['Instances'] if h['HealthStatus'] == 'Healthy']), len(asg['Instances']))
 
 class ASGDescriber(Describer):
   prefix = 'asg_browser'
@@ -782,3 +782,44 @@ class R53RecordDescriber(Describer):
 
   def title_info(self):
     return '{0} {1}'.format(self.r53_entry['entry'], self.r53_entry['name'])
+
+# LC
+class LCResourceLister(ResourceLister):
+  prefix = 'lc_list'
+  title = 'Launch Configurations'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'autoscaling'
+    self.list_method = 'describe_launch_configurations'
+    self.item_path = '.LaunchConfigurations'
+    self.column_paths = {
+      'name': '.LaunchConfigurationName',
+      'image id': '.ImageId',
+      'instance type': '.InstanceType',
+    }
+    self.imported_column_sizes = {
+      'name': 30,
+      'image id': 20,
+      'instance type': 20,
+    }
+    self.describe_command = LCDescriber.opener
+    self.describe_selection_arg = 'lc_entry'
+
+    self.imported_column_order = ['name', 'image id', 'instance type']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+
+class LCDescriber(Describer):
+  prefix = 'lc_browser'
+  title = 'Launch Configuration'
+
+  def __init__(self, parent, alignment, dimensions, lc_entry, *args, **kwargs):
+    self.lc_name = lc_entry['name']
+    self.resource_key = 'autoscaling'
+    self.describe_method = 'describe_launch_configurations'
+    self.describe_kwargs = {'LaunchConfigurationNames': [self.lc_name]}
+    self.object_path='.LaunchConfigurations[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.lc_name

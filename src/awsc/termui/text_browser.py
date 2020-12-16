@@ -198,8 +198,8 @@ class TextBrowser(Control):
             if not self.wrap:
               end = True
 
-        if end or y > y1:
-          break
+          if end or y > y1:
+            break
       if not end:
         y += 1
         x = x0
