@@ -148,9 +148,25 @@ class ASGResourceLister(ResourceLister):
   prefix = 'asg_list'
   title = 'Autoscaling Groups'
 
+  def title_info(self):
+    return self.title_info_data
+
+  def matches(self, list_entry, *args):
+    if self.lc is not None:
+      if list_entry['launch config'] != self.lc['name']:
+        return False
+    return super().matches(list_entry, *args)
+
   def __init__(self, *args, **kwargs):
     self.resource_key = 'autoscaling'
     self.list_method = 'describe_auto_scaling_groups'
+    self.title_info_data = None
+    self.lc = None
+    if 'lc' in kwargs:
+      lc = kwargs['lc']
+      self.title_info_data = 'LaunchConfiguration: {0}'.format(lc['name'])
+      self.lc = lc
+
     self.item_path = '.AutoScalingGroups'
     self.column_paths = {
       'name': '.AutoScalingGroupName',
@@ -159,6 +175,9 @@ class ASGResourceLister(ResourceLister):
       'min': '.MinSize',
       'desired': '.DesiredCapacity',
       'max': '.MaxSize',
+    }
+    self.hidden_columns = {
+      'launch config': '.LaunchConfigurationName',
     }
     self.imported_column_sizes = {
       'name': 30,
@@ -804,6 +823,8 @@ class LCResourceLister(ResourceLister):
     }
     self.describe_command = LCDescriber.opener
     self.describe_selection_arg = 'lc_entry'
+    self.open_command = ASGResourceLister.opener
+    self.open_selection_arg = 'lc'
 
     self.imported_column_order = ['name', 'image id', 'instance type']
     self.sort_column = 'name'
@@ -823,3 +844,5 @@ class LCDescriber(Describer):
 
   def title_info(self):
     return self.lc_name
+
+#

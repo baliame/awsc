@@ -48,7 +48,10 @@ class ResourceListerBase(ListControl):
         if callable(path):
           init[column] = path(item)
         else:
-          init[column] = jq.compile(path).input(item).first()
+          try:
+            init[column] = jq.compile(path).input(item).first()
+          except StopIteration:
+            init[column] = ''
       le = ListEntry(**init)
       le.controller_data = item
       if self.matches(le, *args):
