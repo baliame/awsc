@@ -74,8 +74,6 @@ class Block:
       pass
 
   def input(self, key):
-    if self.parent is None:
-      Commons.UIInstance.log(str(key) if not key.is_sequence else str((str(key), key.name, key.code)))
     for block in self.blocks:
       if block.input(key):
         return True

@@ -182,7 +182,7 @@ class UI:
                 if ct - st > FrameRate:
                   break
               t2 = time.time()
-              self.log('Frame time: {0}'.format(t2 - st), level=1)
+              self.log('Frame time: {0}'.format(t2 - st), level=3)
               d = FrameRate - (t2 - st)
               if d > 0:
                 time.sleep(d)

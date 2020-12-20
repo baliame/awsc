@@ -140,7 +140,6 @@ class ListControl(Control):
     pass
 
   def paint(self):
-    Commons.UIInstance.log('Painting ListControl', level=2)
     win = self.w_in
     if win != self.calculated:
       vals = 0

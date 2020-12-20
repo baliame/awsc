@@ -10,6 +10,7 @@ import json
 import threading
 import traceback
 import sys
+import pyperclip
 
 def datetime_hack(x):
   if isinstance(x, datetime.datetime):
@@ -41,7 +42,13 @@ class ResourceListerBase(ListControl):
     response = getattr(provider, list_method)(**list_kwargs)
     ret = []
 
-    for item in jq.compile(item_path).input(text=json.dumps(response, default=datetime_hack)).first():
+    it = jq.compile(item_path).input(text=json.dumps(response, default=datetime_hack)).first()
+    if it is None:
+      Common.Session.ui.log('get_data_generic for {0}.{1}({2}) returned None on path {3}'.format(resource_key, list_method, list_kwargs, item_path))
+      Common.Session.ui.log('API response was:\n{0}'.format(json.dumps(response, default=datetime_hack)))
+      return []
+
+    for item in it:
       init = {}
       for column, path in {**column_paths, **hidden_columns}.items():
         itree = item
@@ -127,6 +134,8 @@ class ResourceLister(ResourceListerBase):
       if self.open_command is None:
         self.add_hotkey('KEY_ENTER', self.describe, 'Describe')
     self.add_hotkey(ControlCodes.R, self.refresh_data, 'Refresh')
+    if 'arn' in self.column_paths or 'arn' in self.hidden_columns:
+      self.add_hotkey('r', self.copy_arn, 'Copy ARN')
     self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
 
     if 'name' in self.imported_column_sizes or 'name' in self.hidden_columns:
@@ -136,6 +145,11 @@ class ResourceLister(ResourceListerBase):
       self.column_order = []
     self.column_order.extend(self.imported_column_order)
     self.refresh_data()
+
+  def copy_arn(self, *args):
+    if self.selection is not None:
+      pyperclip.copy(self.selection['arn'])
+      Common.Session.set_message('Copied resource ARN to clipboard', Common.color('message_success'))
 
   def async_inner(self, *args, fn, clear=False, **kwargs):
     try:
@@ -149,6 +163,8 @@ class ResourceLister(ResourceListerBase):
         self.mutex.release()
     except Exception as e:
       self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}'.format(str(e))
+      Common.Session.ui.log(str(e), 1)
+      Common.Session.ui.log(traceback.format_exc(), 1)
 
   def describe(self, *args):
     if self.describe_command is not None and self.selection is not None:
