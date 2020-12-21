@@ -162,7 +162,7 @@ class ResourceLister(ResourceListerBase):
       finally:
         self.mutex.release()
     except Exception as e:
-      self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}'.format(str(e))
+      self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
       Common.Session.ui.log(str(e), 1)
       Common.Session.ui.log(traceback.format_exc(), 1)
 
@@ -174,7 +174,7 @@ class ResourceLister(ResourceListerBase):
     if self.open_command is not None and self.selection is not None:
       Common.Session.push_frame(self.open_command(**{self.open_selection_arg: self.selection, 'pushed': True}))
 
-  def get_data(self):
+  def get_data(self, *args, **kwargs):
     return self.get_data_generic(self.resource_key, self.list_method, self.list_kwargs, self.item_path, self.column_paths, self.hidden_columns)
 
   def refresh_data(self, *args, **kwargs):
@@ -211,8 +211,10 @@ class MultiLister(ResourceListerBase):
       raise AttributeError('resource_descriptors is undefined')
     if isinstance(compare_value, ListEntry):
       self.compare_value = compare_value[compare_key]
+      self.orig_compare_value = compare_value
     else:
       self.compare_value = compare_value
+      self.orig_compare_value = compare_value
     self.add_hotkey('KEY_ENTER', self.describe, 'Describe')
     self.add_hotkey('d', self.describe, 'Describe')
     self.add_hotkey(ControlCodes.R, self.refresh_data, 'Refresh')
@@ -243,9 +245,9 @@ class MultiLister(ResourceListerBase):
         finally:
           self.mutex.release()
     except Exception as e:
-      self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}'.format(str(e))
+      self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
 
-  def get_data(self):
+  def get_data(self, *args, **kwargs):
     for elem in self.resource_descriptors:
       yield self.get_data_generic(elem['resource_key'], elem['list_method'], elem['list_kwargs'], elem['item_path'], elem['column_paths'], elem['hidden_columns'], elem)
 

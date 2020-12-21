@@ -103,6 +103,8 @@ def main(*args, **kwargs):
     'autoscaling': ASGResourceLister.opener,
     'sg': SGResourceLister.opener,
     'securitygroup': SGResourceLister.opener,
+    'tg': TargetGroupResourceLister.opener,
+    'targetgroup': TargetGroupResourceLister.opener,
   }
 
   Common.main()

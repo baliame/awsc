@@ -6,6 +6,7 @@ from .termui.control import Border
 from .termui.list_control import ListEntry
 import subprocess
 from pathlib import Path
+import jq
 import botocore
 import time
 import datetime
@@ -658,8 +659,47 @@ class CFNRelated(MultiLister):
         'compare_as_list': False,
         'compare_path': '.TagList[] | select(.Key=="aws:cloudformation:stack-id").Value',
       },
+      {
+        'resource_key': 'elbv2',
+        'list_method': 'describe_load_balancers',
+        'list_kwargs': {},
+        'item_path': '.LoadBalancers',
+        'column_paths': {
+          'type': lambda x: 'Load Balancer',
+          'id': self.empty,
+          'name': '.LoadBalancerName',
+        },
+        'hidden_columns': {
+          'arn': '.LoadBalancerArn',
+        },
+        'compare_as_list': False,
+        'compare_path': self.comparer_generator('AWS::ElasticLoadBalancingV2::LoadBalancer', '.LoadBalancerArn'),
+      },
     ]
     super().__init__(*args, **kwargs)
+
+  def comparer_generator(self, cfn_type, physical_id_path):
+    def fn(raw_item):
+      phys_id = jq.compile(physical_id_path).input(raw_item).first()
+      if '{0}|{1}'.format(cfn_type, phys_id) in self.stack_res_list:
+        return self.compare_value
+      return 'False'
+    return fn
+
+  def async_inner(self, *args, fn, clear=False, **kwargs):
+    stop = False
+    rl = None
+    self.stack_res_list = []
+    while not stop:
+      rargs = {'StackName': self.orig_compare_value['name']}
+      if rl is not None and 'NextToken' in rl and rl['NextToken'] is not None:
+        rargs['NextToken'] = rl['NextToken']
+      rl = Common.Session.service_provider('cloudformation').list_stack_resources(**rargs)
+      if 'NextToken' not in rl or rl['NextToken'] is None:
+        stop = True
+      for item in rl['StackResourceSummaries']:
+        self.stack_res_list.append('{0}|{1}'.format(item['ResourceType'], item['PhysicalResourceId']))
+    return super().async_inner(*args, fn=fn, clear=clear, **kwargs)
 
 # R53
 
@@ -944,8 +984,8 @@ class ListenerResourceLister(ResourceLister):
     return ''
 
 class ListenerDescriber(Describer):
-  prefix = 'lb_browser'
-  title = 'Load Balancer'
+  prefix = 'listener_browser'
+  title = 'Listener'
 
   def __init__(self, parent, alignment, dimensions, listener_entry, *args, **kwargs):
     self.listener_arn = listener_entry['name']
@@ -990,12 +1030,19 @@ class ListenerActionResourceLister(ResourceLister):
     }
     self.describe_command = ListenerActionDescriber.opener
     self.describe_selection_arg = 'listener_entry'
-    #self.open_command = ListenerActionLister.opener
-    #self.open_selection_arg = 'listener'
+    self.open_command = TargetGroupResourceLister.opener
+    self.open_selection_arg = 'rule_entry'
 
     self.imported_column_order = ['prio', 'condition', 'action type', 'target']
     self.sort_column = 'prio'
     super().__init__(*args, **kwargs)
+
+  def open(self, *args):
+    if self.selection is not None:
+      if self.selection['action type'] == 'forward':
+        return super().open(*args)
+      else:
+        return self.describe(*args)
 
   def determine_condition(self, la, *args):
     if len(la['Conditions']) > 1:
@@ -1064,3 +1111,69 @@ class ListenerActionDescriber(Describer):
 
   def title_info(self):
     return self.rule_arn
+
+# Target Groups
+class TargetGroupResourceLister(ResourceLister):
+  prefix = 'target_group_list'
+  title = 'Target Groups'
+
+  def title_info(self):
+    if self.rule is not None:
+      return self.rule['arn']
+    return None
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'elbv2'
+    self.list_method = 'describe_target_groups'
+    self.item_path = '.TargetGroups'
+    if 'rule_entry' in kwargs:
+      self.rule = kwargs['rule_entry']
+      arns = []
+      raw = self.rule.controller_data
+      try:
+        arns = [i['TargetGroupArn'] for i in raw['Actions'][-1]['ForwardConfig']['TargetGroups']]
+        self.list_kwargs = {'TargetGroupArns': arns}
+      except KeyError:
+        self.rule = None
+        Common.Session.set_message('Rule is not configured for forwarding.', Common.color('message_error'))
+    else:
+      self.rule = None
+    self.column_paths = {
+      'name': '.TargetGroupName',
+      'protocol': '.Protocol',
+      'port': '.Port',
+      'target type': '.TargetType',
+    }
+    self.imported_column_sizes = {
+      'name': 30,
+      'protocol': 10,
+      'port': 10,
+      'target type': 10,
+    }
+    self.hidden_columns = {
+      'arn': '.TargetGroupArn',
+    }
+    self.describe_command = TargetGroupDescriber.opener
+    self.describe_selection_arg = 'tg_entry'
+    #self.open_command = ListenerActionResourceLister.opener
+    #self.open_selection_arg = 'listener'
+
+    self.imported_column_order = ['name', 'protocol', 'port', 'target type']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+
+class TargetGroupDescriber(Describer):
+  prefix = 'tg_browser'
+  title = 'Target Group'
+
+  def __init__(self, parent, alignment, dimensions, tg_entry, *args, **kwargs):
+    self.tg_arn = tg_entry['arn']
+    self.tg_name = tg_entry['name']
+    self.resource_key = 'elbv2'
+    self.describe_method = 'describe_target_groups'
+    self.describe_kwargs = {'TargetGroupArns': [self.tg_arn]}
+    self.object_path='.TargetGroups[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.tg_name
