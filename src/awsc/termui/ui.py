@@ -101,9 +101,9 @@ class UI:
         out = ''
         end = True
       p = 0
-      self.log('UI: Print string on screen size [{0} {1}] | Space in line: {2} | Part to print: {3} ({4})'.format(self.w, self.h, space, len(part), part), level=3)
+      self.log('UI: Print string on screen size [{0} {1}] | Space in line: {2} | Part to print: {3} ({4})'.format(self.w, self.h, space, len(part), part), level=4)
       for i in range(xy[0], xy[0]+space):
-        self.log('Printing to [{0} {1}] character {2} of {3}'.format(xy[1], i, p, part), level=3)
+        self.log('Printing to [{0} {1}] character {2} of {3}'.format(xy[1], i, p, part), level=4)
         try:
           self.buf[xy[1]][i].value = part[p]
           if color is not None:
@@ -187,4 +187,4 @@ class UI:
               if d > 0:
                 time.sleep(d)
     except KeyboardInterrupt:
-      print('Exit.')
+      pass

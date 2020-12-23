@@ -68,6 +68,17 @@ class ResourceListerBase(ListControl):
   def matches(self, list_entry, *args):
     return True
 
+  def tag_finder_generator(self, tagname, default='', taglist_key='Tags'):
+    def fn(e, *args):
+      if taglist_key in e:
+        for tag in e[taglist_key]:
+          if tag['Key'] == tagname:
+            return tag['Value']
+      return default
+    return fn
+
+  def empty(self, _):
+    return ''
 
 class ResourceLister(ResourceListerBase):
   prefix = 'CHANGEME'
@@ -107,11 +118,14 @@ class ResourceLister(ResourceListerBase):
     else:
       if not hasattr(self, 'describe_selection_arg'):
         raise AttributeError('describe_command is defined but describe_selection_arg is undefined')
-    if not hasattr(self, 'open_command'):
+    if not hasattr(self, 'open_command') or self.open_command is None:
       self.open_command = None
     else:
-      if not hasattr(self, 'open_selection_arg'):
-        raise AttributeError('open_command is defined but open_selection_arg is undefined')
+      if not isinstance(self.open_command, str):
+        if not hasattr(self, 'open_selection_arg'):
+          raise AttributeError('open_command is defined but open_selection_arg is undefined')
+      elif not hasattr(self, 'additional_commands') or self.open_command not in self.additional_commands:
+        raise AttributeError('open_command refers to a key that is not in additional_commands')
     if not hasattr(self, 'item_path'):
       raise AttributeError('item_path is undefined')
     if not hasattr(self, 'hidden_columns'):
@@ -128,11 +142,20 @@ class ResourceLister(ResourceListerBase):
       self.sort_column = 'name'
 
     if self.open_command is not None:
-      self.add_hotkey('KEY_ENTER', self.open, 'Open')
+      open_tooltip = 'Open'
+      if isinstance(self.open_command, str):
+        cmd = self.additional_commands[self.open_command]
+        self.open_command = cmd['command']
+        self.open_selection_arg = cmd['selection_arg']
+        open_tooltip = cmd['tooltip']
+      self.add_hotkey('KEY_ENTER', self.open, open_tooltip)
     if self.describe_command is not None:
       self.add_hotkey('d', self.describe, 'Describe')
       if self.open_command is None:
         self.add_hotkey('KEY_ENTER', self.describe, 'Describe')
+    if hasattr(self, 'additional_commands'):
+      for key, command_spec in self.additional_commands.items():
+        self.add_hotkey(key, self.command_wrapper(command_spec['command'], command_spec['selection_arg']), command_spec['tooltip'])
     self.add_hotkey(ControlCodes.R, self.refresh_data, 'Refresh')
     if 'arn' in self.column_paths or 'arn' in self.hidden_columns:
       self.add_hotkey('r', self.copy_arn, 'Copy ARN')
@@ -166,13 +189,22 @@ class ResourceLister(ResourceListerBase):
       Common.Session.ui.log(str(e), 1)
       Common.Session.ui.log(traceback.format_exc(), 1)
 
+  def command(self, cmd, kw={}):
+    if self.selection is not None:
+      Common.Session.push_frame(cmd(**kw))
+
+  def command_wrapper(self, cmd, selection_arg):
+    def fn(*args):
+      self.command(cmd, {selection_arg: self.selection, 'pushed': True})
+    return fn
+
   def describe(self, *args):
-    if self.describe_command is not None and self.selection is not None:
-      Common.Session.push_frame(self.describe_command(**{self.describe_selection_arg: self.selection, 'pushed': True}))
+    if self.describe_command is not None:
+      self.command_wrapper(self.describe_command, self.describe_selection_arg)()
 
   def open(self, *args):
-    if self.open_command is not None and self.selection is not None:
-      Common.Session.push_frame(self.open_command(**{self.open_selection_arg: self.selection, 'pushed': True}))
+    if self.open_command is not None:
+      self.command_wrapper(self.open_command, self.open_selection_arg)()
 
   def get_data(self, *args, **kwargs):
     return self.get_data_generic(self.resource_key, self.list_method, self.list_kwargs, self.item_path, self.column_paths, self.hidden_columns)
@@ -183,6 +215,9 @@ class ResourceLister(ResourceListerBase):
   def sort(self):
     self.entries.sort(key=lambda x: x.columns[self.sort_column])
     self._cache = None
+
+class NoResults(Exception):
+  pass
 
 class MultiLister(ResourceListerBase):
   prefix = 'CHANGEME'
@@ -246,10 +281,15 @@ class MultiLister(ResourceListerBase):
           self.mutex.release()
     except Exception as e:
       self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
+      Common.Session.ui.log(str(e), 1)
+      Common.Session.ui.log(traceback.format_exc(), 1)
 
   def get_data(self, *args, **kwargs):
     for elem in self.resource_descriptors:
-      yield self.get_data_generic(elem['resource_key'], elem['list_method'], elem['list_kwargs'], elem['item_path'], elem['column_paths'], elem['hidden_columns'], elem)
+      try:
+        yield self.get_data_generic(elem['resource_key'], elem['list_method'], elem['list_kwargs']() if callable(elem['list_kwargs']) else elem['list_kwargs'], elem['item_path'], elem['column_paths'], elem['hidden_columns'], elem)
+      except NoResults:
+        continue
 
   def matches(self, list_entry, elem, *args):
     raw_item = list_entry.controller_data
@@ -259,6 +299,8 @@ class MultiLister(ResourceListerBase):
       else:
         try:
           val = jq.compile(elem['compare_path']).input(raw_item).first()
+        except ValueError as e:
+          return False
         except StopIteration as e:
           return False
       return val == self.compare_value
@@ -280,19 +322,6 @@ class MultiLister(ResourceListerBase):
   def sort(self):
     self.entries.sort(key=lambda x: x.columns['type'])
     self._cache = None
-
-  # AWS Convenience functions
-  def determine_ec2_name(self, instance):
-    for tag in instance['Tags']:
-      if tag['Key'] == 'Name':
-        return tag['Value']
-    return ''
-
-  def determine_rds_name(self, instance):
-    return instance['Endpoint']['Address']
-
-  def empty(self, _):
-    return ''
 
 class GenericDescriber(TextBrowser):
   prefix = 'generic_describer'

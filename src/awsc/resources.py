@@ -1,4 +1,4 @@
-from .resource_lister import ResourceLister, Describer, MultiLister
+from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber
 from .common import Common
 from .termui.dialog import DialogControl, DialogFieldText
 from .termui.alignment import CenterAnchor, Dimension
@@ -6,6 +6,7 @@ from .termui.control import Border
 from .termui.list_control import ListEntry
 import subprocess
 from pathlib import Path
+import json
 import jq
 import botocore
 import time
@@ -46,7 +47,7 @@ class EC2ResourceLister(ResourceLister):
     self.item_path = '[.Reservations[].Instances[]]'
     self.column_paths = {
       'instance id': '.InstanceId',
-      'name': self.determine_name,
+      'name': self.tag_finder_generator('Name'),
       'type': '.InstanceType',
       'vpc': '.VpcId',
       'public ip': '.PublicIpAddress',
@@ -68,12 +69,6 @@ class EC2ResourceLister(ResourceLister):
     self.sort_column = 'instance id'
     super().__init__(*args, **kwargs)
     self.add_hotkey('s', self.ssh, 'Open SSH')
-
-  def determine_name(self, instance):
-    for tag in instance['Tags']:
-      if tag['Key'] == 'Name':
-        return tag['Value']
-    return ''
 
   def ssh(self, _):
     p = Path.home() / '.ssh' / Common.Session.ssh_key
@@ -434,7 +429,7 @@ class RDSResourceLister(ResourceLister):
     self.hidden_columns = {
       'public_access': '.PubliclyAccessible',
       'db_name': '.DBName',
-      'name': self.determine_name,
+      'name': self.tag_finder_generator('Name', taglist_key='TagList'),
     }
     self.imported_column_sizes = {
       'instance id': 11,
@@ -449,12 +444,6 @@ class RDSResourceLister(ResourceLister):
     self.sort_column = 'instance id'
     super().__init__(*args, **kwargs)
     self.add_hotkey('s', self.db_client, 'Open command line')
-
-  def determine_name(self, instance):
-    for tag in instance['TagList']:
-      if tag['Key'] == 'Name':
-        return tag['Value']
-    return ''
 
   def db_client(self, _):
     if self.selection is not None:
@@ -625,7 +614,7 @@ class CFNRelated(MultiLister):
         'column_paths': {
           'type': lambda x: 'EC2 Instance',
           'id': '.InstanceId',
-          'name': self.determine_ec2_name,
+          'name': self.tag_finder_generator('Name'),
         },
         'hidden_columns': {},
         'compare_as_list': False,
@@ -653,7 +642,7 @@ class CFNRelated(MultiLister):
         'column_paths': {
           'type': lambda x: 'RDS Instance',
           'id': '.DBInstanceIdentifier',
-          'name': self.determine_rds_name,
+          'name': '.Endpoint.Address',
         },
         'hidden_columns': {},
         'compare_as_list': False,
@@ -675,21 +664,100 @@ class CFNRelated(MultiLister):
         'compare_as_list': False,
         'compare_path': self.comparer_generator('AWS::ElasticLoadBalancingV2::LoadBalancer', '.LoadBalancerArn'),
       },
+      {
+        'resource_key': 'elbv2',
+        'list_method': 'describe_target_groups',
+        'list_kwargs': {},
+        'item_path': '.TargetGroups',
+        'column_paths': {
+          'type': lambda x: 'Target Group',
+          'id': self.resource_id_from_arn_generator('.TargetGroupArn'),
+          'name': '.TargetGroupName',
+        },
+        'hidden_columns': {
+          'arn': '.TargetGroupArn',
+        },
+        'compare_as_list': False,
+        'compare_path': self.comparer_generator('AWS::ElasticLoadBalancingV2::TargetGroup', '.TargetGroupArn'),
+      },
+      {
+        'resource_key': 'elbv2',
+        'list_method': 'describe_listeners',
+        'list_kwargs': self.kwargs_from_physids_generator('ListenerArns', 'AWS::ElasticLoadBalancingV2::Listener'),
+        'item_path': '.Listeners',
+        'column_paths': {
+          'type': lambda x: 'Listener',
+          'id': self.full_resource_id_from_arn_generator('.ListenerArn'),
+          'name': self.empty,
+        },
+        'hidden_columns': {
+          'arn': '.ListenerArn',
+        },
+        'compare_as_list': False,
+        'compare_path': self.comparer_generator('AWS::ElasticLoadBalancingV2::Listener', '.ListenerArn'),
+      },
+      {
+        'resource_key': 'ec2',
+        'list_method': 'describe_vpcs',
+        'list_kwargs': {},
+        'item_path': '.Vpcs',
+        'column_paths': {
+          'type': lambda x: 'VPC',
+          'id': '.VpcId',
+          'name': self.tag_finder_generator('Name'),
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      },
+      {
+        'resource_key': 'ec2',
+        'list_method': 'describe_subnets',
+        'list_kwargs': {},
+        'item_path': '.Subnets',
+        'column_paths': {
+          'type': lambda x: 'VPC Subnet',
+          'id': '.SubnetId',
+          'name': self.tag_finder_generator('Name'),
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      },
     ]
     super().__init__(*args, **kwargs)
+
+  def full_resource_id_from_arn_generator(self, arn_path):
+    def fn(raw_item):
+      arn = ARN(jq.compile(arn_path).input(raw_item).first())
+      return arn.resource_id
+    return fn
+
+  def resource_id_from_arn_generator(self, arn_path):
+    def fn(raw_item):
+      arn = ARN(jq.compile(arn_path).input(raw_item).first())
+      return arn.resource_id_first
+    return fn
 
   def comparer_generator(self, cfn_type, physical_id_path):
     def fn(raw_item):
       phys_id = jq.compile(physical_id_path).input(raw_item).first()
-      if '{0}|{1}'.format(cfn_type, phys_id) in self.stack_res_list:
+      if cfn_type in self.stack_res_list and phys_id in self.stack_res_list[cfn_type]:
         return self.compare_value
-      return 'False'
+      return None
+    return fn
+
+  def kwargs_from_physids_generator(self, kwarg, cfn_type):
+    def fn():
+      if cfn_type in self.stack_res_list:
+        return {kwarg: self.stack_res_list[cfn_type]}
+      raise NoResults
     return fn
 
   def async_inner(self, *args, fn, clear=False, **kwargs):
     stop = False
     rl = None
-    self.stack_res_list = []
+    self.stack_res_list = {}
     while not stop:
       rargs = {'StackName': self.orig_compare_value['name']}
       if rl is not None and 'NextToken' in rl and rl['NextToken'] is not None:
@@ -698,7 +766,9 @@ class CFNRelated(MultiLister):
       if 'NextToken' not in rl or rl['NextToken'] is None:
         stop = True
       for item in rl['StackResourceSummaries']:
-        self.stack_res_list.append('{0}|{1}'.format(item['ResourceType'], item['PhysicalResourceId']))
+        if item['ResourceType'] not in self.stack_res_list:
+          self.stack_res_list[item['ResourceType']] = []
+        self.stack_res_list[item['ResourceType']].append(item['PhysicalResourceId'])
     return super().async_inner(*args, fn=fn, clear=clear, **kwargs)
 
 # R53
@@ -1177,3 +1247,306 @@ class TargetGroupDescriber(Describer):
 
   def title_info(self):
     return self.tg_name
+
+# VPC
+class VPCResourceLister(ResourceLister):
+  prefix = 'vpc_list'
+  title = 'VPCs'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_vpcs'
+    self.item_path = '.Vpcs'
+    self.column_paths = {
+      'id': '.VpcId',
+      'name': self.tag_finder_generator('Name'),
+      'default': self.determine_default,
+      'cidr': '.CidrBlock',
+      'state': '.State',
+    }
+    self.imported_column_sizes = {
+      'id': 30,
+      'name': 30,
+      'default': 3,
+      'cidr': 18,
+      'state': 9,
+    }
+    self.describe_command = VPCDescriber.opener
+    self.describe_selection_arg = 'vpc_entry'
+    self.additional_commands = {
+      't': {
+        'command': SubnetResourceLister.opener,
+        'selection_arg': 'vpc',
+        'tooltip': 'View Subnets',
+      }
+    }
+    self.open_command = 't'
+
+    self.imported_column_order = ['id', 'name', 'default', 'cidr', 'state']
+    self.sort_column = 'id'
+    super().__init__(*args, **kwargs)
+
+  def determine_default(self, vpc, *args):
+    if vpc['IsDefault']:
+      return '✓'
+    return ''
+
+class VPCDescriber(Describer):
+  prefix = 'vpc_browser'
+  title = 'VPC'
+
+  def __init__(self, parent, alignment, dimensions, vpc_entry, *args, **kwargs):
+    self.vpc_id = vpc_entry['id']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_vpcs'
+    self.describe_kwargs = {'VpcIds': [self.vpc_id]}
+    self.object_path='.Vpcs[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.vpc_id
+
+# Subnet
+class SubnetResourceLister(ResourceLister):
+  prefix = 'subnet_list'
+  title = 'Subnets'
+
+  def title_info(self):
+    if self.vpc is not None:
+      return self.vpc['id']
+    return None
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_subnets'
+    self.item_path = '.Subnets'
+    if 'vpc' in kwargs:
+      self.vpc = kwargs['vpc']
+      self.list_kwargs = {
+        'Filters': [{
+          'Name': 'vpc-id',
+          'Values': [
+            self.vpc['id'],
+          ]
+        }]
+      }
+    else:
+      self.vpc = None
+    self.column_paths = {
+      'id': '.SubnetId',
+      'name': self.tag_finder_generator('Name'),
+      'vpc': '.VpcId',
+      'cidr': '.CidrBlock',
+      'AZ': '.AvailabilityZone',
+      'public': self.determine_public,
+    }
+    self.hidden_columns = {
+      'arn': '.SubnetArn',
+    }
+    self.imported_column_sizes = {
+      'id': 30,
+      'name': 30,
+      'vpc': 30,
+      'cidr': 18,
+      'AZ': 20,
+      'public': 3,
+    }
+    self.describe_command = SubnetDescriber.opener
+    self.describe_selection_arg = 'subnet_entry'
+    self.additional_commands = {
+      't': {
+        'command': RouteTableResourceLister.opener,
+        'selection_arg': 'subnet',
+        'tooltip': 'View Route Table',
+      }
+    }
+    #self.open_command = RouteTableResourceLister.opener
+    #self.open_selection_arg = 'subnet'
+
+    self.imported_column_order = ['id', 'name', 'vpc', 'cidr', 'AZ', 'public']
+    self.sort_column = 'id'
+    super().__init__(*args, **kwargs)
+
+  def determine_public(self, subnet, *args):
+    if subnet['MapPublicIpOnLaunch']:
+      return '✓'
+    return ''
+
+class SubnetDescriber(Describer):
+  prefix = 'subnet_browser'
+  title = 'Subnet'
+
+  def __init__(self, parent, alignment, dimensions, subnet_entry, *args, **kwargs):
+    self.subnet_id = subnet_entry['id']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_subnets'
+    self.describe_kwargs = {'SubnetIds': [self.subnet_id]}
+    self.object_path='.Subnets[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.subnet_id
+
+# RouteTable
+class RouteTableResourceLister(ResourceLister):
+  prefix = 'route_table_list'
+  title = 'Route Tables'
+
+  def title_info(self):
+    if self.subnet is not None:
+      return self.subnet['id']
+    return None
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_route_tables'
+    self.item_path = '.RouteTables'
+    if 'subnet' in kwargs:
+      self.subnet = kwargs['subnet']
+      self.list_kwargs = {
+        'Filters': [{
+          'Name': 'association.subnet-id',
+          'Values': [
+            self.subnet['id'],
+          ]
+        }]
+      }
+    else:
+      self.subnet = None
+    self.column_paths = {
+      'id': '.RouteTableId',
+      'name': self.tag_finder_generator('Name'),
+      'vpc': '.VpcId',
+      'subnet': self.determine_subnet_association,
+    }
+    self.imported_column_sizes = {
+      'id': 30,
+      'name': 30,
+      'vpc': 30,
+      'subnet': 30,
+    }
+    self.describe_command = RouteTableDescriber.opener
+    self.describe_selection_arg = 'route_table_entry'
+    self.open_command = RouteResourceLister.opener
+    self.open_selection_arg = 'route_table'
+
+    self.imported_column_order = ['id', 'name', 'vpc', 'subnet']
+    self.sort_column = 'id'
+    super().__init__(*args, **kwargs)
+
+  def determine_subnet_association(self, rt, *args):
+    if 'Associations' not in rt or len(rt['Associations']) == 0:
+      return '<none>'
+    if len(rt['Associations']) > 1:
+      return '<multiple>'
+    if 'SubnetId' in rt['Associations'][0]:
+      return rt['Associations'][0]['SubnetId']
+    else:
+      return '<VPC default>'
+
+class RouteTableDescriber(Describer):
+  prefix = 'route_table_browser'
+  title = 'Route Table'
+
+  def __init__(self, parent, alignment, dimensions, route_table_entry, *args, **kwargs):
+    self.route_table_id = route_table_entry['id']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_route_tables'
+    self.describe_kwargs = {'RouteTableIds': [self.route_table_id]}
+    self.object_path='.RouteTables[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.route_table_id
+
+# Routes
+class RouteResourceLister(ResourceLister):
+  prefix = 'routee_list'
+  title = 'Routes'
+
+  def title_info(self):
+    if self.route_table is not None:
+      return self.route_table['id']
+    return None
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_route_tables'
+    self.item_path = '[.RouteTables[] as $rt | $rt.Routes[] as $r | $r | .RouteTableId = $rt.RouteTableId]'
+    if 'route_table' in kwargs:
+      self.route_table = kwargs['route_table']
+      self.list_kwargs = {
+        'RouteTableIds': [self.route_table['id']]
+      }
+    else:
+      self.route_table = None
+    self.column_paths = {
+      'route table': '.RouteTableId',
+      'gateway type': self.determine_gateway_type,
+      'gateway': self.determine_gateway,
+      'destination': '.DestinationCidrBlock',
+      'state': '.State',
+    }
+    self.hidden_columns = {
+      'name': self.empty,
+    }
+    self.imported_column_sizes = {
+      'route table': 30,
+      'gateway type': 20,
+      'gateway': 30,
+      'destination': 30,
+      'state': 10,
+    }
+
+    self.imported_column_order = ['route table', 'gateway type', 'gateway', 'destination', 'state']
+    self.sort_column = 'route table'
+    super().__init__(*args, **kwargs)
+
+    self.add_hotkey('d', self.generic_describe, 'Describe')
+    self.add_hotkey('KEY_ENTER', self.generic_describe, 'Describe')
+
+  def generic_describe(self, entry):
+    if self.selection is not None:
+      Common.Session.push_frame(GenericDescriber.opener(**{
+        'describing': 'Route in route table {0}'.format(self.selection['route table']),
+        'content': json.dumps(self.selection.controller_data, sort_keys=True, indent=2),
+        'pushed': True,
+      }))
+
+  def determine_gateway_type(self, entry):
+    if 'NatGatewayId' in entry:
+      return 'NAT'
+    elif 'InstanceId' in entry:
+      return 'Instance'
+    elif 'TransitGatewayId' in entry:
+      return 'Transit'
+    elif 'LocalGatewayId' in entry:
+      return 'Local'
+    elif 'CarrierGatewayId' in entry:
+      return 'Carrier'
+    elif 'VpcPeeringConnectionId' in entry:
+      return 'VPC Peering'
+    elif 'EgressOnlyInternetGatewayId' in entry:
+      return 'Egress-Only'
+    elif entry['GatewayId'] == 'local':
+      return 'VPC-Local'
+    else:
+      return 'Internet'
+
+  def determine_gateway(self, entry):
+    if 'NatGatewayId' in entry:
+      return entry['NatGatewayId']
+    elif 'InstanceId' in entry:
+      return entry['InstanceId']
+    elif 'TransitGatewayId' in entry:
+      return entry['TransitGatewayId']
+    elif 'LocalGatewayId' in entry:
+      return entry['LocalGatewayId']
+    elif 'CarrierGatewayId' in entry:
+      return entry['CarrierGatewayId']
+    elif 'VpcPeeringConnectionId' in entry:
+      return entry['VpcPeeringConnectionId']
+    elif 'EgressOnlyInternetGatewayId' in entry:
+      return entry['EgressOnlyInternetGatewayId']
+    else:
+      return entry['GatewayId']
