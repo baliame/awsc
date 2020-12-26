@@ -4,6 +4,7 @@ from .termui.dialog import DialogControl, DialogFieldText
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.list_control import ListEntry
+from .termui.ui import ControlCodes
 import subprocess
 from pathlib import Path
 import json
@@ -724,6 +725,62 @@ class CFNRelated(MultiLister):
         'compare_as_list': False,
         'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
       },
+      {
+        'resource_key': 'route53',
+        'list_method': 'list_hosted_zones',
+        'list_kwargs': {},
+        'item_path': '.HostedZones',
+        'column_paths': {
+          'type': lambda x: 'Route53 Zone',
+          'id': '.Id',
+          'name': '.Name',
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': self.comparer_generator('AWS::Route53::HostedZone', '.Id'),
+      },
+      {
+        'resource_key': 'ec2',
+        'list_method': 'describe_vpcs',
+        'list_kwargs': {},
+        'item_path': '.Vpcs',
+        'column_paths': {
+          'type': lambda x: 'VPC',
+          'id': '.VpcId',
+          'name': self.tag_finder_generator('Name'),
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      },
+      {
+        'resource_key': 'ec2',
+        'list_method': 'describe_subnets',
+        'list_kwargs': {},
+        'item_path': '.Subnets',
+        'column_paths': {
+          'type': lambda x: 'Subnet',
+          'id': '.SubnetId',
+          'name': self.tag_finder_generator('Name'),
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      },
+      {
+        'resource_key': 'ec2',
+        'list_method': 'describe_route_tables',
+        'list_kwargs': {},
+        'item_path': '.RouteTables',
+        'column_paths': {
+          'type': lambda x: 'Route Table',
+          'id': '.RouteTableId',
+          'name': self.tag_finder_generator('Name'),
+        },
+        'hidden_columns': {},
+        'compare_as_list': False,
+        'compare_path': '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
+      }
     ]
     super().__init__(*args, **kwargs)
 
@@ -1314,6 +1371,8 @@ class SubnetResourceLister(ResourceLister):
   def title_info(self):
     if self.vpc is not None:
       return self.vpc['id']
+    elif self.db_subnet_group is not None:
+      return self.db_subnet_group['name']
     return None
 
   def __init__(self, *args, **kwargs):
@@ -1332,6 +1391,11 @@ class SubnetResourceLister(ResourceLister):
       }
     else:
       self.vpc = None
+    if 'db_subnet_group' in kwargs:
+      self.db_subnet_group = kwargs['db_subnet_group']
+      self.list_kwargs = self.get_db_subnet_ids
+    else:
+      self.db_subnet_group = None
     self.column_paths = {
       'id': '.SubnetId',
       'name': self.tag_finder_generator('Name'),
@@ -1371,6 +1435,10 @@ class SubnetResourceLister(ResourceLister):
     if subnet['MapPublicIpOnLaunch']:
       return '✓'
     return ''
+
+  def get_db_subnet_ids(self, *args):
+    dsg = Common.Session.service_provider('rds').describe_db_subnet_groups(DBSubnetGroupName=self.db_subnet_group.name)
+    return {'SubnetIds': [s['SubnetIdentifier'] for s in dsg['DBSubnetGroups'][0]['Subnets']]}
 
 class SubnetDescriber(Describer):
   prefix = 'subnet_browser'
@@ -1550,3 +1618,280 @@ class RouteResourceLister(ResourceLister):
       return entry['EgressOnlyInternetGatewayId']
     else:
       return entry['GatewayId']
+
+# DBSubnetGroups
+class DBSubnetGroupResourceLister(ResourceLister):
+  prefix = 'db_subnet_group_list'
+  title = 'DB Subnet Groups'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'rds'
+    self.list_method = 'describe_db_subnet_groups'
+    self.item_path = '.DBSubnetGroups'
+    self.column_paths = {
+      'name': '.DBSubnetGroupName',
+      'vpc': '.VpcId',
+      'status': '.SubnetGroupStatus'
+    }
+    self.hidden_columns = {
+      'arn': '.DBSubnetGroupArn',
+    }
+    self.imported_column_sizes = {
+      'name': 30,
+      'vpc': 30,
+      'status': 30,
+    }
+    self.describe_command = DBSubnetGroupDescriber.opener
+    self.describe_selection_arg = 'dsg_entry'
+    self.open_command = SubnetResourceLister.opener
+    self.open_selection_arg = 'db_subnet_group'
+
+    self.imported_column_order = ['name', 'vpc', 'status']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+
+class DBSubnetGroupDescriber(Describer):
+  prefix = 'subnet_browser'
+  title = 'Subnet'
+
+  def __init__(self, parent, alignment, dimensions, dsg_entry, *args, **kwargs):
+    self.dsg_name = dsg_entry['name']
+    self.resource_key = 'rds'
+    self.describe_method = 'describe_db_subnet_groups'
+    self.describe_kwargs = {'DBSubnetGroupName': self.dsg_name}
+    self.object_path='.DBSubnetGroups[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.dsg_name
+
+# S3
+class S3ResourceLister(ResourceLister):
+  prefix = 's3_list'
+  title = 'S3 Buckets'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 's3'
+    self.list_method = 'list_buckets'
+    self.item_path = '.Buckets'
+    self.column_paths = {
+      'name': '.Name',
+      'location': self.determine_location,
+    }
+    self.imported_column_sizes = {
+      'name': 60,
+      'location': 20,
+    }
+    self.describe_command = S3Describer.opener
+    self.describe_selection_arg = 'bucket'
+    self.open_command = S3ObjectLister.opener
+    self.open_selection_arg = 'bucket'
+
+    self.imported_column_order = ['name', 'location']
+    self.sort_column = 'name'
+    super().__init__(*args, **kwargs)
+
+  def determine_location(self, entry):
+    loc_resp = Common.Session.service_provider('s3').get_bucket_location(Bucket=entry['Name'])
+    return loc_resp['LocationConstraint']
+
+class S3Describer(Describer):
+  prefix = 's3_browser'
+  title = 'S3 Bucket'
+
+  def __init__(self, parent, alignment, dimensions, bucket, *args, **kwargs):
+    self.bucket = bucket['name']
+    self.resource_key = 'rds'
+    self.describe_method = 'get_bucket_policy'
+    self.describe_kwargs = {'Bucket': self.bucket}
+    self.object_path='.'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.bucket
+
+class CancelDownload(Exception):
+  pass
+
+class S3ObjectLister(ResourceLister):
+  prefix = 's3_object_list'
+  title = 'S3 Browser'
+
+  def title_info(self):
+    if self.path is None:
+      return self.bucket
+    else:
+      return '{0}/{1}'.format(self.bucket, self.path)
+
+  def __init__(self, *args, bucket, path=None, **kwargs):
+    self.icons = {
+      'folder': '🗀',
+      'default': '🗈',
+      'ext.txt': '🖹',
+      'ext.png': '🖻',
+      'ext.jpg': '🖻',
+      'ext.gif': '🖻',
+      'ext.jpeg': '🖻',
+      'ext.svg': '🖻',
+      'ext.doc': '🖺',
+      'ext.docx': '🖺',
+      'ext.xls': '🖺',
+      'ext.xlsx': '🖺',
+      'ext.ppt': '🖺',
+      'ext.pptx': '🖺',
+    }
+
+    self.resource_key = 's3'
+    self.list_method = 'list_objects'
+    if isinstance(bucket, ListEntry):
+      self.bucket = bucket['name']
+    else:
+      self.bucket = bucket
+    self.path = path
+    self.list_kwargs = {'Bucket': self.bucket, 'MaxKeys': 100, 'Delimiter': '/'}
+    self.next_marker = 'NextMarker'
+    self.next_marker_arg = 'Marker'
+    if self.path is not None:
+      self.list_kwargs['Prefix'] = self.path
+    self.item_path = '.Contents + .CommonPrefixes'
+    self.column_paths = {
+      'icon': self.determine_icon,
+      'name': self.determine_name,
+      'size': self.determine_size,
+    }
+    self.hidden_columns = {
+      'is_dir': self.determine_is_dir,
+      'size_in_bytes': '.Size',
+    }
+    self.imported_column_sizes = {
+      'icon': 1,
+      'name': 150,
+      'size': 20,
+    }
+    self.imported_column_order = ['icon', 'name', 'size']
+    self.sort_column = 'name'
+    self.additional_commands = {
+      'd': {
+        'command': self.download_selection,
+        'selection_arg': 'file',
+        'tooltip': 'Download',
+      },
+      'v': {
+        'command': self.view_selection,
+        'selection_arg': 'file',
+        'tooltip': 'View Contents',
+      }
+    }
+    self.open_command = S3ObjectLister.opener
+    self.open_selection_arg = 'path'
+    super().__init__(*args, **kwargs)
+    self.add_hotkey(ControlCodes.D, self.empty, 'Cancel download')
+
+  def determine_name(self, entry, *args):
+    if 'Prefix' in entry:
+      return entry['Prefix'].strip('/').split('/')[-1]
+    return entry['Key'].split('/')[-1]
+
+  def determine_is_dir(self, entry, *args):
+    return '/' if 'Prefix' in entry else ''
+
+  def determine_size(self, entry, *args):
+    if 'Prefix' in entry:
+      return ''
+    b_prefix = ['', 'K', 'M', 'G', 'T', 'E']
+    b_idx = 0
+    s = float(entry['Size'])
+    while s >= 1024:
+      b_idx += 1
+      s /= 1024
+      if b_idx == len(b_prefix) - 1:
+        break
+    return '{0:.2f} {1}B'.format(s, b_prefix[b_idx])
+
+  def determine_icon(self, entry, *args):
+    if 'Prefix' in entry:
+      return self.icons['folder']
+    ext = entry['Key'].split('/')[-1].split('.')[-1]
+    ext_key = 'ext.{0}'.format(ext)
+    if ext_key in self.icons:
+      return self.icons[ext_key]
+    return self.icons['default']
+
+  def open(self, *args):
+    if self.open_command is not None and self.selection is not None and self.selection['is_dir'] == '/':
+      subpath = self.get_selection_path()
+      self.command(self.open_command, {self.open_selection_arg: subpath, 'bucket': self.bucket, 'pushed': True})
+
+  def get_selection_path(self):
+    if self.selection is not None:
+      if self.path is None:
+        return '{0}{1}'.format(self.selection['name'], self.selection['is_dir'])
+      else:
+        return '{0}{1}{2}'.format(self.path, self.selection['name'], self.selection['is_dir'])
+    return None
+
+  def get_cache_name(self):
+    return '{0}/{1}'.format(self.bucket, self.get_selection_path()).replace('/', '--')
+
+  def cache_fetch(self, obj, *args, **kwargs):
+    if self.selection is not None:
+      sp = self.get_selection_path()
+      obj_size = float(self.selection['size_in_bytes'])
+      downloaded = 0
+      def fn(chunk):
+        nonlocal downloaded
+        downloaded += chunk
+        perc = float(downloaded) / obj_size
+        key = Common.Session.ui.check_one_key()
+        if key == ControlCodes.C:
+          raise KeyboardInterrupt
+        elif key == ControlCodes.D:
+          raise CancelDownload()
+        Common.Session.ui.progress_bar_paint(perc)
+      Common.Session.service_provider('s3').download_file(Bucket=self.bucket, Key=sp, Filename=obj, Callback=fn)
+      try:
+        with open(obj, 'r') as f:
+          return f.read()
+      except UnicodeDecodeError:
+        with open(obj, 'rb') as f:
+          return f.read()
+
+  def download_selection(self, *args, **kwargs):
+    if self.selection is not None:
+      if self.selection['is_dir'] == '/':
+        Common.Session.set_message('Cannot download directory as file.', Common.color('message_info'))
+        return
+      path = Path.home() / 'Downloads' / 'awsc'
+      path.mkdir(parents=True, exist_ok=True)
+      try:
+        data = Common.Session.ui.filecache(self.get_cache_name(), self.cache_fetch)
+      except CancelDownload:
+        Common.Session.set_message('Download cancelled', Common.color('message_info'))
+        return None
+      fpath = path / self.selection['name']
+      mode = 'w'
+      if isinstance(data, bytes):
+        mode = 'wb'
+      with fpath.open(mode) as f:
+        f.write(data)
+      Common.Session.set_message('Downloaded file to {0}'.format(str(fpath.resolve())), Common.color('message_success'))
+    return None
+
+  def view_selection(self, *args, **kwargs):
+    if self.selection is not None:
+      if self.selection['is_dir'] == '/':
+        Common.Session.set_message('Cannot display directory as text file.', Common.color('message_info'))
+        return None
+      try:
+        data = Common.Session.ui.filecache(self.get_cache_name(), self.cache_fetch)
+      except CancelDownload:
+        Common.Session.set_message('Download cancelled', Common.color('message_info'))
+        return None
+      if isinstance(data, bytes):
+        data = '<binary>'
+      return GenericDescriber.opener(**{
+        'describing': 'File: {0}'.format(self.get_selection_path()),
+        'content': data,
+        'pushed': True,
+      })
+    return None

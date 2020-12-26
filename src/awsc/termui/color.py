@@ -7,13 +7,14 @@ class Palette:
 
 class Palette8Bit(Palette):
   def __call__(self, code, string, background=None, bold=False):
-    if not bold:
-      ccode = "\033[38;5;{0}m".format(code)
-    else:
-      ccode = "\033[1;38;5;{0}m".format(code)
+    out = ""
     if background is not None:
-      ccode = "\033[48;5;{0}m{1}".format(background, ccode)
-    return "{0}{1}\033[0m".format(ccode, string)
+      out += "\033[48;5;" + str(background) + "m"
+    out += "\033["
+    if bold:
+      out += "1;"
+    out += "38;5;" + str(code) + "m" + string + "\033[0m"
+    return out
 
 class Color:
   def __init__(self, palette, code, background=None):

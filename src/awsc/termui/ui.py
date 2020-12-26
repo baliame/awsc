@@ -13,6 +13,9 @@ from .color import ColorGold, ColorGreen, ColorMagenta
 from .block import Block
 import numpy as np
 from .screen import Screen
+import shutil
+import tempfile
+from pathlib import Path
 
 FrameRate = 0.05
 
@@ -65,11 +68,16 @@ class UI:
     self.debug = 1
     self.clear_log()
     self.top_block = Block(None, TopLeftAnchor(0, 0), Dimension('100%', '100%'), tag='top')
+    self.last_paint = time.time()
+    self.last_size_refresh = time.time()
     self.term = Terminal()
+    self._w = self.term.width
+    self._h = self.term.height
     self.exit = False
     signal.signal(signal.SIGINT, self.set_exit)
     self.buf = Screen(self)
     self.tickers = []
+    self.cache_dir = None
 
   def clear_log(self):
     if self.debug == 0:
@@ -83,6 +91,20 @@ class UI:
     with open('log.log', 'a') as f:
       f.write(line)
       f.write('\n')
+
+  def filecache(self, obj, cb, *args, **kwargs):
+    if self.cache_dir is None:
+      self.cache_dir = tempfile.mkdtemp(prefix='awsc')
+    objpath = Path(self.cache_dir) / obj
+    if not objpath.exists():
+      data = cb(str(objpath.resolve()), *args, **kwargs)
+      return data
+    try:
+      with objpath.open('r') as f:
+        return f.read()
+    except UnicodeDecodeError:
+      with objpath.open('rb') as f:
+        return f.read()
 
   def print(self, out, xy=None, color=None, wrap=False, bounds=None, bold=False):
     if bounds is None:
@@ -116,17 +138,26 @@ class UI:
       if not wrap or xy[1] >= bounds[1][1]:
         end = True
 
+  def refresh_size(self):
+    if self.last_paint - self.last_size_refresh > 1:
+      self.last_size_refresh = self.last_paint
+      self._w = self.term.width
+      self._h = self.term.height
+
   @property
   def w(self):
-    return self.term.width
+    self.refresh_size()
+    return self._w
 
   @property
   def h(self):
-    return self.term.height
+    self.refresh_size()
+    return self._h
 
   @property
   def dim(self):
-    return (self.w, self.h)
+    self.refresh_size()
+    return (self._w, self._h)
 
   def set_exit(self, *args, **kwargs):
     self.exit = True
@@ -134,12 +165,22 @@ class UI:
   def before_paint(self):
     self.top_block.before_paint()
 
+  def progress_bar_paint(self, perc):
+    width = int(self.w * perc)
+    with self.term.location(0, self.h - 1):
+      perc_t = '{0:.2f}% '.format(perc * 100)
+      print('\033[38;5;220m' + perc_t + ((width - len(perc_t)) * '░') + '\033[0m', end='')
+
+  def check_one_key(self):
+    return self.term.inkey(FrameRate / 8, FrameRate / 8)
+
   def paint(self):
     row = ' ' * self.w
     self.buf.clear()
     self.top_block.paint()
     with self.term.location(0, 0):
       self.buf.output()
+    self.last_paint = time.time()
 
   def unraw(self, cmd, *args, **kwargs):
     termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
@@ -172,9 +213,7 @@ class UI:
                 func()
               self.before_paint()
               self.paint()
-              while key := self.term.inkey(FrameRate, FrameRate):
-#              key = self.term.inkey(FrameRate, FrameRate)
-#              if key:
+              while key := self.term.inkey(FrameRate / 4, FrameRate / 4):
                 if key == '\x03':
                   raise KeyboardInterrupt
                 self.top_block.input(key)
@@ -182,9 +221,12 @@ class UI:
                 if ct - st > FrameRate:
                   break
               t2 = time.time()
-              self.log('Frame time: {0}'.format(t2 - st), level=3)
+              self.log('Frame time: {0}'.format(t2 - st), level=1)
               d = FrameRate - (t2 - st)
               if d > 0:
                 time.sleep(d)
     except KeyboardInterrupt:
       pass
+    finally:
+      if self.cache_dir is not None:
+        shutil.rmtree(self.cache_dir)

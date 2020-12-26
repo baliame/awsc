@@ -70,6 +70,9 @@ class Session:
         new_frame[0].add_hotkey('KEY_ESCAPE', self.pop_frame, 'Back')
 
   def pop_frame(self, *args):
+    for elem in self.stack_frame:
+      if hasattr(elem, 'on_close'):
+        elem.on_close()
     if len(self.stack) > 0:
       self.replace_frame(self.stack.pop(), drop_stack=False)
     for elem in self.stack_frame:

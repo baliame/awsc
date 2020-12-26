@@ -121,6 +121,9 @@ def main(*args, **kwargs):
       'tg': TargetGroupResourceLister.opener,
       'targetgroup': TargetGroupResourceLister.opener,
       'vpc': VPCResourceLister.opener,
+      'dsg': DBSubnetGroupResourceLister.opener,
+      'dbsubnetgroup': DBSubnetGroupResourceLister.opener,
+      's3': S3ResourceLister.opener,
     }
 
     Common.main()

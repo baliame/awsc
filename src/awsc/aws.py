@@ -14,12 +14,22 @@ class AWS:
       signature_version = 'v4',
     )
 
+  def s3conf(self):
+    return botoconf.Config(
+      region_name = Common.Session.region,
+      signature_version = 's3v4',
+    )
+
   def __call__(self, service, keys=None):
+    if service == 's3':
+      config = self.s3conf()
+    else:
+      config = self.conf()
     return boto3.client(
       service,
       aws_access_key_id=keys['access'] if keys is not None else Common.Configuration.keystore[Common.Session.context]['access'],
       aws_secret_access_key=keys['secret'] if keys is not None else Common.Configuration.keystore[Common.Session.context]['secret'],
-      config=self.conf(),
+      config=config,
     )
 
   def whoami(self, keys=None):

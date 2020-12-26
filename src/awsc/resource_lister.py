@@ -17,7 +17,22 @@ def datetime_hack(x):
     return x.isoformat()
   raise TypeError("Unknown type")
 
+class StopLoadingData(Exception):
+  pass
+
 class ResourceListerBase(ListControl):
+  def __init__(self, *args, **kwargs):
+    self.load_counter = 1
+    self.closed = False
+    if not hasattr(self, 'next_marker'):
+      self.next_marker = None
+    if not hasattr(self, 'next_marker_arg'):
+      self.next_marker_arg = None
+    super().__init__(*args, **kwargs)
+
+  def on_close(self):
+    self.closed = True
+
   def asynch(self, fn, clear=False, *args, **kwargs):
     try:
       t = threading.Thread(target=self.async_inner, args=args, kwargs={**kwargs, 'fn': fn, 'clear': clear}, daemon=True)
@@ -32,38 +47,79 @@ class ResourceListerBase(ListControl):
       del(self.thread_share['thread_error'])
 
   def async_inner(self, *args, fn, clear=False, **kwargs):
-    pass
+    try:
+      self.mutex.acquire()
+      try:
+        if clear:
+          self.thread_share['clear'] = True
+      finally:
+        self.mutex.release()
 
-  def get_data_generic(self, resource_key, list_method, list_kwargs, item_path, column_paths, hidden_columns, *args):
+      for data in fn(*args, **kwargs):
+        self.mutex.acquire()
+        try:
+          self.thread_share['new_entries'].extend(data)
+        finally:
+          self.mutex.release()
+    except StopLoadingData as e:
+      return
+    except Exception as e:
+      self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
+      Common.Session.ui.log(str(e), 1)
+      Common.Session.ui.log(traceback.format_exc(), 1)
+
+  def get_data_generic(self, resource_key, list_method, list_kwargs, item_path, column_paths, hidden_columns, next_marker_name, next_marker_arg, *args):
     try:
       provider = Common.Session.service_provider(resource_key)
     except KeyError:
       return
-    response = getattr(provider, list_method)(**list_kwargs)
+    if callable(list_kwargs):
+      list_kwargs = list_kwargs()
+    next_marker = None
     ret = []
+    while next_marker != '':
+      if self.closed:
+        raise StopLoadingData
+      it_list_kwargs = list_kwargs.copy()
+      if next_marker is not None and next_marker_arg is not None:
+        it_list_kwargs[next_marker_arg] = next_marker
+      response = getattr(provider, list_method)(**it_list_kwargs)
 
-    it = jq.compile(item_path).input(text=json.dumps(response, default=datetime_hack)).first()
-    if it is None:
-      Common.Session.ui.log('get_data_generic for {0}.{1}({2}) returned None on path {3}'.format(resource_key, list_method, list_kwargs, item_path))
-      Common.Session.ui.log('API response was:\n{0}'.format(json.dumps(response, default=datetime_hack)))
-      return []
+      it = jq.compile(item_path).input(text=json.dumps(response, default=datetime_hack)).first()
+      if it is None:
+        Common.Session.ui.log('get_data_generic for {0}.{1}({2}) returned None on path {3}'.format(resource_key, list_method, list_kwargs, item_path))
+        Common.Session.ui.log('API response was:\n{0}'.format(json.dumps(response, default=datetime_hack)))
+        return []
 
-    for item in it:
-      init = {}
-      for column, path in {**column_paths, **hidden_columns}.items():
-        itree = item
-        if callable(path):
-          init[column] = path(item)
-        else:
-          try:
-            init[column] = jq.compile(path).input(item).first()
-          except StopIteration:
-            init[column] = ''
-      le = ListEntry(**init)
-      le.controller_data = item
-      if self.matches(le, *args):
-        ret.append(le)
-    return ret
+      for item in it:
+        if self.closed:
+          raise StopLoadingData
+        init = {}
+        for column, path in {**column_paths, **hidden_columns}.items():
+          itree = item
+          if callable(path):
+            init[column] = path(item)
+          else:
+            try:
+              init[column] = jq.compile(path).input(item).first()
+            except StopIteration:
+              init[column] = ''
+        le = ListEntry(**init)
+        le.controller_data = item
+        if self.matches(le, *args):
+          ret.append(le)
+      if self.closed:
+        raise StopLoadingData
+      Common.Session.set_message('Loaded batch #{0}'.format(self.load_counter), Common.color('message_success'))
+      yield ret
+      if self.closed:
+        raise StopLoadingData
+      self.load_counter += 1
+      if next_marker_name is not None and next_marker_name in response:
+        next_marker = response[next_marker_name]
+        ret = []
+      else:
+        next_marker = ''
 
   def matches(self, list_entry, *args):
     return True
@@ -174,24 +230,26 @@ class ResourceLister(ResourceListerBase):
       pyperclip.copy(self.selection['arn'])
       Common.Session.set_message('Copied resource ARN to clipboard', Common.color('message_success'))
 
-  def async_inner(self, *args, fn, clear=False, **kwargs):
-    try:
-      data = fn(*args, **kwargs)
-      self.mutex.acquire()
-      try:
-        if clear:
-          self.thread_share['clear'] = True
-        self.thread_share['new_entries'].extend(data)
-      finally:
-        self.mutex.release()
-    except Exception as e:
-      self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
-      Common.Session.ui.log(str(e), 1)
-      Common.Session.ui.log(traceback.format_exc(), 1)
+  #def async_inner(self, *args, fn, clear=False, **kwargs):
+    #try:
+    #  data = fn(*args, **kwargs)
+    #  self.mutex.acquire()
+    #  try:
+    #    if clear:
+    #      self.thread_share['clear'] = True
+    #    self.thread_share['new_entries'].extend(data)
+    #  finally:
+    #    self.mutex.release()
+    #except Exception as e:
+    #  self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
+    #  Common.Session.ui.log(str(e), 1)
+    #  Common.Session.ui.log(traceback.format_exc(), 1)
 
   def command(self, cmd, kw={}):
     if self.selection is not None:
-      Common.Session.push_frame(cmd(**kw))
+      frame = cmd(**kw)
+      if frame is not None:
+        Common.Session.push_frame(frame)
 
   def command_wrapper(self, cmd, selection_arg):
     def fn(*args):
@@ -207,7 +265,8 @@ class ResourceLister(ResourceListerBase):
       self.command_wrapper(self.open_command, self.open_selection_arg)()
 
   def get_data(self, *args, **kwargs):
-    return self.get_data_generic(self.resource_key, self.list_method, self.list_kwargs, self.item_path, self.column_paths, self.hidden_columns)
+    for y in self.get_data_generic(self.resource_key, self.list_method, self.list_kwargs, self.item_path, self.column_paths, self.hidden_columns, self.next_marker, self.next_marker_arg):
+      yield y
 
   def refresh_data(self, *args, **kwargs):
     self.asynch(self.get_data, clear=True)
@@ -264,30 +323,31 @@ class MultiLister(ResourceListerBase):
         'pushed': True
       }))
 
-  def async_inner(self, *args, fn, clear=False, **kwargs):
-    try:
-      self.mutex.acquire()
-      try:
-        if clear:
-          self.thread_share['clear'] = True
-      finally:
-        self.mutex.release()
-
-      for data in fn(*args, **kwargs):
-        self.mutex.acquire()
-        try:
-          self.thread_share['new_entries'].extend(data)
-        finally:
-          self.mutex.release()
-    except Exception as e:
-      self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
-      Common.Session.ui.log(str(e), 1)
-      Common.Session.ui.log(traceback.format_exc(), 1)
+  #def async_inner(self, *args, fn, clear=False, **kwargs):
+  #  try:
+  #    self.mutex.acquire()
+  #    try:
+  #      if clear:
+  #        self.thread_share['clear'] = True
+  #    finally:
+  #      self.mutex.release()
+  #
+  #    for data in fn(*args, **kwargs):
+  #      self.mutex.acquire()
+  #      try:
+  #        self.thread_share['new_entries'].extend(data)
+  #      finally:
+  #        self.mutex.release()
+  #  except Exception as e:
+  #    self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
+  #    Common.Session.ui.log(str(e), 1)
+  #    Common.Session.ui.log(traceback.format_exc(), 1)
 
   def get_data(self, *args, **kwargs):
     for elem in self.resource_descriptors:
       try:
-        yield self.get_data_generic(elem['resource_key'], elem['list_method'], elem['list_kwargs']() if callable(elem['list_kwargs']) else elem['list_kwargs'], elem['item_path'], elem['column_paths'], elem['hidden_columns'], elem)
+        for y in self.get_data_generic(elem['resource_key'], elem['list_method'], elem['list_kwargs'], elem['item_path'], elem['column_paths'], elem['hidden_columns'], None, None, elem):
+          yield y
       except NoResults:
         continue
 
