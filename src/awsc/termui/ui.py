@@ -16,6 +16,7 @@ from .screen import Screen
 import shutil
 import tempfile
 from pathlib import Path
+import threading
 
 FrameRate = 0.05
 
@@ -78,6 +79,8 @@ class UI:
     self.buf = Screen(self)
     self.tickers = []
     self.cache_dir = None
+    self.mutex = threading.Lock()
+    self.input_buffer = []
 
   def clear_log(self):
     if self.debug == 0:
@@ -196,6 +199,31 @@ class UI:
       tty.setraw(self.term. _keyboard_fd, termios.TCSANOW)
       self.term._line_buffered = False
 
+  def buffer_input(self):
+    while True:
+      key = self.term.inkey(None, 0.01)
+      if key is not None and key != u'':
+        self.mutex.acquire()
+        try:
+          self.input_buffer.append(key)
+        finally:
+          self.mutex.release()
+
+  def process_input_buffer(self, st):
+    self.mutex.acquire()
+    try:
+      if len(self.input_buffer) > 0:
+        key = self.input_buffer[0]
+        self.input_buffer = self.input_buffer[1:]
+        if key == '\x03':
+          raise KeyboardInterrupt
+        self.top_block.input(key)
+        ct = time.time()
+        if ct - st > FrameRate - 0.02:
+          return
+    finally:
+      self.mutex.release()
+
   def main(self):
     global FrameRate
     self.restore = termios.tcgetattr(self.term._keyboard_fd)
@@ -203,20 +231,16 @@ class UI:
       with self.term.fullscreen():
         with self.term.hidden_cursor():
           with self.term.raw():
+            t = threading.Thread(target=self.buffer_input, daemon=True)
+            t.start()
             while not self.exit:
               #print(self.term.clear())
               st = time.time()
+              self.process_input_buffer(st)
               for func in self.tickers:
                 func()
               self.before_paint()
               self.paint()
-              while key := self.term.inkey(FrameRate / 4, FrameRate / 4):
-                if key == '\x03':
-                  raise KeyboardInterrupt
-                self.top_block.input(key)
-                ct = time.time()
-                if ct - st > FrameRate:
-                  break
               t2 = time.time()
               self.log('Frame time: {0}'.format(t2 - st), level=1)
               d = FrameRate - (t2 - st)
