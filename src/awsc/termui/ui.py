@@ -123,14 +123,12 @@ class UI:
         out = ''
         end = True
       p = 0
-      self.log('UI: Print string on screen size [{0} {1}] | Space in line: {2} | Part to print: {3} ({4})'.format(self.w, self.h, space, len(part), part), level=4)
       for i in range(xy[0], xy[0]+space):
-        self.log('Printing to [{0} {1}] character {2} of {3}'.format(xy[1], i, p, part), level=4)
         try:
           self.buf[xy[1]][i].value = part[p]
-          if color is not None:
-            self.buf[xy[1]][i].color = color
+          self.buf[xy[1]][i].color = color
           self.buf[xy[1]][i].bold = bold
+          self.buf[xy[1]][i].dirty = True
         except IndexError:
           break
         p += 1
@@ -175,7 +173,6 @@ class UI:
     return self.term.inkey(FrameRate / 8, FrameRate / 8)
 
   def paint(self):
-    row = ' ' * self.w
     self.buf.clear()
     self.top_block.paint()
     with self.term.location(0, 0):
