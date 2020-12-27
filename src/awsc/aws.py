@@ -20,6 +20,9 @@ class AWS:
       signature_version = 's3v4',
     )
 
+  def env_session(self):
+    return boto3.Session()
+
   def __call__(self, service, keys=None):
     if service == 's3':
       config = self.s3conf()
