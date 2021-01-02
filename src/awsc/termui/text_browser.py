@@ -49,8 +49,10 @@ class TextBrowser(Control):
     add = [[a] for a in text.split('\n')]
     self.lines.extend(add)
     self._prefilter_lines.extend(add)
+    Commons.UIInstance.dirty = True
 
   def clear(self):
+    Commons.UIInstance.dirty = True
     self.lines = []
     self._prefilter_lines = []
     self.filter = None
@@ -63,6 +65,7 @@ class TextBrowser(Control):
 
   @filter.setter
   def filter(self, value):
+    Commons.UIInstance.dirty = True
     refilter = False
     if self._filter != value:
       self._filter_line = -1
@@ -99,6 +102,7 @@ class TextBrowser(Control):
     self.hotkeys[hotkey] = action
     if tooltip is not None:
       self.tooltips[hotkey] = tooltip
+    Commons.UIInstance.dirty = True
 
   def input(self, key):
     inkey = str(key)
@@ -108,6 +112,7 @@ class TextBrowser(Control):
       inkey = inkey.lower()
     if inkey in self.hotkeys.keys():
       self.hotkeys[inkey](self)
+      Commons.UIInstance.dirty = True
       return True
     return False
 

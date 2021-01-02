@@ -1,5 +1,5 @@
 import re
-from .common import Common
+from .common import Common, SessionAwareDialog
 from .termui.alignment import TopLeftAnchor, TopRightAnchor, CenterAnchor, Dimension
 from .termui.dialog import DialogControl, DialogFieldLabel, DialogFieldText
 from .termui.list_control import ListControl, ListEntry
@@ -8,7 +8,7 @@ from .termui.control import Control, Border
 from .info import HotkeyDisplay
 from botocore import exceptions
 
-class DeleteContextDialog(DialogControl):
+class DeleteContextDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, name='', caller=None, *args, **kwargs):
     kwargs['ok_action'] = self.accept_and_close
     kwargs['cancel_action'] = self.close
@@ -32,9 +32,9 @@ class DeleteContextDialog(DialogControl):
   def close(self):
     if self.caller is not None:
       self.caller.reload_contexts()
-    self.parent.remove_block(self)
+    super().close()
 
-class ImportContextDialog(DialogControl):
+class ImportContextDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
     self.accepts_inputs = True
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'New Context', Common.color('modal_dialog_border_title'))
@@ -86,9 +86,9 @@ class ImportContextDialog(DialogControl):
   def close(self):
     if self.caller is not None:
       self.caller.reload_contexts()
-    self.parent.remove_block(self)
+    super().close()
 
-class AddContextDialog(DialogControl):
+class AddContextDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
     self.accepts_inputs = True
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'New Context', Common.color('modal_dialog_border_title'))
@@ -139,7 +139,7 @@ class AddContextDialog(DialogControl):
   def close(self):
     if self.caller is not None:
       self.caller.reload_contexts()
-    self.parent.remove_block(self)
+    super().close()
 
 class ContextList(ListControl):
   def __init__(self, parent, alignment, dimensions, *args, **kwargs):

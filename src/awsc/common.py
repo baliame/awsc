@@ -3,9 +3,19 @@ from .termui.alignment import TopLeftAnchor, Dimension
 from .session import Session
 from .termui.color import Color, Palette8Bit
 from .termui.control import Border, BorderStyle
+from .termui.dialog import DialogControl
 
 DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension('100%', '100%-14')
+
+class SessionAwareDialog(DialogControl):
+  def __init__(self, *args, **kwargs):
+    Common.Session.extend_frame(self)
+    super().__init__(*args, **kwargs)
+
+  def close(self):
+    self.parent.remove_block(self)
+    Common.Session.remove_from_frame(self)
 
 class Common:
   Configuration = None

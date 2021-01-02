@@ -1,6 +1,6 @@
 from .info import InfoDisplay, NeutralDialog, HotkeyDisplay
 from .termui.ui import UI, ControlCodes
-from .termui.dialog import DialogFieldLabel
+from .termui.dialog import DialogFieldLabel, DialogControl
 from .termui.alignment import TopLeftAnchor, BottomLeftAnchor, Dimension
 import time
 import subprocess
@@ -53,6 +53,7 @@ class Session:
     self._message_label.texts = [(text, color)]
     self.message_time = 5.0
     self.last_tick = time.time()
+    self.ui.dirty = True
 
   def replace_frame(self, new_frame, drop_stack=True):
     for elem in self.stack_frame:
@@ -77,6 +78,14 @@ class Session:
       self.replace_frame(self.stack.pop(), drop_stack=False)
     for elem in self.stack_frame:
       elem.reparent()
+
+  def extend_frame(self, control):
+    self.stack_frame.append(control)
+
+  def remove_from_frame(self, control):
+    if hasattr(elem, 'on_close'):
+      elem.on_close()
+    self.stack_frame.remove(control)
 
   def tick(self):
     delta = time.time() - self.last_tick

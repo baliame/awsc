@@ -1,5 +1,5 @@
 from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber
-from .common import Common
+from .common import Common, SessionAwareDialog
 from .termui.dialog import DialogControl, DialogFieldText
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
@@ -29,8 +29,114 @@ def format_timedelta(delta):
   else:
     return '<1s ago'
 
-# EC2
+# AMI
+class AMIResourceLister(ResourceLister):
+  prefix = 'ami_list'
+  title = 'Amazon Machine Images'
 
+  def title_info(self):
+    return self.title_info_data
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_images'
+    self.title_info_data = None
+    self.list_kwargs = {'Owners': ['self']}
+    if 'ec2' in kwargs:
+      self.list_kwargs['ImageIds'] = [kwargs['ec2']['image']]
+      self.title_info_data = 'Instance: {0}'.format(kwargs['ec2']['instance id'])
+    self.item_path = '.Images'
+    self.column_paths = {
+      'id': '.ImageId',
+      'name': '.Name',
+      'arch': '.Architecture',
+      'platform': '.PlatformDetails',
+      'type': '.ImageType',
+      'owner': '.ImageOwnerAlias',
+      'state': '.State',
+      'virt': '.VirtualizationType',
+    }
+    self.imported_column_sizes = {
+      'id': 15,
+      'name': 64,
+      'arch': 8,
+      'platform': 10,
+      'type': 10,
+      'owner': 15,
+      'state': 10,
+      'virt': 10,
+    }
+    self.describe_command = AMIDescriber.opener
+    self.describe_selection_arg = 'ami_entry'
+    self.imported_column_order = ['id', 'name', 'arch', 'platform', 'type', 'owner', 'state', 'virt']
+    self.primary_key = 'id'
+    self.sort_column = 'id'
+    super().__init__(*args, **kwargs)
+
+class AMIDescriber(Describer):
+  prefix = 'ami_browser'
+  title = 'Amazon Machine Image'
+
+  def __init__(self, parent, alignment, dimensions, ami_entry, *args, **kwargs):
+    self.ami_id = ami_entry['id']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_images'
+    self.describe_kwargs = {'ImageIds': [self.ami_id]}
+    self.object_path='.Images[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.ami_id
+
+# InstanceClasses
+class InstanceClassResourceLister(ResourceLister):
+  prefix = 'instance_class_list'
+  title = 'Instance Classes'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_instance_types'
+    self.item_path = '.InstanceTypes'
+    self.list_kwargs = {'MaxResults': 20}
+    self.column_paths = {
+      'name': '.InstanceType',
+      'cpus': '.VCpuInfo.DefaultVCpus',
+      'memory': lambda x: '{0} MiB'.format(x['MemoryInfo']['SizeInMiB']),
+      'ebs optimization': '.EbsInfo.EbsOptimizedSupport',
+      'network': '.NetworkInfo.NetworkPerformance'
+    }
+    self.imported_column_sizes = {
+      'name': 20,
+      'cpus': 4,
+      'memory': 10,
+      'ebs optimization': 15,
+      'network': 15,
+    }
+    self.next_marker = 'NextToken'
+    self.next_marker_arg = 'NextToken'
+    self.imported_column_order = ['name', 'cpus', 'memory', 'ebs optimization', 'network']
+    self.sort_column = 'name'
+    self.primary_key = 'name'
+    self.describe_command = InstanceClassDescriber.opener
+    self.describe_selection_arg = 'instance_class_entry'
+    super().__init__(*args, **kwargs)
+
+class InstanceClassDescriber(Describer):
+  prefix = 'instance_class_browser'
+  title = 'Instance Class'
+
+  def __init__(self, parent, alignment, dimensions, instance_class_entry, *args, **kwargs):
+    self.instance_class = instance_class_entry['name']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_instance_types'
+    self.describe_kwargs = {'InstanceTypes': [self.instance_class]}
+    self.object_path='.InstanceTypes[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.instance_class
+
+# EC2
 class EC2ResourceLister(ResourceLister):
   prefix = 'ec2_list'
   title = 'EC2 Instances'
@@ -64,10 +170,14 @@ class EC2ResourceLister(ResourceLister):
       'key name': 30,
       'state': 10,
     }
+    self.hidden_columns = {
+      'image': '.ImageId'
+    }
     self.describe_command = EC2Describer.opener
     self.describe_selection_arg = 'instance_entry'
     self.imported_column_order = ['instance id', 'name', 'type', 'vpc', 'public ip', 'key name', 'state']
     self.sort_column = 'instance id'
+    self.primary_key = 'instance id'
     super().__init__(*args, **kwargs)
     self.add_hotkey('s', self.ssh, 'Open SSH')
 
@@ -193,6 +303,7 @@ class ASGResourceLister(ResourceLister):
     self.open_selection_arg = 'asg'
     self.imported_column_order = ['name', 'launch config/template', 'current', 'min', 'desired', 'max']
     self.sort_column = 'name'
+    self.primary_key = 'name'
     super().__init__(*args, **kwargs)
 
   def determine_launch_info(self, asg):
@@ -252,6 +363,7 @@ class SGResourceLister(ResourceLister):
 
     self.imported_column_order = ['group id', 'name', 'vpc', 'ingress rules', 'egress rules']
     self.sort_column = 'name'
+    self.primary_key = 'group id'
     super().__init__(*args, **kwargs)
     self.add_hotkey('i', self.ingress, 'View ingress rules')
     self.add_hotkey('e', self.egress, 'View egress rules')
@@ -443,6 +555,7 @@ class RDSResourceLister(ResourceLister):
     self.describe_selection_arg = 'instance_entry'
     self.imported_column_order = ['instance id', 'host', 'engine', 'type', 'vpc']
     self.sort_column = 'instance id'
+    self.primary_key = 'instance id'
     super().__init__(*args, **kwargs)
     self.add_hotkey('s', self.db_client, 'Open command line')
 
@@ -574,6 +687,7 @@ class CFNResourceLister(ResourceLister):
 
     self.imported_column_order = ['name', 'status', 'drift', 'created', 'updated']
     self.sort_column = 'name'
+    self.primary_key = 'name'
     super().__init__(*args, **kwargs)
 
   def determine_created(self, cfn):
@@ -852,6 +966,7 @@ class R53ResourceLister(ResourceLister):
     self.describe_selection_arg = 'r53_entry'
     self.open_command = R53RecordLister.opener
     self.open_selection_arg = 'r53_entry'
+    self.primary_key = 'id'
 
     self.imported_column_order = ['id', 'name', 'records']
     self.sort_column = 'name'
@@ -890,6 +1005,7 @@ class R53RecordLister(ResourceLister):
 
     self.imported_column_order = ['entry', 'name', 'records', 'ttl']
     self.sort_column = 'name'
+    self.primary_key = None
     super().__init__(*args, **kwargs)
     self.add_hotkey('e', self.edit, 'Edit')
 
@@ -1046,6 +1162,7 @@ class LBResourceLister(ResourceLister):
 
     self.imported_column_order = ['name', 'type', 'scheme', 'hostname']
     self.sort_column = 'name'
+    self.primary_key = 'name'
     super().__init__(*args, **kwargs)
 
   def determine_scheme(self, lb, *args):
@@ -1100,6 +1217,7 @@ class ListenerResourceLister(ResourceLister):
     self.describe_selection_arg = 'listener_entry'
     self.open_command = ListenerActionResourceLister.opener
     self.open_selection_arg = 'listener'
+    self.primary_key = 'arn'
 
     self.imported_column_order = ['protocol', 'port', 'ssl policy']
     self.sort_column = 'arn'
@@ -1287,6 +1405,7 @@ class TargetGroupResourceLister(ResourceLister):
 
     self.imported_column_order = ['name', 'protocol', 'port', 'target type']
     self.sort_column = 'name'
+    self.primary_key = 'arn'
     super().__init__(*args, **kwargs)
 
 class TargetGroupDescriber(Describer):
@@ -1341,6 +1460,7 @@ class VPCResourceLister(ResourceLister):
 
     self.imported_column_order = ['id', 'name', 'default', 'cidr', 'state']
     self.sort_column = 'id'
+    self.primary_key = 'id'
     super().__init__(*args, **kwargs)
 
   def determine_default(self, vpc, *args):
@@ -1429,6 +1549,7 @@ class SubnetResourceLister(ResourceLister):
 
     self.imported_column_order = ['id', 'name', 'vpc', 'cidr', 'AZ', 'public']
     self.sort_column = 'id'
+    self.primary_key = 'id'
     super().__init__(*args, **kwargs)
 
   def determine_public(self, subnet, *args):
@@ -1500,6 +1621,7 @@ class RouteTableResourceLister(ResourceLister):
 
     self.imported_column_order = ['id', 'name', 'vpc', 'subnet']
     self.sort_column = 'id'
+    self.primary_key = 'id'
     super().__init__(*args, **kwargs)
 
   def determine_subnet_association(self, rt, *args):
@@ -1568,6 +1690,7 @@ class RouteResourceLister(ResourceLister):
 
     self.imported_column_order = ['route table', 'gateway type', 'gateway', 'destination', 'state']
     self.sort_column = 'route table'
+    self.primary_key = None
     super().__init__(*args, **kwargs)
 
     self.add_hotkey('d', self.generic_describe, 'Describe')
@@ -1645,6 +1768,7 @@ class DBSubnetGroupResourceLister(ResourceLister):
     self.describe_selection_arg = 'dsg_entry'
     self.open_command = SubnetResourceLister.opener
     self.open_selection_arg = 'db_subnet_group'
+    self.primary_key = 'name'
 
     self.imported_column_order = ['name', 'vpc', 'status']
     self.sort_column = 'name'
@@ -1686,6 +1810,7 @@ class S3ResourceLister(ResourceLister):
     self.describe_selection_arg = 'bucket'
     self.open_command = S3ObjectLister.opener
     self.open_selection_arg = 'bucket'
+    self.primary_key = 'name'
 
     self.imported_column_order = ['name', 'location']
     self.sort_column = 'name'
@@ -1762,6 +1887,7 @@ class S3ObjectLister(ResourceLister):
     self.hidden_columns = {
       'is_dir': self.determine_is_dir,
       'size_in_bytes': '.Size',
+      'bucket_prefixed_path': self.determine_bucket_prefixed_path,
     }
     self.imported_column_sizes = {
       'icon': 1,
@@ -1785,7 +1911,11 @@ class S3ObjectLister(ResourceLister):
     self.open_command = S3ObjectLister.opener
     self.open_selection_arg = 'path'
     super().__init__(*args, **kwargs)
+    self.primary_key = 'bucket_prefixed_path'
     self.add_hotkey(ControlCodes.D, self.empty, 'Cancel download')
+
+  def determine_bucket_prefixed_path(self, entry, *args):
+    return '{0}/{1}'.format(self.bucket, entry['Key'] if 'Key' in entry else entry['Prefix'])
 
   def determine_name(self, entry, *args):
     if 'Prefix' in entry:
@@ -1798,7 +1928,7 @@ class S3ObjectLister(ResourceLister):
   def determine_size(self, entry, *args):
     if 'Prefix' in entry:
       return ''
-    b_prefix = ['', 'K', 'M', 'G', 'T', 'E']
+    b_prefix = ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Ei']
     b_idx = 0
     s = float(entry['Size'])
     while s >= 1024:

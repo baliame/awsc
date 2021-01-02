@@ -3,7 +3,6 @@ from .alignment import TopLeftAnchor, Dimension
 
 class Block:
   def __init__(self, parent, alignment, dimensions, weight = 0, tag='default', *args, **kwargs):
-    Commons.UIInstance.log('Initializing Block', level=2)
     self.blocks = []
     self.weight = weight
     if parent is not None:
@@ -12,6 +11,7 @@ class Block:
     self.alignment = alignment
     self.dimensions = dimensions
     self.tag = tag
+    Commons.UIInstance.dirty = True
 
   def reparent(self):
     self.parent.remove_block(self)
@@ -52,7 +52,7 @@ class Block:
       block.paint()
 
   def add_block(self, block):
-    Commons.UIInstance.log('Adding Block to {0}'.format(self), level=2)
+    Commons.UIInstance.dirty = True
     idx = 0
     for i in range(len(self.blocks)):
       blk = self.blocks[i]
@@ -62,7 +62,6 @@ class Block:
       i += 1
     block.parent = self
     self.blocks.insert(idx, block)
-    Commons.UIInstance.log(str(self.blocks), level=3)
 
   def clear_blocks(self, tag=None):
     self.blocks = [block for block in self.blocks if tag is not None and block.tag != tag]

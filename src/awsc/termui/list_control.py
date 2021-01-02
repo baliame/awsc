@@ -27,6 +27,7 @@ class ListControl(Control):
 
   @filter.setter
   def filter(self, value):
+    Commons.UIInstance.dirty = True
     sel = self.selection
     self._filter = value
     self.top = 0
@@ -36,11 +37,13 @@ class ListControl(Control):
   def add_entry(self, entry):
     self.entries.append(entry)
     self._cache = None
+    Commons.UIInstance.dirty = True
 
   def add_hotkey(self, hotkey, action, tooltip=None):
     self.hotkeys[hotkey] = action
     if tooltip is not None:
       self.tooltips[hotkey] = tooltip
+    Commons.UIInstance.dirty = True
 
   def input(self, key):
     inkey = str(key)
@@ -50,6 +53,7 @@ class ListControl(Control):
       inkey = inkey.lower()
     if inkey in self.hotkeys.keys():
       self.hotkeys[inkey](self)
+      Commons.UIInstance.dirty = True
       return True
     return False
 
@@ -113,12 +117,15 @@ class ListControl(Control):
       self.column_order.insert(index, column)
     self.column_titles[column] = min_size
     self.calculated = 0
+    Commons.UIInstance.dirty = True
 
   def before_paint_critical(self):
     if self.thread_share['clear']:
+      Commons.UIInstance.dirty = True
       self.entries = []
       self.thread_share['clear'] = False
     if len(self.thread_share['new_entries']) > 0:
+      Commons.UIInstance.dirty = True
       self.entries.extend(self.thread_share['new_entries'])
       self._cache = None
       self.thread_share['new_entries'] = []
@@ -206,6 +213,10 @@ class ListEntry:
 
   def __getitem__(self, item):
     return self.columns[item]
+
+  def __setitem__(self, item, value):
+    self.columns['item'] = value
+    Commons.UIInstance.dirty = True
 
   def matches_filter(self, filter):
     if filter is None:

@@ -1,6 +1,7 @@
 import jq
-from .common import Common, DefaultAnchor, DefaultDimension, DefaultBorder
+from .common import Common, DefaultAnchor, DefaultDimension, DefaultBorder, SessionAwareDialog
 from .termui.alignment import TopRightAnchor, Dimension
+from .termui.dialog import DialogControl, DialogFieldLabel
 from .termui.list_control import ListControl, ListEntry
 from .termui.ui import ControlCodes
 from .termui.text_browser import TextBrowser
@@ -158,7 +159,7 @@ class ResourceLister(ResourceListerBase):
   def title_info(self):
     return None
 
-  def __init__(self, parent, alignment, dimensions, *args, **kwargs):
+  def __init__(self, parent, alignment, dimensions, *args, selector_cb=None, **kwargs):
     super().__init__(parent, alignment, dimensions, *args, **kwargs)
     if not hasattr(self, 'resource_key'):
       raise AttributeError('resource_key is undefined')
@@ -196,6 +197,10 @@ class ResourceLister(ResourceListerBase):
       self.imported_column_order = sorted([k for k in self.column_paths.keys() if k != 'name'])
     if not hasattr(self, 'sort_column'):
       self.sort_column = 'name'
+    if not hasattr(self, 'primary_key'):
+      self.primary_key = 'name'
+
+    self.selector_cb = selector_cb
 
     if self.open_command is not None:
       open_tooltip = 'Open'
@@ -204,11 +209,16 @@ class ResourceLister(ResourceListerBase):
         self.open_command = cmd['command']
         self.open_selection_arg = cmd['selection_arg']
         open_tooltip = cmd['tooltip']
-      self.add_hotkey('KEY_ENTER', self.open, open_tooltip)
+      if selector_cb is None:
+        self.add_hotkey('KEY_ENTER', self.open, open_tooltip)
+      else:
+        self.add_hotkey('o', self.open, open_tooltip)
     if self.describe_command is not None:
       self.add_hotkey('d', self.describe, 'Describe')
-      if self.open_command is None:
+      if self.open_command is None and selector_cb is None:
         self.add_hotkey('KEY_ENTER', self.describe, 'Describe')
+    if selector_cb is not None:
+      self.add_hotkey('KEY_ENTER', self.select_and_close, 'Select')
     if hasattr(self, 'additional_commands'):
       for key, command_spec in self.additional_commands.items():
         self.add_hotkey(key, self.command_wrapper(command_spec['command'], command_spec['selection_arg']), command_spec['tooltip'])
@@ -229,6 +239,11 @@ class ResourceLister(ResourceListerBase):
     if self.selection is not None:
       pyperclip.copy(self.selection['arn'])
       Common.Session.set_message('Copied resource ARN to clipboard', Common.color('message_success'))
+
+  def select_and_close(self):
+    if self.selection is not None and self.selector_cb is not None and self.primary_key is not None:
+      self.selector_cb(self.selection[self.primary_key])
+      Common.Session.pop_frame()
 
   #def async_inner(self, *args, fn, clear=False, **kwargs):
     #try:
@@ -463,3 +478,31 @@ class Describer(TextBrowser):
     response = getattr(provider, self.describe_method)(**self.describe_kwargs)
     self.clear()
     self.add_text(json.dumps(jq.compile(self.object_path).input(text=json.dumps(response, default=datetime_hack)).first(), sort_keys=True, indent=2))
+
+class DeleteResourceDialog(SessionAwareDialog):
+  def __init__(self, parent, alignment, dimensions, *args, resource_type, resource_identifier, callback, **kwargs):
+    kwargs['ok_action'] = self.accept_and_close
+    kwargs['cancel_action'] = self.close
+    kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Delete Context', Common.color('modal_dialog_border_title'))
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    self.name = name
+    self.add_field(DialogFieldLabel([
+      ('Delete ', Common.color('modal_dialog_label')),
+      (resource_type, Common.color('modal_dialog_label_highlight')),
+      (' resource "', Common.color('modal_dialog_label')),
+      (resource_identifier, Common.color('modal_dialog_label_highlight')),
+      ('"?', Common.color('modal_dialog_label')),
+    ]))
+    self.add_field(DialogFieldLabel('This action cannot be undone.', Common.color('modal_dialog_error')))
+    self.highlighted = 1
+    self.callback = callback
+
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
+      self.close()
+      return True
+    return super().input(inkey)
+
+  def accept_and_close(self):
+    self.callback()
+    self.close()

@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 import threading
 
-FrameRate = 0.05
+FrameRate = 0.02
 
 class ControlCodes:
   A = '\x01'
@@ -81,6 +81,7 @@ class UI:
     self.cache_dir = None
     self.mutex = threading.Lock()
     self.input_buffer = []
+    self.dirty = False
 
   def clear_log(self):
     if self.debug == 0:
@@ -110,6 +111,7 @@ class UI:
         return f.read()
 
   def print(self, out, xy=None, color=None, wrap=False, bounds=None, bold=False):
+    self.dirty = True
     if bounds is None:
       bounds = ((0, self.w), (0, self.h))
     if xy is None:
@@ -173,7 +175,7 @@ class UI:
       print('\033[38;5;220m' + perc_t + ((width - len(perc_t)) * '░') + '\033[0m', end='')
 
   def check_one_key(self):
-    return self.term.inkey(FrameRate / 8, FrameRate / 8)
+    return self.term.inkey(0.01, 0.01)
 
   def paint(self):
     self.buf.clear()
@@ -181,6 +183,7 @@ class UI:
     with self.term.location(0, 0):
       self.buf.output()
     self.last_paint = time.time()
+    self.dirty = False
 
   def unraw(self, cmd, *args, **kwargs):
     termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
@@ -240,9 +243,10 @@ class UI:
               for func in self.tickers:
                 func()
               self.before_paint()
-              self.paint()
+              if self.dirty:
+                self.paint()
               t2 = time.time()
-              self.log('Frame time: {0}'.format(t2 - st), level=1)
+              self.log('Frame time: {0:.5f}'.format(t2 - st), level=1)
               d = FrameRate - (t2 - st)
               if d > 0:
                 time.sleep(d)

@@ -6,6 +6,7 @@ class DialogField:
   def __init__(self):
     self.highlightable = False
     self.centered = False
+    Commons.UIInstance.dirty = True
 
   def input(self, inkey):
     return False
@@ -61,6 +62,7 @@ class DialogFieldButton(DialogField):
   def input(self, inkey):
     if inkey.is_sequence and inkey.name == 'KEY_ENTER':
       self.action()
+      Commons.UIInstance.dirty = True
     return True
 
   def paint(self, x0, x1, y, selected=False):
@@ -69,7 +71,6 @@ class DialogFieldButton(DialogField):
       textlen = len(self.text) + 4
       w = x1 - x0 + 1
       x = int(w / 2) - int(textlen / 2) + x0
-    Commons.UIInstance.print('< {0} >'.format(self.text), xy=(x, y), color=self.selected_color if selected else self.color)
 
 class DialogFieldText(DialogField):
   def __init__(self, label, text='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0, password=False):
@@ -92,28 +93,35 @@ class DialogFieldText(DialogField):
       if inkey.name == 'KEY_LEFT':
         if self.left > 0:
           self.left -= 1
+        Commons.UIInstance.dirty = True
         return True
       elif inkey.name == 'KEY_RIGHT':
         self.left += 1
+        Commons.UIInstance.dirty = True
         return True
       elif inkey.name == 'KEY_HOME':
         self.left = 0
+        Commons.UIInstance.dirty = True
         return True
       elif inkey.name == 'KEY_END':
         self.left = len(self.text) - drawable
         if self.left < 0:
           self.left = 0
+        Commons.UIInstance.dirty = True
         return True
       elif inkey.name == 'KEY_BACKSPACE' and len(self.text) > 0:
         self.text = self.text[:-1]
+        Commons.UIInstance.dirty = True
         return True
       elif inkey.name == 'KEY_DELETE':
         self.text = ''
+        Commons.UIInstance.dirty = True
         return True
     elif inkey in self.accepted_inputs:
       self.text += inkey
       if len(self.text) > self.drawable:
         self.left = len(self.text) - self.drawable + 1
+      Commons.UIInstance.dirty = True
       return True
     return False
 
@@ -168,6 +176,7 @@ class DialogControl(Control):
           break
         if self.highlighted == orig:
           break
+      Commons.UIInstance.dirty = True
       return True
     elif inkey.is_sequence and inkey.name == 'KEY_BTAB':
       orig = self.highlighted
@@ -179,6 +188,7 @@ class DialogControl(Control):
           break
         if self.highlighted == orig:
           break
+      Commons.UIInstance.dirty = True
       return True
     self.fields[self.highlighted].input(inkey)
     return True # Modals should prevent input from being piped to others.

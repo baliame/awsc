@@ -30,9 +30,11 @@ class Filterer(Control):
       elif inkey.name == 'KEY_DELETE':
         self.text = ''
         self.session.resource_main.filter = self.text
+      Commons.UIInstance.dirty = True
     elif str(inkey) in self.accepted_input:
       self.text += inkey
       self.session.resource_main.filter = self.text
+      Commons.UIInstance.dirty = True
     return True
 
   def pause(self):
@@ -96,8 +98,10 @@ class Commander(Control):
         self.text = ''
       elif inkey.name == 'KEY_TAB':
         self.accept_autocomplete()
+      Commons.UIInstance.dirty = True
     elif str(inkey) in self.accepted_input:
       self.text += inkey
+      Commons.UIInstance.dirty = True
     return True
 
   def accept_and_close(self):
