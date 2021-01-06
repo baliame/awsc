@@ -71,6 +71,7 @@ class DialogFieldButton(DialogField):
       textlen = len(self.text) + 4
       w = x1 - x0 + 1
       x = int(w / 2) - int(textlen / 2) + x0
+    Commons.UIInstance.print('< {0} >'.format(self.text), xy=(x, y), color=self.selected_color if selected else self.color)
 
 class DialogFieldText(DialogField):
   def __init__(self, label, text='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0, password=False):

@@ -90,8 +90,8 @@ class Session:
     self.stack_frame.append(control)
 
   def remove_from_frame(self, control):
-    if hasattr(elem, 'on_close'):
-      elem.on_close()
+    if hasattr(control, 'on_close'):
+      control.on_close()
     self.stack_frame.remove(control)
 
   def tick(self):

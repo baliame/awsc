@@ -1,10 +1,11 @@
 import jq
 from .common import Common, DefaultAnchor, DefaultDimension, DefaultBorder, SessionAwareDialog
 from .termui.alignment import TopRightAnchor, Dimension
-from .termui.dialog import DialogControl, DialogFieldLabel
+from .termui.dialog import DialogControl, DialogFieldLabel, DialogField
 from .termui.list_control import ListControl, ListEntry
 from .termui.ui import ControlCodes
 from .termui.text_browser import TextBrowser
+from .termui.color import ColorGold, ColorBlackOnGold, ColorBlackOnOrange
 from .info import HotkeyDisplay
 import datetime
 import json
@@ -136,6 +137,69 @@ class ResourceListerBase(ListControl):
   def empty(self, _):
     return ''
 
+class DialogFieldButton(DialogField):
+  def __init__(self, text, action, color=ColorGold, selected_color=ColorBlackOnGold):
+    super().__init__()
+    self.highlightable = True
+    self.text = text
+    self.color = color
+    self.selected_color = selected_color
+    self.centered = True
+    self.action = action
+
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ENTER':
+      self.action()
+      Commons.UIInstance.dirty = True
+    return True
+
+  def paint(self, x0, x1, y, selected=False):
+    x = x0
+    if self.centered:
+      textlen = len(self.text) + 4
+      w = x1 - x0 + 1
+      x = int(w / 2) - int(textlen / 2) + x0
+
+class DialogFieldResourceListSelector(DialogField):
+  def __init__(self, selector_class, label, default='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0):
+    super().__init__()
+    self.highlightable = True
+    self.left = 0
+    self.text = default
+    self.label = label
+    self.color = color
+    self.label_color = label_color
+    self.label_min = label_min
+    self.selected_color = selected_color
+    self.centered = True
+    self.selector_class = selector_class
+
+  def selector_callback(self, entry):
+    self.text = entry
+
+  def input(self, inkey):
+    if inkey.is_sequence:
+      if inkey.name == 'KEY_ENTER':
+        Common.Session.push_frame(self.selector_class.selector(self.selector_callback))
+        Common.Session.ui.dirty = True
+        return True
+      elif inkey.name == 'KEY_BACKSPACE' or inkey.name == 'KEY_DELETE':
+        self.text = ''
+        Common.Session.ui.dirty = True
+        return True
+    return False
+
+  def paint(self, x0, x1, y, selected=False):
+    x = x0
+    Common.Session.ui.print(self.label, xy=(x, y), color=self.label_color)
+    x += max(len(self.label) + 1, self.label_min)
+    space = x1 - x + 1
+    t = self.text + ' ↲'
+    if self.left >= len(t):
+      self.left = 0
+    text = t[self.left:(self.left+space if len(t) > self.left+space else len(t))]
+    Common.Session.ui.print(text, xy=(x, y), color=self.selected_color if selected else self.color)
+
 class ResourceLister(ResourceListerBase):
   prefix = 'CHANGEME'
   title = 'CHANGEME'
@@ -154,6 +218,10 @@ class ResourceLister(ResourceListerBase):
     )
     l.border=DefaultBorder(cls.prefix, cls.title, l.title_info())
     return [l, l.hotkey_display]
+
+  @classmethod
+  def selector(cls, cb, **kwargs):
+    return cls.opener(**{'selector_cb': cb, **kwargs})
 
   def title_info(self):
     return None
@@ -240,7 +308,7 @@ class ResourceLister(ResourceListerBase):
       pyperclip.copy(self.selection['arn'])
       Common.Session.set_message('Copied resource ARN to clipboard', Common.color('message_success'))
 
-  def select_and_close(self):
+  def select_and_close(self, *args):
     if self.selection is not None and self.selector_cb is not None and self.primary_key is not None:
       self.selector_cb(self.selection[self.primary_key])
       Common.Session.pop_frame()

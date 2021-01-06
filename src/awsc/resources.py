@@ -1,6 +1,6 @@
-from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber
+from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber, DialogFieldResourceListSelector
 from .common import Common, SessionAwareDialog
-from .termui.dialog import DialogControl, DialogFieldText
+from .termui.dialog import DialogControl, DialogFieldText, DialogFieldLabel, DialogFieldButton
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.list_control import ListEntry
@@ -137,6 +137,50 @@ class InstanceClassDescriber(Describer):
     return self.instance_class
 
 # EC2
+class EC2LaunchDialog(SessionAwareDialog):
+  def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
+    kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Launch EC2 instance', Common.color('modal_dialog_border_title'))
+    kwargs['ok_action'] = self.accept_and_close
+    kwargs['cancel_action'] = self.close
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    self.add_field(DialogFieldLabel('Enter AWS instance details'))
+    self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
+    self.add_field(self.error_label)
+    self.add_field(DialogFieldLabel(''))
+    self.name_field = DialogFieldText('Name:', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
+    self.add_field(self.name_field)
+    self.instance_type_field = DialogFieldResourceListSelector(InstanceClassResourceLister, 'Instance type:', 't2.micro', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
+    self.add_field(self.instance_type_field)
+    self.image_field = DialogFieldResourceListSelector(AMIResourceLister, 'AMI:', '', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
+    self.add_field(self.image_field)
+    self.caller = caller
+
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
+      self.close()
+      return True
+    return super().input(inkey)
+
+  def accept_and_close(self):
+    if self.name_field.text == '':
+      self.error_label.text = 'Name cannot be blank.'
+      return
+    if self.instance_type_field.text == '':
+      self.error_label.text = 'Instance type cannot be blank.'
+      return
+    if self.image_field.text == '':
+      self.error_label.text = 'AMI cannot be blank.'
+      return
+
+    # TODO: do.
+
+    self.close()
+
+  def close(self):
+    if self.caller is not None:
+      self.caller.refresh_data()
+    super().close()
+
 class EC2ResourceLister(ResourceLister):
   prefix = 'ec2_list'
   title = 'EC2 Instances'
@@ -180,6 +224,10 @@ class EC2ResourceLister(ResourceLister):
     self.primary_key = 'instance id'
     super().__init__(*args, **kwargs)
     self.add_hotkey('s', self.ssh, 'Open SSH')
+    self.add_hotkey('l', self.new_instance, 'Launch new instance')
+
+  def new_instance(self, _):
+    EC2LaunchDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '20'), caller=self, weight=-500)
 
   def ssh(self, _):
     p = Path.home() / '.ssh' / Common.Session.ssh_key
