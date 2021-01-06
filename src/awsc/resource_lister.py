@@ -86,7 +86,7 @@ class ResourceListerBase(ListControl):
         it_list_kwargs[next_marker_arg] = next_marker
       response = getattr(provider, list_method)(**it_list_kwargs)
 
-      it = jq.compile(item_path).input(text=json.dumps(response, default=datetime_hack)).first()
+      it = Common.Session.jq(item_path).input(text=json.dumps(response, default=datetime_hack)).first()
       if it is None:
         Common.Session.ui.log('get_data_generic for {0}.{1}({2}) returned None on path {3}'.format(resource_key, list_method, list_kwargs, item_path))
         Common.Session.ui.log('API response was:\n{0}'.format(json.dumps(response, default=datetime_hack)))
@@ -102,7 +102,7 @@ class ResourceListerBase(ListControl):
             init[column] = path(item)
           else:
             try:
-              init[column] = jq.compile(path).input(item).first()
+              init[column] = Common.Session.jq(path).input(item).first()
             except StopIteration:
               init[column] = ''
         le = ListEntry(**init)
@@ -111,7 +111,6 @@ class ResourceListerBase(ListControl):
           ret.append(le)
       if self.closed:
         raise StopLoadingData
-      Common.Session.set_message('Loaded batch #{0}'.format(self.load_counter), Common.color('message_success'))
       yield ret
       if self.closed:
         raise StopLoadingData
@@ -234,6 +233,7 @@ class ResourceLister(ResourceListerBase):
       self.column_order = []
     self.column_order.extend(self.imported_column_order)
     self.refresh_data()
+    Common.Session.ui.log('ResourceLister init has returned')
 
   def copy_arn(self, *args):
     if self.selection is not None:
@@ -373,7 +373,7 @@ class MultiLister(ResourceListerBase):
         val = elem['compare_path'](raw_item)
       else:
         try:
-          val = jq.compile(elem['compare_path']).input(raw_item).first()
+          val = Common.Session.jq(elem['compare_path']).input(raw_item).first()
         except ValueError as e:
           return False
         except StopIteration as e:
@@ -384,7 +384,7 @@ class MultiLister(ResourceListerBase):
         return self.compare_value in elem['compare_path'](raw_item)
       else:
         try:
-          for val in jq.compile(elem['compare_path']).input(raw_item).first():
+          for val in Common.Session.jq(elem['compare_path']).input(raw_item).first():
             if val == self.compare_value:
               return True
         except StopIteration as e:
@@ -477,7 +477,7 @@ class Describer(TextBrowser):
       return
     response = getattr(provider, self.describe_method)(**self.describe_kwargs)
     self.clear()
-    self.add_text(json.dumps(jq.compile(self.object_path).input(text=json.dumps(response, default=datetime_hack)).first(), sort_keys=True, indent=2))
+    self.add_text(json.dumps(Common.Session.jq(self.object_path).input(text=json.dumps(response, default=datetime_hack)).first(), sort_keys=True, indent=2))
 
 class DeleteResourceDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, *args, resource_type, resource_identifier, callback, **kwargs):

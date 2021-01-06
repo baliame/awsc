@@ -146,4 +146,4 @@ def main(*args, **kwargs):
       threads = yappi.get_thread_stats()
       for thread in threads:
         print('Stats for thread #{0}'.format(thread.id))
-        yappi.get_func_stats(ctx_id=thread.id).print_all()
+        yappi.get_func_stats(ctx_id=thread.id).save('/tmp/awsc-profiling-thread-{0}.tmp'.format(thread.id), "callgrind")

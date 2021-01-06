@@ -6,9 +6,16 @@ import time
 import subprocess
 import tempfile
 import os
+import jq
 
 class Session:
+  def jq(self, stmt):
+    if stmt not in self.jqc:
+      self.jqc[stmt] = jq.compile(stmt)
+    return self.jqc[stmt]
+
   def __init__(self, config, highlight_color, generic_color):
+    self.jqc = {}
     self.ui = UI()
     self.config = config
     self.context_update_hooks = []

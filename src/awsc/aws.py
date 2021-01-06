@@ -2,6 +2,40 @@ import boto3
 from .common import Common
 from botocore import config as botoconf
 from botocore import exceptions
+from multiprocessing import Process, Pipe
+
+class AWSSubprocessWrapper:
+  def __init__(self, client):
+    self.client = client
+
+  def __getattr__(self, attr):
+    if hasattr(self.client, attr):
+      a = getattr(self.client, attr)
+      if callable(a):
+        return AWSSubprocessWrapper.SubprocessCallWrapper(a)
+      return a
+    raise AttributeError
+
+  class SubprocessCallWrapper:
+    def __init__(self, target):
+      self.target = target
+
+    def __call__(self, *args, **kwargs):
+      own, remote = Pipe(False)
+      p = Process(target=self.execute, args=[remote, *args], kwargs=kwargs, daemon=True)
+      p.start()
+      p.join()
+      data = own.recv()
+      if isinstance(data, Exception):
+        raise data
+      return data
+
+    def execute(self, remote, *args, **kwargs):
+      try:
+        data = self.target(*args, **kwargs)
+      except Exception as e:
+        remote.send(e)
+      remote.send(data)
 
 class AWS:
   def __init__(self):
@@ -28,12 +62,14 @@ class AWS:
       config = self.s3conf()
     else:
       config = self.conf()
-    return boto3.client(
+    client = boto3.client(
       service,
       aws_access_key_id=keys['access'] if keys is not None else Common.Configuration.keystore[Common.Session.context]['access'],
       aws_secret_access_key=keys['secret'] if keys is not None else Common.Configuration.keystore[Common.Session.context]['secret'],
       config=config,
     )
+    #return AWSSubprocessWrapper(client)
+    return client
 
   def whoami(self, keys=None):
     return self('sts', keys).get_caller_identity()

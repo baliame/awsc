@@ -130,10 +130,11 @@ class UI:
       p = 0
       for i in range(xy[0], xy[0]+space):
         try:
-          self.buf[xy[1]][i].value = part[p]
-          self.buf[xy[1]][i].color = color
-          self.buf[xy[1]][i].bold = bold
-          self.buf[xy[1]][i].dirty = True
+          char = self.buf[xy[1]][i]
+          char.value = part[p]
+          char.color = color
+          char.bold = bold
+          char.dirty = True
         except IndexError:
           break
         p += 1
@@ -246,7 +247,7 @@ class UI:
               if self.dirty:
                 self.paint()
               t2 = time.time()
-              self.log('Frame time: {0:.5f}'.format(t2 - st), level=1)
+              self.log('Frame time: {0:.2f}ms'.format((t2 - st) * 1000), level=1)
               d = FrameRate - (t2 - st)
               if d > 0:
                 time.sleep(d)

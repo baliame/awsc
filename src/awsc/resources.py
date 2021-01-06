@@ -900,19 +900,19 @@ class CFNRelated(MultiLister):
 
   def full_resource_id_from_arn_generator(self, arn_path):
     def fn(raw_item):
-      arn = ARN(jq.compile(arn_path).input(raw_item).first())
+      arn = ARN(Common.Session.jq(arn_path).input(raw_item).first())
       return arn.resource_id
     return fn
 
   def resource_id_from_arn_generator(self, arn_path):
     def fn(raw_item):
-      arn = ARN(jq.compile(arn_path).input(raw_item).first())
+      arn = ARN(Common.Session.jq(arn_path).input(raw_item).first())
       return arn.resource_id_first
     return fn
 
   def comparer_generator(self, cfn_type, physical_id_path):
     def fn(raw_item):
-      phys_id = jq.compile(physical_id_path).input(raw_item).first()
+      phys_id = Common.Session.jq(physical_id_path).input(raw_item).first()
       if cfn_type in self.stack_res_list and phys_id in self.stack_res_list[cfn_type]:
         return self.compare_value
       return None
