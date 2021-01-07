@@ -8,6 +8,7 @@ from .info import InfoDisplay
 from .aws import AWS
 from .commander import Commander, Filterer
 from .resources import *
+from .meta import CommanderOptionsLister
 import os
 import sys
 import yappi
@@ -129,6 +130,8 @@ def main(*args, **kwargs):
       'instanceclass': InstanceClassResourceLister.opener,
       'key': KeyPairResourceLister.opener,
       'keypair': KeyPairResourceLister.opener,
+      '?': CommanderOptionsLister.opener,
+      'help': CommanderOptionsLister.opener,
     }
 
     Common.main()
