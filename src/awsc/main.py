@@ -38,14 +38,7 @@ def open_region_lister():
   return [regl, regl.hotkey_display]
 
 def open_ssh_lister():
-  sshl = SSHList(
-    Common.Session.ui.top_block,
-    DefaultAnchor,
-    DefaultDimension,
-    border=DefaultBorder('ssh_key_list', 'SSH Keys'),
-    weight = 0,
-  )
-  return [sshl, sshl.hotkey_display]
+  return SSHList.opener()
 
 def open_filterer():
   if Common.Session.filterer is None:
@@ -134,6 +127,8 @@ def main(*args, **kwargs):
       'it': InstanceClassResourceLister.opener,
       'instancetype': InstanceClassResourceLister.opener,
       'instanceclass': InstanceClassResourceLister.opener,
+      'key': KeyPairResourceLister.opener,
+      'keypair': KeyPairResourceLister.opener,
     }
 
     Common.main()

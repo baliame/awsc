@@ -5,6 +5,7 @@ from .termui.dialog import DialogControl, DialogFieldLabel, DialogField
 from .termui.list_control import ListControl, ListEntry
 from .termui.ui import ControlCodes
 from .termui.text_browser import TextBrowser
+from .termui.control import Border
 from .termui.color import ColorGold, ColorBlackOnGold, ColorBlackOnOrange
 from .info import HotkeyDisplay
 import datetime
@@ -30,10 +31,14 @@ class ResourceListerBase(ListControl):
       self.next_marker = None
     if not hasattr(self, 'next_marker_arg'):
       self.next_marker_arg = None
+    self.auto_refresh_last = datetime.datetime.now()
     super().__init__(*args, **kwargs)
 
   def on_close(self):
     self.closed = True
+
+  def auto_refresh(self):
+    pass
 
   def asynch(self, fn, clear=False, *args, **kwargs):
     try:
@@ -52,7 +57,7 @@ class ResourceListerBase(ListControl):
     try:
       self.mutex.acquire()
       try:
-        if clear:
+        if clear or (not hasattr(self, 'primary_key') or self.primary_key is None):
           self.thread_share['clear'] = True
       finally:
         self.mutex.release()
@@ -63,12 +68,44 @@ class ResourceListerBase(ListControl):
           self.thread_share['new_entries'].extend(data)
         finally:
           self.mutex.release()
+
     except StopLoadingData as e:
-      return
+      pass
     except Exception as e:
       self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
       Common.Session.ui.log(str(e), 1)
       Common.Session.ui.log(traceback.format_exc(), 1)
+    self.mutex.acquire()
+    try:
+      self.thread_share['updating'] = False
+      self.thread_share['finalize'] = True
+    finally:
+      self.mutex.release()
+
+  def handle_finalization_critical(self):
+    if hasattr(self, 'primary_key') and self.primary_key is not None:
+      i = 0
+      ne = []
+      for entry in self.entries:
+        if entry[self.primary_key] in self.thread_share['acquired']:
+          ne.append(entry)
+      self.entries = ne[:]
+      self.sort()
+
+  def handle_new_entries_critical(self, ne):
+    if not hasattr(self, 'primary_key') or self.primary_key is None:
+      super().handle_new_entries_critical(ne)
+    else:
+      for new in ne:
+        found = False
+        for old in self.entries:
+          if old[self.primary_key] == new[self.primary_key]:
+            old.mutate(new)
+            found = True
+            break
+        if not found:
+          self.entries.append(new)
+        self.thread_share['acquired'].append(new[self.primary_key])
 
   def get_data_generic(self, resource_key, list_method, list_kwargs, item_path, column_paths, hidden_columns, next_marker_name, next_marker_arg, *args):
     try:
@@ -161,7 +198,7 @@ class DialogFieldButton(DialogField):
       x = int(w / 2) - int(textlen / 2) + x0
 
 class DialogFieldResourceListSelector(DialogField):
-  def __init__(self, selector_class, label, default='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0):
+  def __init__(self, selector_class, label, default='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0, primary_key=None):
     super().__init__()
     self.highlightable = True
     self.left = 0
@@ -173,6 +210,7 @@ class DialogFieldResourceListSelector(DialogField):
     self.selected_color = selected_color
     self.centered = True
     self.selector_class = selector_class
+    self.primary_key = primary_key
 
   def selector_callback(self, entry):
     self.text = entry
@@ -180,7 +218,10 @@ class DialogFieldResourceListSelector(DialogField):
   def input(self, inkey):
     if inkey.is_sequence:
       if inkey.name == 'KEY_ENTER':
-        Common.Session.push_frame(self.selector_class.selector(self.selector_callback))
+        kwa = {}
+        if self.primary_key is not None:
+          kwa['primary_key'] = self.primary_key
+        Common.Session.push_frame(self.selector_class.selector(self.selector_callback, **kwa))
         Common.Session.ui.dirty = True
         return True
       elif inkey.name == 'KEY_BACKSPACE' or inkey.name == 'KEY_DELETE':
@@ -214,6 +255,8 @@ class ResourceLister(ResourceListerBase):
       color=Common.color('{0}_generic'.format(cls.prefix), 'generic'),
       selection_color=Common.color('{0}_selection'.format(cls.prefix), 'selection'),
       title_color=Common.color('{0}_heading'.format(cls.prefix), 'column_title'),
+      update_color=Common.color('{0}_updated'.format(cls.prefix), 'highlight'),
+      update_selection_color=Common.color('{0}_updated'.format(cls.prefix), 'highlight_selection'),
       **kwargs
     )
     l.border=DefaultBorder(cls.prefix, cls.title, l.title_info())
@@ -266,6 +309,16 @@ class ResourceLister(ResourceListerBase):
       self.sort_column = 'name'
     if not hasattr(self, 'primary_key'):
       self.primary_key = 'name'
+    if 'primary_key' in kwargs:
+      self.primary_key = kwargs['primary_key']
+    if 'update_color' in kwargs:
+      self.update_color = kwargs['update_color']
+    else:
+      self.update_color = self.color
+    if 'update_selection_color' in kwargs:
+      self.update_selection_color = kwargs['update_selection_color']
+    else:
+      self.update_selection_color = self.selection_color
 
     self.selector_cb = selector_cb
 
@@ -313,21 +366,6 @@ class ResourceLister(ResourceListerBase):
       self.selector_cb(self.selection[self.primary_key])
       Common.Session.pop_frame()
 
-  #def async_inner(self, *args, fn, clear=False, **kwargs):
-    #try:
-    #  data = fn(*args, **kwargs)
-    #  self.mutex.acquire()
-    #  try:
-    #    if clear:
-    #      self.thread_share['clear'] = True
-    #    self.thread_share['new_entries'].extend(data)
-    #  finally:
-    #    self.mutex.release()
-    #except Exception as e:
-    #  self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
-    #  Common.Session.ui.log(str(e), 1)
-    #  Common.Session.ui.log(traceback.format_exc(), 1)
-
   def command(self, cmd, kw={}):
     if self.selection is not None:
       frame = cmd(**kw)
@@ -351,8 +389,21 @@ class ResourceLister(ResourceListerBase):
     for y in self.get_data_generic(self.resource_key, self.list_method, self.list_kwargs, self.item_path, self.column_paths, self.hidden_columns, self.next_marker, self.next_marker_arg):
       yield y
 
+  def auto_refresh(self):
+    if datetime.datetime.now() - self.auto_refresh_last > datetime.timedelta(seconds=10):
+      self.refresh_data()
+
   def refresh_data(self, *args, **kwargs):
-    self.asynch(self.get_data, clear=True)
+    self.mutex.acquire()
+    try:
+      if 'updating' in self.thread_share and self.thread_share['updating']:
+        return
+      self.thread_share['updating'] = True
+      self.thread_share['acquired'] = []
+    finally:
+      self.mutex.release()
+    self.auto_refresh_last = datetime.datetime.now()
+    self.asynch(self.get_data)
 
   def sort(self):
     self.entries.sort(key=lambda x: x.columns[self.sort_column])
@@ -405,26 +456,6 @@ class MultiLister(ResourceListerBase):
         'content': json.dumps(self.selection.controller_data, sort_keys=True, indent=2),
         'pushed': True
       }))
-
-  #def async_inner(self, *args, fn, clear=False, **kwargs):
-  #  try:
-  #    self.mutex.acquire()
-  #    try:
-  #      if clear:
-  #        self.thread_share['clear'] = True
-  #    finally:
-  #      self.mutex.release()
-  #
-  #    for data in fn(*args, **kwargs):
-  #      self.mutex.acquire()
-  #      try:
-  #        self.thread_share['new_entries'].extend(data)
-  #      finally:
-  #        self.mutex.release()
-  #  except Exception as e:
-  #    self.thread_share['thread_error'] = 'Refresh thread execution failed: {0}: {1}'.format(e.__class__.__name__, str(e))
-  #    Common.Session.ui.log(str(e), 1)
-  #    Common.Session.ui.log(traceback.format_exc(), 1)
 
   def get_data(self, *args, **kwargs):
     for elem in self.resource_descriptors:
@@ -548,20 +579,20 @@ class Describer(TextBrowser):
     self.add_text(json.dumps(Common.Session.jq(self.object_path).input(text=json.dumps(response, default=datetime_hack)).first(), sort_keys=True, indent=2))
 
 class DeleteResourceDialog(SessionAwareDialog):
-  def __init__(self, parent, alignment, dimensions, *args, resource_type, resource_identifier, callback, **kwargs):
+  def __init__(self, parent, alignment, dimensions, *args, resource_type, resource_identifier, callback, action_name='Delete', undoable=False, **kwargs):
     kwargs['ok_action'] = self.accept_and_close
     kwargs['cancel_action'] = self.close
-    kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Delete Context', Common.color('modal_dialog_border_title'))
+    kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), '{1} {0}'.format(resource_type, action_name), Common.color('modal_dialog_border_title'))
     super().__init__(parent, alignment, dimensions, *args, **kwargs)
-    self.name = name
     self.add_field(DialogFieldLabel([
-      ('Delete ', Common.color('modal_dialog_label')),
+      ('{0} '.format(action_name), Common.color('modal_dialog_label')),
       (resource_type, Common.color('modal_dialog_label_highlight')),
       (' resource "', Common.color('modal_dialog_label')),
       (resource_identifier, Common.color('modal_dialog_label_highlight')),
       ('"?', Common.color('modal_dialog_label')),
     ]))
-    self.add_field(DialogFieldLabel('This action cannot be undone.', Common.color('modal_dialog_error')))
+    if not undoable:
+      self.add_field(DialogFieldLabel('This action cannot be undone.', Common.color('modal_dialog_error')))
     self.highlighted = 1
     self.callback = callback
 

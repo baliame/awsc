@@ -1,10 +1,11 @@
-from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber, DialogFieldResourceListSelector
+from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber, DialogFieldResourceListSelector, DeleteResourceDialog
 from .common import Common, SessionAwareDialog
 from .termui.dialog import DialogControl, DialogFieldText, DialogFieldLabel, DialogFieldButton
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.list_control import ListEntry
 from .termui.ui import ControlCodes
+from .ssh import SSHList
 import subprocess
 from pathlib import Path
 import json
@@ -28,6 +29,123 @@ def format_timedelta(delta):
     return '{0}s ago'.format(seconds)
   else:
     return '<1s ago'
+
+# KeyPairs
+class KeyPairResourceLister(ResourceLister):
+  prefix = 'keypair_list'
+  title = 'EC2 Keypairs'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_key_pairs'
+    self.item_path = '.KeyPairs'
+    self.column_paths = {
+      'id': '.KeyPairId',
+      'name': '.KeyName',
+      'fingerprint': '.KeyFingerprint',
+      'association': self.determine_keypair_association,
+    }
+    self.imported_column_sizes = {
+      'id': 16,
+      'name': 32,
+      'fingerprint': 48,
+      'association': 16,
+    }
+    self.describe_command = KeyPairDescriber.opener
+    self.describe_selection_arg = 'keypair_entry'
+    self.imported_column_order = ['id', 'name', 'fingerprint', 'association']
+    self.primary_key = 'id'
+    self.sort_column = 'id'
+    super().__init__(*args, **kwargs)
+    self.add_hotkey('a', self.set_keypair_association, 'Associate with SSH key')
+    self.add_hotkey('c', self.create_keypair, 'Create new keypair')
+    self.add_hotkey('x', self.remove_keypair_association, 'Remove association')
+
+  def determine_keypair_association(self, entry):
+    return Common.Session.get_keypair_association(entry['KeyPairId'])
+
+  def set_keypair_association(self, _):
+    if self.selection is not None:
+      Common.Session.push_frame(SSHList.selector(self.ssh_selector_callback))
+      Common.Session.ui.dirty = True
+
+  def ssh_selector_callback(self, val):
+    if self.selection is not None:
+      Common.Session.set_keypair_association(self.selection['id'], val)
+      self.refresh_data()
+
+  def create_keypair(self, _):
+    KeyPairCreateDialog.opener(self)
+
+  def remove_keypair_association(self, _):
+    if self.selection is not None:
+      Common.Session.set_keypair_association(self.selection['id'], '')
+      self.refresh_data()
+
+class KeyPairCreateDialog(SessionAwareDialog):
+  def __init__(self, *args, caller=None, **kwargs):
+    kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Create new keypair', Common.color('modal_dialog_border_title'))
+    kwargs['ok_action'] = self.accept_and_close
+    kwargs['cancel_action'] = self.close
+    super().__init__(*args, **kwargs)
+    self.add_field(DialogFieldLabel('Enter keypair details'))
+    self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
+    self.add_field(self.error_label)
+    self.name_field = DialogFieldText('Name:', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
+    self.add_field(self.name_field)
+    self.dotssh = Path.home() / '.ssh'
+    self.add_field(DialogFieldLabel('Key file will be saved in {0}'.format(str(self.dotssh.resolve()))))
+    self.save_as_field = DialogFieldText('Filename:', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
+    self.add_field(self.save_as_field)
+    self.caller = caller
+
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
+      self.close()
+      return True
+    return super().input(inkey)
+
+  def accept_and_close(self):
+    if self.name_field.text == '':
+      self.error_label.text = 'Name cannot be blank.'
+      return
+    if self.save_as_field.text == '':
+      self.error_label.text = 'Filename cannot be blank.'
+      return
+    if '/' in self.save_as_field.text or '\\' in self.save_as_field.text:
+      self.error_label.text = 'Filename cannot contain path separators.'
+      return
+
+    try:
+      resp = Common.Session.service_provider('ec2').create_key_pair(KeyName=self.name_field.text)
+      data = resp['KeyMaterial']
+      with (self.dotssh / self.save_as_field.text).open('w') as f:
+        f.write(data)
+      Common.Session.set_keypair_association(resp['KeyPairId'], self.save_as_field.text)
+    except Exception as e:
+      Common.Session.set_message(str(e), Common.color('message_error'))
+
+    self.close()
+
+  def close(self):
+    if self.caller is not None:
+      self.caller.refresh_data()
+    super().close()
+
+class KeyPairDescriber(Describer):
+  prefix = 'keypair_browser'
+  title = 'EC2 Keypair'
+
+  def __init__(self, parent, alignment, dimensions, keypair_entry, *args, **kwargs):
+    self.keypair_id = keypair_entry['id']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_key_pairs'
+    self.describe_kwargs = {'KeyPairIds': [self.keypair_id]}
+    self.object_path='.KeyPairs[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.keypair_id
 
 # AMI
 class AMIResourceLister(ResourceLister):
@@ -153,6 +271,12 @@ class EC2LaunchDialog(SessionAwareDialog):
     self.add_field(self.instance_type_field)
     self.image_field = DialogFieldResourceListSelector(AMIResourceLister, 'AMI:', '', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
     self.add_field(self.image_field)
+    self.keypair_field = DialogFieldResourceListSelector(KeyPairResourceLister, 'Keypair:', '', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'), primary_key='name')
+    self.add_field(self.keypair_field)
+    self.subnet_field = DialogFieldResourceListSelector(SubnetResourceLister, 'Subnet:', '', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
+    self.add_field(self.subnet_field)
+    self.secgroup_field = DialogFieldResourceListSelector(SGResourceLister, 'Security group:', '', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
+    self.add_field(self.secgroup_field)
     self.caller = caller
 
   def input(self, inkey):
@@ -171,8 +295,39 @@ class EC2LaunchDialog(SessionAwareDialog):
     if self.image_field.text == '':
       self.error_label.text = 'AMI cannot be blank.'
       return
+    if self.keypair_field.text == '':
+      self.error_label.text = 'Key pair cannot be blank.'
+      return
 
-    # TODO: do.
+    try:
+      ec2 = Common.Session.service_provider('ec2')
+      kwa = {
+        'ImageId': self.image_field.text,
+        'InstanceType': self.instance_type_field.text,
+        'KeyName': self.keypair_field.text,
+        'MinCount': 1,
+        'MaxCount': 1,
+        'TagSpecifications': [
+          {
+            'ResourceType': 'instance',
+            'Tags': [{'Key': 'Name', 'Value': self.name_field.text}],
+          },
+        ],
+      }
+      if self.subnet_field.text != '':
+        kwa['SubnetId'] = self.subnet_field.text
+        if self.secgroup_field.text != '':
+          sg = ec2.describe_security_groups(GroupIds=[self.secgroup_field.text])['SecurityGroups'][0]
+          sn = ec2.describe_subnets(SubnetIds=[self.subnet_field.text])['Subnets'][0]
+          if sg['VpcId'] == sn['VpcId']:
+            kwa['SecurityGroupIds'] = [self.secgroup_field.text]
+          else:
+            Common.Session.set_message('Security group and subnet belong to different VPCs.', Common.color('message_error'))
+            return
+      resp = ec2.run_instances(**kwa)
+      Common.Session.set_message('Instance {0} is launching'.format(resp['Instances'][0]['InstanceId']), Common.color('message_success'))
+    except Exception as e:
+      Common.Session.set_message(str(e), Common.color('message_error'))
 
     self.close()
 
@@ -225,12 +380,52 @@ class EC2ResourceLister(ResourceLister):
     super().__init__(*args, **kwargs)
     self.add_hotkey('s', self.ssh, 'Open SSH')
     self.add_hotkey('l', self.new_instance, 'Launch new instance')
+    self.add_hotkey(ControlCodes.S, self.stop_instance, 'Stop instance')
+    self.add_hotkey(ControlCodes.D, self.terminate_instance, 'Terminate instance')
+
+  def stop_instance(self, _):
+    if self.selection is not None:
+      DeleteResourceDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=self, resource_type='EC2 Instance', resource_identifier=self.selection['instance id'], callback=self.do_stop, undoable=True, action_name='Stop')
+
+  def terminate_instance(self, _):
+    if self.selection is not None:
+      DeleteResourceDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=self, resource_type='EC2 Instance', resource_identifier=self.selection['instance id'], callback=self.do_terminate, action_name='Terminate')
+
+  def do_stop(self):
+    if self.selection is not None:
+      try:
+        resp = Common.Session.service_provider('ec2').stop_instances(InstanceIds=[self.selection['instance id']])
+        Common.Session.set_message('Stopping instance {0}'.format(self.selection['instance id']), Common.color('message_success'))
+      except Exception as e:
+        Common.Session.set_message(str(e), Common.color('message_error'))
+    self.refresh_data()
+
+  def do_terminate(self):
+    if self.selection is not None:
+      try:
+        resp = Common.Session.service_provider('ec2').terminate_instances(InstanceIds=[self.selection['instance id']])
+        Common.Session.set_message('Terminating instance {0}'.format(self.selection['instance id']), Common.color('message_success'))
+      except Exception as e:
+        Common.Session.set_message(str(e), Common.color('message_error'))
+    self.refresh_data()
 
   def new_instance(self, _):
     EC2LaunchDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '20'), caller=self, weight=-500)
 
   def ssh(self, _):
-    p = Path.home() / '.ssh' / Common.Session.ssh_key
+    if self.selection is None:
+      return
+    key = Common.Session.ssh_key
+    try:
+      kp = Common.Session.service_provider('ec2').describe_key_pairs(KeyNames=[self.selection['key name']])
+      if len(kp['KeyPairs']) > 0:
+        assoc = Common.Session.get_keypair_association(kp['KeyPairs'][0]['KeyPairId'])
+        if assoc != '':
+          key = assoc
+    except Exception as e:
+      Common.Session.set_message(str(e), Common.color('message_error'))
+      return
+    p = Path.home() / '.ssh' / key
     if not p.exists():
       Common.Session.set_message('Selected SSH key does not exist', Common.color('message_error'))
       return
@@ -484,6 +679,8 @@ class SGRuleLister(ResourceLister):
     super().__init__(parent, alignment, dimensions, *args, **kwargs)
 
   def determine_name(self, rule):
+    if rule['IpProtocol'] == '-1':
+      return '<all>'
     if rule['FromPort'] != rule['ToPort']:
       return ''
     if rule['FromPort'] not in SGRuleLister.well_known:
@@ -492,7 +689,7 @@ class SGRuleLister(ResourceLister):
 
   def determine_protocol(self, rule):
     if rule['IpProtocol'] == '-1' or rule['IpProtocol'] == -1:
-      return 'all'
+      return '<all>'
     return rule['IpProtocol']
 
   def determine_ips(self, rule):
@@ -506,6 +703,8 @@ class SGRuleLister(ResourceLister):
     return ','.join(pair['GroupId'] for pair in rule['UserIdGroupPairs'])
 
   def determine_port_range(self, rule):
+    if rule['IpProtocol'] == '-1':
+      return '0-65535'
     if rule['FromPort'] != rule['ToPort']:
       return '{0}-{1}'.format(rule['FromPort'], rule['ToPort'])
     return str(rule['FromPort'])
@@ -543,7 +742,7 @@ class SGRelated(MultiLister):
         'column_paths': {
           'type': lambda x: 'EC2 Instance',
           'id': '.InstanceId',
-          'name': self.determine_ec2_name,
+          'name': self.tag_finder_generator('Name'),
         },
         'hidden_columns': {},
         'compare_as_list': True,
@@ -557,7 +756,7 @@ class SGRelated(MultiLister):
         'column_paths': {
           'type': lambda x: 'RDS Instance',
           'id': '.DBInstanceIdentifier',
-          'name': self.determine_rds_name,
+          'name': '.Endpoint.Address',
         },
         'hidden_columns': {},
         'compare_as_list': True,

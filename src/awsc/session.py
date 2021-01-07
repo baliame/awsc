@@ -101,6 +101,8 @@ class Session:
       self.message_time -= delta
       if self.message_time <= 0:
         self._message_label.texts = []
+    if hasattr(self.resource_main, 'auto_refresh'):
+      self.resource_main.auto_refresh()
 
   @property
   def context(self):
@@ -133,6 +135,15 @@ class Session:
     self._ssh_key = value
     self.info_display['SSH Key'] = value
     self.info_display['Default SSH username'] = self.config['default_ssh_usernames'][value] if value in self.config['default_ssh_usernames'] else ''
+
+  def get_keypair_association(self, keypair_id):
+    if keypair_id in self.config['keypair_associations']:
+      return self.config['keypair_associations'][keypair_id]
+    return ''
+
+  def set_keypair_association(self, keypair_id, key_name):
+    self.config['keypair_associations'][keypair_id] = key_name
+    self.config.write_config()
 
   def textedit(self, value):
     editor = self.config['editor_command']

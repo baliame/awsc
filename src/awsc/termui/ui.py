@@ -244,10 +244,10 @@ class UI:
               for func in self.tickers:
                 func()
               self.before_paint()
-              if self.dirty:
+              if self.dirty or time.time() - self.last_paint > 3:
                 self.paint()
               t2 = time.time()
-              self.log('Frame time: {0:.2f}ms'.format((t2 - st) * 1000), level=1)
+              #self.log('Frame time: {0:.2f}ms'.format((t2 - st) * 1000), level=1)
               d = FrameRate - (t2 - st)
               if d > 0:
                 time.sleep(d)

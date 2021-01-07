@@ -1,5 +1,5 @@
 import re
-from .common import Common
+from .common import Common, DefaultAnchor, DefaultDimension, DefaultBorder
 from .termui.alignment import TopLeftAnchor, TopRightAnchor, CenterAnchor, Dimension
 from .termui.dialog import DialogControl, DialogFieldLabel, DialogFieldText
 from .termui.list_control import ListControl, ListEntry
@@ -9,7 +9,23 @@ from .info import HotkeyDisplay
 from pathlib import Path
 
 class SSHList(ListControl):
-  def __init__(self, parent, alignment, dimensions, *args, **kwargs):
+  @classmethod
+  def opener(cls, **kwargs):
+    l = cls(
+      Common.Session.ui.top_block,
+      DefaultAnchor,
+      DefaultDimension,
+      weight=0,
+      **kwargs
+    )
+    l.border=DefaultBorder("ssh", "SSH Keys", None)
+    return [l, l.hotkey_display]
+
+  @classmethod
+  def selector(cls, cb, **kwargs):
+    return cls.opener(**{'selector_cb': cb, **kwargs})
+
+  def __init__(self, parent, alignment, dimensions, selector_cb=None, *args, **kwargs):
     super().__init__(
       parent,
       alignment,
@@ -20,10 +36,14 @@ class SSHList(ListControl):
       *args,
       **kwargs,
     )
+    self.selector_cb = selector_cb
     self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
     self.add_hotkey('d', self.set_default_ssh_key, 'Set as default')
     self.add_hotkey('e', self.set_default_ssh_username, 'Set default username')
-    self.add_hotkey('KEY_ENTER', self.select_ssh_key, 'Select ssh key')
+    if selector_cb is not None:
+      self.add_hotkey('KEY_ENTER', self.select_and_close, 'Select and close')
+    else:
+      self.add_hotkey('KEY_ENTER', self.select_ssh_key, 'Select ssh key')
     self.add_column('usage frequency', 12)
     self.add_column('default username', 20)
     self.add_column('default', 8)
@@ -67,6 +87,11 @@ class SSHList(ListControl):
   def select_ssh_key(self, _):
     if self.selection is not None:
       Common.Session.ssh_key = self.selection.name
+
+  def select_and_close(self, _):
+    if self.selection is not None and self.selector_cb is not None:
+      self.selector_cb(self.selection['name'])
+      Common.Session.pop_frame()
 
   def set_default_ssh_username(self, _):
     SSHDefaultUsernameDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), key_name=self.selection['name'], caller=self, weight=-500)

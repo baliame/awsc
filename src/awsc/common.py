@@ -1,5 +1,5 @@
 from .config.config import Config
-from .termui.alignment import TopLeftAnchor, Dimension
+from .termui.alignment import TopLeftAnchor, Dimension, CenterAnchor
 from .session import Session
 from .termui.color import Color, Palette8Bit
 from .termui.control import Border, BorderStyle
@@ -9,6 +9,10 @@ DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension('100%', '100%-14')
 
 class SessionAwareDialog(DialogControl):
+  @classmethod
+  def opener(cls, caller):
+    return cls(caller.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=caller)
+
   def __init__(self, *args, **kwargs):
     Common.Session.extend_frame(self)
     super().__init__(*args, **kwargs)

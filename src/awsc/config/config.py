@@ -3,7 +3,7 @@ from .storage import Keystore
 from .scheme import Scheme
 import yaml
 
-last_config_version = 8
+last_config_version = 10
 
 class Config:
   def __init__(self, path=None):
@@ -17,6 +17,8 @@ class Config:
       6: self.update_6,
       7: self.update_7,
       8: self.update_8,
+      9: self.update_9,
+      10: self.update_10,
     }
     if path is None:
       path = Path.home() / '.config' / 'awsc'
@@ -65,6 +67,12 @@ class Config:
   def update_8(self):
     self.config['editor_command'] = 'nano {0}'
 
+  def update_9(self):
+    self.config['keypair_associations'] = {}
+
+  def update_10(self):
+    self.scheme.backup_and_reset()
+
   def update_version(self):
     if 'version' not in self.config:
       version = 0
@@ -86,6 +94,7 @@ class Config:
       'default_region': 'us-east-1',
       'default_ssh_key': 'id_rsa',
       'default_ssh_usernames': {},
+      'keypair_associations': {},
       'editor_command': 'nano {0}',
       'usage_statistics': {
         'regions': {},

@@ -103,6 +103,7 @@ class HotkeyDisplay(Control):
     ControlCodes.C: 'ctrl-c',
     ControlCodes.D: 'ctrl-d',
     ControlCodes.R: 'ctrl-r',
+    ControlCodes.S: 'ctrl-s',
   }
 
   def __init__(self, parent, alignment, dimensions, holder, session=None, cols=2, highlight_color=None, generic_color=None, *args, **kwargs):

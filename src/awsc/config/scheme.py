@@ -27,6 +27,10 @@ class Scheme:
           'foreground': 70,
           'background': 0,
         },
+        'highlight_selection': {
+          'foreground': 0,
+          'background': 70,
+        },
         'info_display_title': {
           'foreground': 70,
           'background': 0,

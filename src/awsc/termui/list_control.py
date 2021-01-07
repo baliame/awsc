@@ -1,6 +1,7 @@
 from .control import Control
 from .common import Commons
 from .color import ColorBlack, ColorGold, ColorBlackOnGold, ColorBlackOnOrange, ColorWhite
+import datetime
 
 class ListControl(Control):
   def __init__(self, parent, alignment, dimensions, color=ColorGold, selection_color=ColorBlackOnGold, title_color=ColorBlackOnOrange, *args, **kwargs):
@@ -19,6 +20,7 @@ class ListControl(Control):
     self.thread_share['clear'] = False
     self._cache = None
     self.thread_share['new_entries'] = []
+    self.thread_share['finalize'] = False
     self.top = 0
 
   @property
@@ -36,6 +38,7 @@ class ListControl(Control):
 
   def add_entry(self, entry):
     self.entries.append(entry)
+    self.sort()
     self._cache = None
     Commons.UIInstance.dirty = True
 
@@ -123,12 +126,23 @@ class ListControl(Control):
     if self.thread_share['clear']:
       Commons.UIInstance.dirty = True
       self.entries = []
+      self.top = 0
       self.thread_share['clear'] = False
     if len(self.thread_share['new_entries']) > 0:
       Commons.UIInstance.dirty = True
-      self.entries.extend(self.thread_share['new_entries'])
+      self.handle_new_entries_critical(self.thread_share['new_entries'])
       self._cache = None
       self.thread_share['new_entries'] = []
+    if self.thread_share['finalize']:
+      self.handle_finalization_critical()
+      self.thread_share['finalize'] = False
+
+  def handle_new_entries_critical(self, entries):
+    self.entries.extend(entries)
+    self.sort()
+
+  def handle_finalization_critical(self):
+    pass
 
   def before_paint(self):
     super().before_paint()
@@ -137,7 +151,6 @@ class ListControl(Control):
       self.before_paint_critical()
     finally:
       self.mutex.release()
-    self.sort()
     if self.selected >= len(self.entries):
       self.selected = len(self.entries) - 1
     if self.selected < 0:
@@ -179,6 +192,7 @@ class ListControl(Control):
     c = self.corners()
     y = c[1][0] + (0 if self.border is None else 1)
     x = c[0][0] + (0 if self.border is None else 1)
+    now = datetime.datetime.now()
     rows = self.rows
     for col in self.column_order:
       text = col
@@ -200,7 +214,17 @@ class ListControl(Control):
           text = text[:m]
         elif len(text) < m:
           text = text + ((m - len(text)) * ' ')
-        Commons.UIInstance.print(text, xy=(x,y), color=self.selection_color if i == self.selected else self.color)
+        if i == self.selected:
+          if hasattr(self, 'update_selection_color') and now - item.updated < datetime.timedelta(seconds=3):
+            color = self.update_selection_color
+          else:
+            color = self.selection_color
+        else:
+          if hasattr(self, 'update_color') and now - item.updated < datetime.timedelta(seconds=3):
+            color = self.update_color
+          else:
+            color = self.color
+        Commons.UIInstance.print(text, xy=(x,y), color=color)
         x += m
       y += 1
 
@@ -210,6 +234,7 @@ class ListEntry:
     self.columns = {"name" : name}
     self.columns.update({k:str(v) for (k, v) in kwargs.items()})
     self.controller_data = {}
+    self.updated = datetime.datetime.now()
 
   def __getitem__(self, item):
     return self.columns[item]
@@ -226,3 +251,22 @@ class ListEntry:
       if f in column.lower():
         return True
     return False
+
+  def mutate(self, other):
+    up = False
+    if self.name != other.name or len(self.columns) != len(other.columns):
+      up = True
+      Commons.UIInstance.log('Up because name or col len')
+    else:
+      for col in self.columns:
+        if col not in other.columns or self.columns[col] != other.columns[col]:
+          Commons.UIInstance.log('Up because col {0}'.format(col))
+          up = True
+          break
+    if not up:
+      return
+    self.updated = datetime.datetime.now()
+    self.name = other.name
+    self.columns = other.columns.copy()
+    self.controller_data = other.controller_data
+
