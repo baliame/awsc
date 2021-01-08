@@ -7,12 +7,17 @@ https://github.com/pypa/sampleproject
 # Always prefer setuptools over distutils
 from setuptools import setup, find_packages
 
+with open('README.md', 'r') as readme:
+  ld = readme.read()
+
 setup(
   name='awsc',
   url='https://github.com/baliame/awsc',
 
-  version='0.1.0',
-  description='AWS Commander',  # Optional
+  version='0.1.1',
+  description='AWS Commander',
+  long_description=ld,
+  long_description_content_type='text/markdown',
   author='baliame',
   author_email='akos.toth@cheppers.com',  # Optional
 
