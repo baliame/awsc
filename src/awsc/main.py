@@ -11,9 +11,6 @@ from .resources import *
 from .meta import CommanderOptionsLister
 import os
 import sys
-import yappi
-
-profiling = False
 
 def awscheck():
   return bool(Common.Session.context) and bool(Common.Session.region)
@@ -74,8 +71,6 @@ def open_commander():
   )
 
 def main(*args, **kwargs):
-  if profiling:
-    yappi.start()
   # stderr hack
   old_stderr = None
   try:
@@ -139,9 +134,3 @@ def main(*args, **kwargs):
     if old_stderr is not None:
       sys.stderr.close()
       sys.stderr = old_stderr
-    if profiling:
-      yappi.stop()
-      threads = yappi.get_thread_stats()
-      for thread in threads:
-        print('Stats for thread #{0}'.format(thread.id))
-        yappi.get_func_stats(ctx_id=thread.id).save('/tmp/awsc-profiling-thread-{0}.tmp'.format(thread.id), "callgrind")
