@@ -92,6 +92,15 @@ class Control(Block):
     self.mutex = threading.Lock()
 
   @property
+  def border(self):
+    return self._border
+
+  @border.setter
+  def border(self, value):
+    self._border = value
+    Commons.UIInstance.dirty = True
+
+  @property
   def inner(self):
     c = self.corners()
     x0 = c[0][0] + (0 if self.border is None else 1)

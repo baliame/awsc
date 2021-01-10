@@ -1,6 +1,7 @@
 from .config.config import Config
 from .termui.alignment import TopLeftAnchor, Dimension, CenterAnchor
 from .session import Session
+from .termui.bar_graph import BarGraph
 from .termui.color import Color, Palette8Bit
 from .termui.control import Border, BorderStyle
 from .termui.dialog import DialogControl
@@ -8,10 +9,31 @@ from .termui.dialog import DialogControl
 DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension('100%', '100%-14')
 
+class BaseChart(BarGraph):
+  prefix = 'CHANGEME'
+  title = 'CHANGEME'
+
+  @classmethod
+  def opener(cls, *args, **kwargs):
+    ret = cls(
+      Common.Session.ui.top_block,
+      DefaultAnchor,
+      DefaultDimension,
+      *args,
+      weight=0,
+      color=Common.color('generic'),
+      **kwargs
+    )
+    ret.border=DefaultBorder(cls.prefix, cls.title, ret.title_info())
+    return [ret]
+
+  def title_info(self):
+    return None
+
 class SessionAwareDialog(DialogControl):
   @classmethod
-  def opener(cls, caller):
-    return cls(caller.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=caller)
+  def opener(cls, caller, *args, **kwargs):
+    return cls(caller.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=caller, *args, **kwargs)
 
   def __init__(self, *args, **kwargs):
     Common.Session.extend_frame(self)
