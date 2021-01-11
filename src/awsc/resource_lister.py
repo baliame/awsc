@@ -26,6 +26,7 @@ class StopLoadingData(Exception):
 class ResourceListerBase(ListControl):
   def __init__(self, *args, **kwargs):
     self.load_counter = 1
+    self.dialog_mode = False
     self.closed = False
     if not hasattr(self, 'next_marker'):
       self.next_marker = None
@@ -374,7 +375,7 @@ class ResourceLister(ResourceListerBase):
 
   def command_wrapper(self, cmd, selection_arg):
     def fn(*args):
-      self.command(cmd, {selection_arg: self.selection, 'pushed': True})
+      self.command(cmd, {selection_arg: self.selection, 'pushed': True, 'caller': self})
     return fn
 
   def describe(self, *args):
@@ -390,6 +391,8 @@ class ResourceLister(ResourceListerBase):
       yield y
 
   def auto_refresh(self):
+    if self.dialog_mode:
+      return
     if datetime.datetime.now() - self.auto_refresh_last > datetime.timedelta(seconds=10):
       self.refresh_data()
 

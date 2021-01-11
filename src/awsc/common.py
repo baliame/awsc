@@ -35,11 +35,25 @@ class SessionAwareDialog(DialogControl):
   def opener(cls, caller, *args, **kwargs):
     return cls(caller.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=caller, *args, **kwargs)
 
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args, caller, **kwargs):
+    caller.dialog_mode = True
+    self.caller = caller
     Common.Session.extend_frame(self)
+    kwargs['ok_action'] = self.accept_and_close
+    kwargs['cancel_action'] = self.close
     super().__init__(*args, **kwargs)
 
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
+      self.close()
+      return True
+    return super().input(inkey)
+
+  def accept_and_close(self):
+    self.close()
+
   def close(self):
+    self.caller.dialog_mode = False
     self.parent.remove_block(self)
     Common.Session.remove_from_frame(self)
 

@@ -1,6 +1,6 @@
 from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber, DialogFieldResourceListSelector, DeleteResourceDialog
 from .common import Common, SessionAwareDialog, BaseChart
-from .termui.dialog import DialogControl, DialogFieldText, DialogFieldLabel, DialogFieldButton
+from .termui.dialog import DialogControl, DialogFieldText, DialogFieldLabel, DialogFieldButton, DialogFieldCheckbox
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.list_control import ListEntry
@@ -30,10 +30,72 @@ def format_timedelta(delta):
   else:
     return '<1s ago'
 
+# EBS
+class EBSResourceLister(ResourceLister):
+  prefix = 'ebs_list'
+  title = 'EBS Volumes'
+
+  def __init__(self, *args, **kwargs):
+    self.resource_key = 'ec2'
+    self.list_method = 'describe_volumes'
+    self.item_path = '.Volumes'
+    self.column_paths = {
+      'id': '.VolumeId',
+      'name': self.tag_finder_generator('Name'),
+      'size': self.determine_size,
+      'state': '.State',
+      'type': '.VolumeType',
+      'attached to': self.determine_attachment,
+    }
+    self.imported_column_sizes = {
+      'id': 20,
+      'name': 32,
+      'size': 10,
+      'state': 10,
+      'type': 10,
+      'attached to': 16,
+    }
+    self.imported_column_order = ['id', 'name', 'size', 'state', 'type', 'attached to']
+    self.list_kwargs = {}
+    self.primary_key = 'id'
+    self.sort_column = 'id'
+    self.describe_command = EBSDescriber.opener
+    self.describe_selection_arg = 'ebs_entry'
+    super().__init__(*args, **kwargs)
+
+  def determine_size(self, entry):
+    return '{0} GiB'.format(entry['Size'])
+
+  def determine_attachment(self, entry):
+    for at in entry['Attachments']:
+      if at['State'] in ('attaching', 'attached', 'busy'):
+        return at['InstanceId']
+    return ''
+
+class EBSDescriber(Describer):
+  prefix = 'ebs_browser'
+  title = 'EBS Volume'
+
+  def __init__(self, parent, alignment, dimensions, ebs_entry, *args, **kwargs):
+    self.ebs_id = ebs_entry['id']
+    self.resource_key = 'ec2'
+    self.describe_method = 'describe_volumes'
+    self.describe_kwargs = {'VolumeIds': [self.ebs_id]}
+    self.object_path='.Volumes[0]'
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+
+  def title_info(self):
+    return self.ebs_id
+
 # Metrics
 class MetricLister(ResourceLister):
   prefix = 'metric_list'
   title = 'Metrics'
+
+  def title_info(self):
+    if self.dimension is not None:
+      return '{0}={1}'.format(self.dimensions[0], self.dimension[1])
+    return None
 
   def __init__(self, *args, metric_namespace=None, metric_name=None, dimension=None, **kwargs):
     self.resource_key = 'cloudwatch'
@@ -163,9 +225,7 @@ class KeyPairResourceLister(ResourceLister):
 class KeyPairCreateDialog(SessionAwareDialog):
   def __init__(self, *args, caller=None, **kwargs):
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Create new keypair', Common.color('modal_dialog_border_title'))
-    kwargs['ok_action'] = self.accept_and_close
-    kwargs['cancel_action'] = self.close
-    super().__init__(*args, **kwargs)
+    super().__init__(*args, caller=caller,  **kwargs)
     self.add_field(DialogFieldLabel('Enter keypair details'))
     self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
     self.add_field(self.error_label)
@@ -176,12 +236,6 @@ class KeyPairCreateDialog(SessionAwareDialog):
     self.save_as_field = DialogFieldText('Filename:', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
     self.add_field(self.save_as_field)
     self.caller = caller
-
-  def input(self, inkey):
-    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
-      self.close()
-      return True
-    return super().input(inkey)
 
   def accept_and_close(self):
     if self.name_field.text == '':
@@ -203,7 +257,7 @@ class KeyPairCreateDialog(SessionAwareDialog):
     except Exception as e:
       Common.Session.set_message(str(e), Common.color('message_error'))
 
-    self.close()
+    super().accept_and_close()
 
   def close(self):
     if self.caller is not None:
@@ -336,9 +390,7 @@ class InstanceClassDescriber(Describer):
 class EC2LaunchDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Launch EC2 instance', Common.color('modal_dialog_border_title'))
-    kwargs['ok_action'] = self.accept_and_close
-    kwargs['cancel_action'] = self.close
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
     self.add_field(DialogFieldLabel('Enter AWS instance details'))
     self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
     self.add_field(self.error_label)
@@ -356,12 +408,6 @@ class EC2LaunchDialog(SessionAwareDialog):
     self.secgroup_field = DialogFieldResourceListSelector(SGResourceLister, 'Security group:', '', label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'))
     self.add_field(self.secgroup_field)
     self.caller = caller
-
-  def input(self, inkey):
-    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
-      self.close()
-      return True
-    return super().input(inkey)
 
   def accept_and_close(self):
     if self.name_field.text == '':
@@ -407,7 +453,7 @@ class EC2LaunchDialog(SessionAwareDialog):
     except Exception as e:
       Common.Session.set_message(str(e), Common.color('message_error'))
 
-    self.close()
+    super().accept_and_close()
 
   def close(self):
     if self.caller is not None:
@@ -459,12 +505,17 @@ class EC2ResourceLister(ResourceLister):
     self.add_hotkey('s', self.ssh, 'Open SSH')
     self.add_hotkey('l', self.new_instance, 'Launch new instance')
     self.add_hotkey('m', self.metrics, 'Metrics')
-    self.add_hotkey(ControlCodes.S, self.stop_instance, 'Stop/start instance')
+    self.add_hotkey(ControlCodes.S, self.stop_start_instance, 'Stop/start instance')
     self.add_hotkey(ControlCodes.D, self.terminate_instance, 'Terminate instance')
 
-  def stop_instance(self, _):
+  def stop_start_instance(self, _):
     if self.selection is not None:
-      DeleteResourceDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=self, resource_type='EC2 Instance', resource_identifier=self.selection['instance id'], callback=self.do_stop, undoable=True, action_name='Stop')
+      if self.selection['state'] == 'running':
+        DeleteResourceDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=self, resource_type='EC2 Instance', resource_identifier=self.selection['instance id'], callback=self.do_stop, undoable=True, action_name='Stop')
+      elif self.selection['state'] == 'stopped':
+        DeleteResourceDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '10'), caller=self, resource_type='EC2 Instance', resource_identifier=self.selection['instance id'], callback=self.do_start, undoable=True, action_name='Start')
+      else:
+        Common.Session.set_message('Instance is not in running or stopped state.', Common.color('message_info'))
 
   def terminate_instance(self, _):
     if self.selection is not None:
@@ -473,6 +524,15 @@ class EC2ResourceLister(ResourceLister):
   def metrics(self, _):
     if self.selection is not None:
       Common.Session.push_frame(MetricLister.opener(metric_namespace='AWS/EC2', dimension=('InstanceId', self.selection['instance id'])))
+
+  def do_start(self):
+    if self.selection is not None:
+      try:
+        resp = Common.Session.service_provider('ec2').start_instances(InstanceIds=[self.selection['instance id']])
+        Common.Session.set_message('Starting instance {0}'.format(self.selection['instance id']), Common.color('message_success'))
+      except Exception as e:
+        Common.Session.set_message(str(e), Common.color('message_error'))
+    self.refresh_data()
 
   def do_stop(self):
     if self.selection is not None:
@@ -533,10 +593,8 @@ class EC2Describer(Describer):
   def title_info(self):
     return self.instance_id
 
-class EC2SSHDialog(DialogControl):
+class EC2SSHDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, instance_entry=None, caller=None, *args, **kwargs):
-    kwargs['ok_action'] = self.accept_and_close
-    kwargs['cancel_action'] = self.close
     kwargs['border'] = Border(
       Common.border('ec2_ssh', 'default'),
       Common.color('ec2_ssh_modal_dialog_border', 'modal_dialog_border'),
@@ -545,7 +603,7 @@ class EC2SSHDialog(DialogControl):
       instance_entry['instance id'],
       Common.color('ec2_ssh_modal_dialog_border_title_info', 'modal_dialog_border_title_info'),
     )
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
     self.instance_id = instance_entry['instance id']
     self.ip = instance_entry['public ip']
     def_text = Common.Configuration['default_ssh_usernames'][Common.Session.ssh_key] if Common.Session.ssh_key in Common.Configuration['default_ssh_usernames'] else ''
@@ -560,12 +618,6 @@ class EC2SSHDialog(DialogControl):
     self.add_field(self.username_textfield)
     self.highlighted = 1 if def_text != '' else 0
     self.caller = caller
-
-  def input(self, inkey):
-    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
-      self.close()
-      return True
-    return super().input(inkey)
 
   def accept_and_close(self):
     ph = Path.home() / '.ssh' / Common.Session.ssh_key
@@ -628,9 +680,11 @@ class ASGResourceLister(ResourceLister):
     self.open_command = EC2ResourceLister.opener
     self.open_selection_arg = 'asg'
     self.imported_column_order = ['name', 'launch config/template', 'current', 'min', 'desired', 'max']
+
     self.sort_column = 'name'
     self.primary_key = 'name'
     super().__init__(*args, **kwargs)
+    self.add_hotkey(ControlCodes.S, self.scale_group, 'Scale')
 
   def determine_launch_info(self, asg):
     if 'LaunchConfigurationName' in asg and bool(asg['LaunchConfigurationName']):
@@ -642,6 +696,48 @@ class ASGResourceLister(ResourceLister):
 
   def determine_instance_count(self, asg):
     return '{0}/{1}'.format(len([h for h in asg['Instances'] if h['HealthStatus'] == 'Healthy']), len(asg['Instances']))
+
+  def scale_group(self, _):
+    if self.selection is not None:
+      ASGScaleDialog(self.parent, CenterAnchor(0, 0), Dimension('80%|40', '20'), caller=self, weight=-500)
+
+class ASGScaleDialog(SessionAwareDialog):
+  def __init__(self, *args, caller=None, **kwargs):
+    kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Scale autoscaling group', Common.color('modal_dialog_border_title'), caller.selection['name'], Common.color('modal_dialog_border_title_info'))
+    self.asg_entry = caller.selection
+    super().__init__(caller=caller, *args, **kwargs)
+    self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
+    self.add_field(self.error_label)
+    self.desired_capacity_field = DialogFieldText('Desired capacity:', text=str(self.asg_entry['desired']), label_min=16, color=Common.color('modal_dialog_textfield'), selected_color=Common.color('modal_dialog_textfield_selected'), label_color=Common.color('modal_dialog_textfield_label'), accepted_inputs='0123456789')
+    self.add_field(self.desired_capacity_field)
+    self.add_field(DialogFieldLabel(''))
+    self.adjust_limits_field = DialogFieldCheckbox('Adjust min/max capacity if required', checked=True, color=Common.color('modal_dialog_textfield_label'), selected_color=Common.color('modal_dialog_textfield_selected'))
+    self.add_field(self.adjust_limits_field)
+    self.caller = caller
+
+  def accept_and_close(self):
+    if self.desired_capacity_field.text == '':
+      self.error_label.text = 'Desired capacity cannot be blank.'
+      return
+
+    b3s = Common.Session.service_provider('autoscaling')
+    asg = b3s.describe_auto_scaling_groups(AutoScalingGroupNames=[self.asg_entry['name']])['AutoScalingGroups'][0]
+    des = int(self.desired_capacity_field.text)
+
+    if (des < asg['MinSize'] or des > asg['MaxSize']) and not self.adjust_limits_field.checked:
+      self.error_label.text = 'Desired capacity is out of min-max range of {0}-{1}'.format(asg['MinSize'], asg['MaxSize'])
+      return
+
+    nmin = min(des, asg['MinSize'])
+    nmax = max(des, asg['MaxSize'])
+
+    b3s.update_auto_scaling_group(AutoScalingGroupName=self.asg_entry['name'], DesiredCapacity=des, MinSize=nmin, MaxSize=nmax)
+    super().accept_and_close()
+
+  def close(self):
+    if self.caller is not None:
+      self.caller.refresh_data()
+    super().close()
 
 class ASGDescriber(Describer):
   prefix = 'asg_browser'
@@ -911,10 +1007,8 @@ class RDSDescriber(Describer):
   def title_info(self):
     return self.instance_id
 
-class RDSClientDialog(DialogControl):
+class RDSClientDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, instance_entry=None, caller=None, *args, **kwargs):
-    kwargs['ok_action'] = self.accept_and_close
-    kwargs['cancel_action'] = self.close
     kwargs['border'] = Border(
       Common.border('rds_client_modal', 'default'),
       Common.color('rds_client_modal_dialog_border', 'modal_dialog_border'),
@@ -923,7 +1017,7 @@ class RDSClientDialog(DialogControl):
       instance_entry['instance id'],
       Common.color('rds_client_modal_dialog_border_title_info', 'modal_dialog_border_title_info'),
     )
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
     self.instance_id = instance_entry['instance id']
     self.db_name = instance_entry['db_name']
     self.ip = instance_entry['host']
@@ -959,12 +1053,6 @@ class RDSClientDialog(DialogControl):
     self.highlighted = 1 if def_text != '' else 0
     self.caller = caller
 
-  def input(self, inkey):
-    if inkey.is_sequence and inkey.name == 'KEY_ESCAPE':
-      self.close()
-      return True
-    return super().input(inkey)
-
   def accept_and_close(self):
     if self.engine in ['aurora', 'aurora-mysql', 'mariadb', 'mysql']:
       dollar_zero = 'mysql'
@@ -978,10 +1066,7 @@ class RDSClientDialog(DialogControl):
       return
     ex = Common.Session.ui.unraw(subprocess.run, ['bash', '-c', cmd])
     Common.Session.set_message('{1} exited with code {0}'.format(ex.returncode, dollar_zero), Common.color('message_info'))
-    self.close()
-
-  def close(self):
-    self.parent.remove_block(self)
+    super().accept_and_close()
 
 # CFN
 

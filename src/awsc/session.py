@@ -69,6 +69,7 @@ class Session:
       self.stack = []
     self.resource_main = new_frame[0]
     self.stack_frame = new_frame[:]
+    self.ui.dirty = True
 
   def push_frame(self, new_frame):
     self.stack.append(self.stack_frame[:])
@@ -76,6 +77,7 @@ class Session:
     if hasattr(new_frame[0], 'add_hotkey'):
       if 'KEY_ESCAPE' not in new_frame[0].tooltips:
         new_frame[0].add_hotkey('KEY_ESCAPE', self.pop_frame, 'Back')
+    self.ui.dirty = True
 
   def pop_frame(self, *args):
     for elem in self.stack_frame:
@@ -85,14 +87,17 @@ class Session:
       self.replace_frame(self.stack.pop(), drop_stack=False)
     for elem in self.stack_frame:
       elem.reparent()
+    self.ui.dirty = True
 
   def extend_frame(self, control):
     self.stack_frame.append(control)
+    self.ui.dirty = True
 
   def remove_from_frame(self, control):
     if hasattr(control, 'on_close'):
       control.on_close()
     self.stack_frame.remove(control)
+    self.ui.dirty = True
 
   def tick(self):
     delta = time.time() - self.last_tick

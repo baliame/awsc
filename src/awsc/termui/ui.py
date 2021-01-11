@@ -117,6 +117,8 @@ class UI:
     if xy is None:
       xy = (bounds[0][0], bounds[1][0])
     end = False
+    if (xy[0] > bounds[0][1] and not wrap) or xy[1] > bounds[1][1]:
+      return
     while not end:
       space = bounds[0][1] - xy[0]
       if len(out) > space:

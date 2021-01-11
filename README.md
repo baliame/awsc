@@ -34,10 +34,14 @@ You will then be taken to the list of AWS contexts and you should see an empty l
 
 For navigation , refer to the top right hotkey display on each screen.
 
-## Command palette
+### Command palette
 
 The command palette can be accessed by pressing :. This allows you to navigate between the different AWS resources. Most resources have short names that are accepted, but the full name of the resource without spaces should also be accepted. For an exhaustive list of commands that are available, type 'help' and press enter.
 
-## Defaults
+### Defaults
 
 You can configure a default context, region and ssh key in their relevant screens. These are remembered and automatically set on each launch. Your default SSH key is only used if the keypair for the instance you are accessing does not already have an associated SSH key.
+
+## Version history
+
+Refer to the [changelog](CHANGELOG.md) for release notes on versions.

@@ -73,8 +73,34 @@ class DialogFieldButton(DialogField):
       x = int(w / 2) - int(textlen / 2) + x0
     Commons.UIInstance.print('< {0} >'.format(self.text), xy=(x, y), color=self.selected_color if selected else self.color)
 
+class DialogFieldCheckbox(DialogField):
+  def __init__(self, label, checked=False, color=ColorGold, selected_color=ColorBlackOnGold):
+    super().__init__()
+    self.highlightable = True
+    self.checked = checked
+    self.label = label
+    self.color = color
+    self.selected_color = selected_color
+    self.char_unchecked = '☐'
+    self.char_checked = '☑'
+
+  def input(self, inkey):
+    if inkey.is_sequence and inkey.name == 'KEY_ENTER':
+      self.checked = not self.checked
+      Commons.UIInstance.dirty = True
+    return True
+
+  def paint(self, x0, x1, y, selected=False):
+    x = x0
+    text = '{0} {1}'.format(self.char_checked if self.checked else self.char_unchecked, self.label)
+    if self.centered:
+      textlen = len(text)
+      w = x1 - x0 + 1
+      x = int(w / 2) - int(textlen / 2) + x0
+    Commons.UIInstance.print(text, xy=(x, y), color=self.selected_color if selected else self.color)
+
 class DialogFieldText(DialogField):
-  def __init__(self, label, text='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0, password=False):
+  def __init__(self, label, text='', color=ColorBlackOnOrange, selected_color=ColorBlackOnGold, label_color=ColorGold, label_min=0, password=False, accepted_inputs=None):
     super().__init__()
     self.highlightable = True
     self.left = 0
@@ -87,7 +113,10 @@ class DialogFieldText(DialogField):
     self.centered = True
     self.password = password
     self.drawable = 0
-    self.accepted_inputs = Commons.TextfieldInputs
+    if accepted_inputs is None:
+      self.accepted_inputs = Commons.TextfieldInputs
+    else:
+      self.accepted_inputs = accepted_inputs
 
   def input(self, inkey):
     if inkey.is_sequence:

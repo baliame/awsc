@@ -105,6 +105,7 @@ def main(*args, **kwargs):
       'loadbalancing': LBResourceLister.opener,
       'ami': AMIResourceLister.opener,
       'image': AMIResourceLister.opener,
+      'ebs': EBSResourceLister.opener,
       'ec2': EC2ResourceLister.opener,
       'instance': EC2ResourceLister.opener,
       'asg': ASGResourceLister.opener,
