@@ -13,7 +13,7 @@ class DeleteContextDialog(SessionAwareDialog):
     kwargs['ok_action'] = self.accept_and_close
     kwargs['cancel_action'] = self.close
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Delete Context', Common.color('modal_dialog_border_title'))
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
     self.name = name
     self.add_field(DialogFieldLabel([('Delete context "', Common.color('modal_dialog_label')), (name, Common.color('modal_dialog_label_highlight')), ('"?', Common.color('modal_dialog_label'))]))
     self.highlighted = 1
@@ -40,7 +40,7 @@ class ImportContextDialog(SessionAwareDialog):
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'New Context', Common.color('modal_dialog_border_title'))
     kwargs['ok_action'] = self.accept_and_close
     kwargs['cancel_action'] = self.close
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
     self.caller = caller
     self.add_field(DialogFieldLabel('Enter AWS context details'))
     self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
@@ -94,7 +94,7 @@ class AddContextDialog(SessionAwareDialog):
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'New Context', Common.color('modal_dialog_border_title'))
     kwargs['ok_action'] = self.accept_and_close
     kwargs['cancel_action'] = self.close
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
     self.add_field(DialogFieldLabel('Enter AWS context details'))
     self.error_label = DialogFieldLabel('', default_color=Common.color('modal_dialog_error'))
     self.add_field(self.error_label)
