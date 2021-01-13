@@ -285,7 +285,7 @@ class ResourceLister(ResourceListerBase):
       self.describe_command = None
     else:
       if not hasattr(self, 'describe_selection_arg'):
-        raise AttributeError('describe_command is defined but describe_selection_arg is undefined')
+        self.describe_selection_arg = 'entry'
     if not hasattr(self, 'open_command') or self.open_command is None:
       self.open_command = None
     else:
@@ -414,6 +414,82 @@ class ResourceLister(ResourceListerBase):
 
 class NoResults(Exception):
   pass
+
+class SingleRelationLister(ResourceListerBase):
+  prefix = 'CHANGEME'
+  title = 'CHANGEME'
+
+  @classmethod
+  def opener(cls, **kwargs):
+    l = cls(
+      Common.Session.ui.top_block,
+      DefaultAnchor,
+      DefaultDimension,
+      weight=0,
+      color=Common.color('{0}_generic'.format(cls.prefix), 'generic'),
+      selection_color=Common.color('{0}_selection'.format(cls.prefix), 'selection'),
+      title_color=Common.color('{0}_heading'.format(cls.prefix), 'column_title'),
+      **kwargs
+    )
+    l.border=DefaultBorder(cls.prefix, cls.title, l.title_info())
+    return [l, l.hotkey_display]
+
+  def __init__(self, parent, alignment, dimensions, *args, **kwargs):
+    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    self.column_order = []
+    self.column_titles = {}
+    self.add_column('type', 30, 0)
+    self.add_column('id', 120, 1)
+    if not hasattr(self, 'resource_key'):
+      raise AttributeError('resource_key is undefined')
+    if not hasattr(self, 'describe_method'):
+      raise AttributeError('describe_method is undefined')
+    if not hasattr(self, 'describe_kwargs'):
+      raise AttributeError('describe_kwargs is undefined')
+    if not hasattr(self, 'object_path'):
+      raise AttributeError('object_path is undefined')
+    if not hasattr(self, 'sort_column'):
+      self.sort_column = 'type'
+    if not hasattr(self, 'resource_descriptors'):
+      raise AttributeError('resource_descriptors is undefined')
+    self.descriptor = None
+    self.descriptor_raw = None
+    self.add_hotkey('d', self.describe, 'Describe')
+    self.add_hotkey('KEY_ENTER', self.describe, 'Describe')
+    self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))
+    self.refresh_data()
+
+  def describe(self, _):
+    if self.selection is not None:
+      if 'describer' not in self.selection.controller_data:
+        Common.Session.set_message('Resource cannot be described', Common.color('message_info'))
+        return
+      Common.Session.push_frame(self.selection.controller_data['describer'](entry=self.selection, entry_key='id'))
+
+  def get_data(self, *args, **kwargs):
+    if self.descriptor is None:
+      try:
+        provider = Common.Session.service_provider(self.resource_key)
+      except KeyError:
+        return
+      resp = getattr(provider, self.describe_method)(**self.describe_kwargs)
+      self.descriptor = Common.Session.jq(self.object_path).input(text=json.dumps(resp, default=datetime_hack)).first()
+      self.descriptor_raw = json.dumps(self.descriptor, default=datetime_hack)
+    for elem in self.resource_descriptors:
+      try:
+        result = Common.Session.jq(elem['base_path']).input(text=self.descriptor_raw).first()
+        yield [ListEntry(item, id=item, type=elem['type'], controller_data=elem) for item in result]
+      except StopIteration:
+        continue
+      except ValueError:
+        continue
+
+  def refresh_data(self, *args, **kwargs):
+    self.asynch(self.get_data, clear=True)
+
+  def sort(self):
+    self.entries.sort(key=lambda x: x.columns[self.sort_column])
+    self._cache = None
 
 class MultiLister(ResourceListerBase):
   prefix = 'CHANGEME'
@@ -550,18 +626,31 @@ class Describer(TextBrowser):
     return [l, l.hotkey_display]
 
   def title_info(self):
-    return 'CHANGEME'
+    return self.entry_id
 
-  def __init__(self, parent, alignment, dimensions, *args, **kwargs):
+  def populate_entry(self, *args, entry, entry_key, **kwargs):
+    self.entry = entry
+    self.entry_id = entry[entry_key]
+
+  def populate_describe_kwargs(self):
+    self.describe_kwargs[self.describe_kwarg_name] = [self.entry_id] if self.describe_kwarg_is_list else self.entry_id
+
+  def __init__(self, parent, alignment, dimensions, *args, entry, entry_key, **kwargs):
+    self.populate_entry(entry=entry, entry_key=entry_key)
     super().__init__(parent, alignment, dimensions, *args, **kwargs)
     if not hasattr(self, 'resource_key'):
       raise AttributeError('resource_key is undefined')
     if not hasattr(self, 'describe_method'):
       raise AttributeError('describe_method is undefined')
+    if not hasattr(self, 'describe_kwarg_name'):
+      raise AttributeError('describe_kwarg_name is undefined')
+    if not hasattr(self, 'describe_kwarg_is_list'):
+      self.describe_kwarg_is_list = False
     if not hasattr(self, 'describe_kwargs'):
-      raise AttributeError('describe_kwargs is undefined')
+      self.describe_kwargs = {}
     if not hasattr(self, 'object_path'):
       raise AttributeError('object_path is undefined')
+    self.populate_describe_kwargs()
 
     self.add_hotkey(ControlCodes.R, self.refresh_data, 'Refresh')
     self.hotkey_display = HotkeyDisplay(self.parent, TopRightAnchor(1, 0), Dimension('33%|50', 8), self, session=Common.Session, highlight_color=Common.color('hotkey_display_title'), generic_color=Common.color('hotkey_display_value'))

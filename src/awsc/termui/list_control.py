@@ -229,11 +229,14 @@ class ListControl(Control):
       y += 1
 
 class ListEntry:
-  def __init__(self, name, **kwargs):
+  def __init__(self, name, controller_data=None, **kwargs):
     self.name = name
     self.columns = {"name" : name}
     self.columns.update({k:str(v) for (k, v) in kwargs.items()})
-    self.controller_data = {}
+    if controller_data is None:
+      self.controller_data = {}
+    else:
+      self.controller_data = controller_data
     self.updated = datetime.datetime.now()
 
   def __getitem__(self, item):

@@ -1,4 +1,4 @@
-from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber, DialogFieldResourceListSelector, DeleteResourceDialog
+from .resource_lister import ResourceLister, Describer, MultiLister, NoResults, GenericDescriber, DialogFieldResourceListSelector, DeleteResourceDialog, SingleRelationLister
 from .common import Common, SessionAwareDialog, BaseChart
 from .termui.dialog import DialogControl, DialogFieldText, DialogFieldLabel, DialogFieldButton, DialogFieldCheckbox
 from .termui.alignment import CenterAnchor, Dimension
@@ -60,7 +60,6 @@ class EBSResourceLister(ResourceLister):
     self.primary_key = 'id'
     self.sort_column = 'id'
     self.describe_command = EBSDescriber.opener
-    self.describe_selection_arg = 'ebs_entry'
     super().__init__(*args, **kwargs)
 
   def determine_size(self, entry):
@@ -76,16 +75,13 @@ class EBSDescriber(Describer):
   prefix = 'ebs_browser'
   title = 'EBS Volume'
 
-  def __init__(self, parent, alignment, dimensions, ebs_entry, *args, **kwargs):
-    self.ebs_id = ebs_entry['id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_volumes'
-    self.describe_kwargs = {'VolumeIds': [self.ebs_id]}
+    self.describe_kwarg_name = 'VolumeIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.Volumes[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.ebs_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # Metrics
 class MetricLister(ResourceLister):
@@ -192,7 +188,6 @@ class KeyPairResourceLister(ResourceLister):
       'association': 16,
     }
     self.describe_command = KeyPairDescriber.opener
-    self.describe_selection_arg = 'keypair_entry'
     self.imported_column_order = ['id', 'name', 'fingerprint', 'association']
     self.primary_key = 'id'
     self.sort_column = 'id'
@@ -268,16 +263,13 @@ class KeyPairDescriber(Describer):
   prefix = 'keypair_browser'
   title = 'EC2 Keypair'
 
-  def __init__(self, parent, alignment, dimensions, keypair_entry, *args, **kwargs):
-    self.keypair_id = keypair_entry['id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_key_pairs'
-    self.describe_kwargs = {'KeyPairIds': [self.keypair_id]}
+    self.describe_kwarg_name = 'KeyPairIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.KeyPairs[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.keypair_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # AMI
 class AMIResourceLister(ResourceLister):
@@ -317,7 +309,6 @@ class AMIResourceLister(ResourceLister):
       'virt': 10,
     }
     self.describe_command = AMIDescriber.opener
-    self.describe_selection_arg = 'ami_entry'
     self.imported_column_order = ['id', 'name', 'arch', 'platform', 'type', 'owner', 'state', 'virt']
     self.primary_key = 'id'
     self.sort_column = 'id'
@@ -327,16 +318,13 @@ class AMIDescriber(Describer):
   prefix = 'ami_browser'
   title = 'Amazon Machine Image'
 
-  def __init__(self, parent, alignment, dimensions, ami_entry, *args, **kwargs):
-    self.ami_id = ami_entry['id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_images'
-    self.describe_kwargs = {'ImageIds': [self.ami_id]}
+    self.describe_kwarg_name = 'ImageIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.Images[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.ami_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # InstanceClasses
 class InstanceClassResourceLister(ResourceLister):
@@ -368,23 +356,19 @@ class InstanceClassResourceLister(ResourceLister):
     self.sort_column = 'name'
     self.primary_key = 'name'
     self.describe_command = InstanceClassDescriber.opener
-    self.describe_selection_arg = 'instance_class_entry'
     super().__init__(*args, **kwargs)
 
 class InstanceClassDescriber(Describer):
   prefix = 'instance_class_browser'
   title = 'Instance Class'
 
-  def __init__(self, parent, alignment, dimensions, instance_class_entry, *args, **kwargs):
-    self.instance_class = instance_class_entry['name']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_instance_types'
-    self.describe_kwargs = {'InstanceTypes': [self.instance_class]}
+    self.describe_kwarg_name = 'InstanceTypes'
+    self.describe_kwarg_is_list = True
     self.object_path='.InstanceTypes[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.instance_class
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # EC2
 class EC2LaunchDialog(SessionAwareDialog):
@@ -460,6 +444,66 @@ class EC2LaunchDialog(SessionAwareDialog):
       self.caller.refresh_data()
     super().close()
 
+class EC2RelatedLister(SingleRelationLister):
+  prefix = 'ec2_related'
+  title = 'EC2 Instance related resources'
+
+  def title_info(self):
+    return self.instance_id
+
+  def __init__(self, *args, ec2_entry=None, **kwargs):
+    self.resource_key = 'ec2'
+    self.instance_id = ec2_entry['instance id']
+    self.describe_method = 'describe_instances'
+    self.describe_kwargs = {'InstanceIds': [self.instance_id]}
+    self.object_path='.Reservations[0].Instances[0]'
+    self.resource_descriptors = [
+      {
+        'base_path': '[.SecurityGroups[].GroupId]',
+        'type': 'Security Group',
+        'describer': SGDescriber.opener,
+      },
+      {
+        'base_path': '[.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value]',
+        'type': 'Cloudformation Stack',
+        'describer': CFNDescriber.opener,
+      },
+      {
+        'base_path': '[.VpcId]',
+        'type': 'VPC',
+        'describer': VPCDescriber.opener,
+      },
+      {
+        'base_path': '[.NetworkInterfaces[].NetworkInterfaceId]',
+        'type': 'Network Interface',
+      },
+      {
+        'base_path': '[.BlockDeviceMappings[].Ebs.VolumeId]',
+        'type': 'EBS Volume',
+        'describer': EBSDescriber.opener,
+      },
+      {
+        'base_path': '[.ImageId]',
+        'type': 'AMI',
+        'describer': AMIDescriber.opener,
+      },
+      {
+        'base_path': '[.KeyName]',
+        'type': 'Keypair',
+      },
+      {
+        'base_path': '[.InstanceType]',
+        'type': 'Instance Type',
+        'describer': InstanceClassDescriber.opener,
+      },
+      {
+        'base_path': '[.SubnetId]',
+        'type': 'Subnet',
+        'describer': SubnetDescriber.opener,
+      },
+    ]
+    super().__init__(*args, **kwargs)
+
 class EC2ResourceLister(ResourceLister):
   prefix = 'ec2_list'
   title = 'EC2 Instances'
@@ -497,7 +541,6 @@ class EC2ResourceLister(ResourceLister):
       'image': '.ImageId'
     }
     self.describe_command = EC2Describer.opener
-    self.describe_selection_arg = 'instance_entry'
     self.imported_column_order = ['instance id', 'name', 'type', 'vpc', 'public ip', 'key name', 'state']
     self.sort_column = 'instance id'
     self.primary_key = 'instance id'
@@ -505,6 +548,7 @@ class EC2ResourceLister(ResourceLister):
     self.add_hotkey('s', self.ssh, 'Open SSH')
     self.add_hotkey('l', self.new_instance, 'Launch new instance')
     self.add_hotkey('m', self.metrics, 'Metrics')
+    self.add_hotkey('r', self.related, 'View related resources')
     self.add_hotkey(ControlCodes.S, self.stop_start_instance, 'Stop/start instance')
     self.add_hotkey(ControlCodes.D, self.terminate_instance, 'Terminate instance')
 
@@ -524,6 +568,10 @@ class EC2ResourceLister(ResourceLister):
   def metrics(self, _):
     if self.selection is not None:
       Common.Session.push_frame(MetricLister.opener(metric_namespace='AWS/EC2', dimension=('InstanceId', self.selection['instance id'])))
+
+  def related(self, _):
+    if self.selection is not None:
+      Common.Session.push_frame(EC2RelatedLister.opener(ec2_entry=self.selection))
 
   def do_start(self):
     if self.selection is not None:
@@ -582,16 +630,13 @@ class EC2Describer(Describer):
   prefix = 'ec2_browser'
   title = 'EC2 Instance'
 
-  def __init__(self, parent, alignment, dimensions, instance_entry, *args, **kwargs):
-    self.instance_id = instance_entry['instance id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='instance id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_instances'
-    self.describe_kwargs = {'InstanceIds': [self.instance_id]}
+    self.describe_kwarg_name = 'InstanceIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.Reservations[0].Instances[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.instance_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 class EC2SSHDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, instance_entry=None, caller=None, *args, **kwargs):
@@ -676,7 +721,6 @@ class ASGResourceLister(ResourceLister):
       'max': 10,
     }
     self.describe_command = ASGDescriber.opener
-    self.describe_selection_arg = 'asg_entry'
     self.open_command = EC2ResourceLister.opener
     self.open_selection_arg = 'asg'
     self.imported_column_order = ['name', 'launch config/template', 'current', 'min', 'desired', 'max']
@@ -743,16 +787,13 @@ class ASGDescriber(Describer):
   prefix = 'asg_browser'
   title = 'Autoscaling Group'
 
-  def __init__(self, parent, alignment, dimensions, asg_entry, *args, **kwargs):
-    self.asg_name = asg_entry['name']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'autoscaling'
     self.describe_method = 'describe_auto_scaling_groups'
-    self.describe_kwargs = {'AutoScalingGroupNames': [self.asg_name]}
+    self.describe_kwarg_name = 'AutoScalingGroupNames'
+    self.describe_kwarg_is_list = True
     self.object_path='.AutoScalingGroups[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.asg_name
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # SecGroup
 
@@ -779,7 +820,6 @@ class SGResourceLister(ResourceLister):
       'egress rules': 20,
     }
     self.describe_command = SGDescriber.opener
-    self.describe_selection_arg = 'sg_entry'
     self.open_command = SGRelated.opener
     self.open_selection_arg = 'compare_value'
 
@@ -892,16 +932,13 @@ class SGDescriber(Describer):
   prefix = 'sg_browser'
   title = 'Security Group'
 
-  def __init__(self, parent, alignment, dimensions, sg_entry, *args, **kwargs):
-    self.sg_id = sg_entry['group id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='group id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_security_groups'
-    self.describe_kwargs = {'GroupIds': [self.sg_id]}
+    self.describe_kwarg_name = 'GroupIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.SecurityGroups[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.sg_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 class SGRelated(MultiLister):
   prefix = 'sg_related'
@@ -978,7 +1015,6 @@ class RDSResourceLister(ResourceLister):
       'vpc': 15,
     }
     self.describe_command = RDSDescriber.opener
-    self.describe_selection_arg = 'instance_entry'
     self.imported_column_order = ['instance id', 'host', 'engine', 'type', 'vpc']
     self.sort_column = 'instance id'
     self.primary_key = 'instance id'
@@ -996,16 +1032,12 @@ class RDSDescriber(Describer):
   prefix = 'rds_browser'
   title = 'RDS Instance'
 
-  def __init__(self, parent, alignment, dimensions, instance_entry, *args, **kwargs):
-    self.instance_id = instance_entry['instance id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='instance id', **kwargs):
     self.resource_key = 'rds'
     self.describe_method = 'describe_db_instances'
-    self.describe_kwargs = {'DBInstanceIdentifier': self.instance_id}
+    self.describe_kwarg_name = 'DBInstanceIdentifier'
     self.object_path='.DBInstances[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.instance_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 class RDSClientDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, instance_entry=None, caller=None, *args, **kwargs):
@@ -1096,7 +1128,6 @@ class CFNResourceLister(ResourceLister):
       'updated': 20,
     }
     self.describe_command = CFNDescriber.opener
-    self.describe_selection_arg = 'cfn_entry'
     self.open_command = CFNRelated.opener
     self.open_selection_arg = 'compare_value'
 
@@ -1115,16 +1146,20 @@ class CFNDescriber(Describer):
   prefix = 'cfn_browser'
   title = 'CloudFormation Stack'
 
-  def __init__(self, parent, alignment, dimensions, sg_entry, *args, **kwargs):
-    self.stack_name = sg_entry['name']
+  def populate_entry(self, *args, **kwargs):
+    super().populate_entry(*args, **kwargs)
+    try:
+      arn = ARN(self.entry_id)
+      self.entry_id = arn.resource_id_first
+    except ValueError:
+      return
+
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'cloudformation'
     self.describe_method = 'describe_stacks'
-    self.describe_kwargs = {'StackName': self.stack_name}
+    self.describe_kwarg_name = 'StackName'
     self.object_path='.Stacks[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.stack_name
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 class CFNRelated(MultiLister):
   prefix = 'cfn_related'
@@ -1378,7 +1413,6 @@ class R53ResourceLister(ResourceLister):
       'records': 5,
     }
     self.describe_command = R53Describer.opener
-    self.describe_selection_arg = 'r53_entry'
     self.open_command = R53RecordLister.opener
     self.open_selection_arg = 'r53_entry'
     self.primary_key = 'id'
@@ -1416,7 +1450,6 @@ class R53RecordLister(ResourceLister):
       'ttl': 5,
     }
     self.describe_command = R53RecordDescriber.opener
-    self.describe_selection_arg = 'r53_entry'
 
     self.imported_column_order = ['entry', 'name', 'records', 'ttl']
     self.sort_column = 'name'
@@ -1477,31 +1510,36 @@ class R53Describer(Describer):
   prefix = 'r53_browser'
   title = 'Route53 Hosted Zone'
 
-  def __init__(self, parent, alignment, dimensions, r53_entry, *args, **kwargs):
-    self.r53_entry = r53_entry
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='id', **kwargs):
     self.resource_key = 'route53'
     self.describe_method = 'get_hosted_zone'
-    self.describe_kwargs = {'Id': self.r53_entry['id']}
+    self.describe_kwarg_name = 'Id'
     self.object_path='.'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.r53_entry['name']
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 class R53RecordDescriber(Describer):
   prefix = 'r53_record_browser'
   title = 'Route53 Record'
 
-  def __init__(self, parent, alignment, dimensions, r53_entry, *args, **kwargs):
-    self.r53_entry = r53_entry
+  def populate_entry(self, *args, entry, **kwargs):
+    super().populate_entry(*args, entry=entry, **kwargs)
+    self.record_type = entry['entry']
+    self.record_name = entry['name']
+
+  def populate_describe_kwargs(self, *args, **kwargs):
+    super().populate_describe_kwargs(*args, **kwargs)
+    self.describe_kwargs['StartRecordType'] = self.record_type
+    self.describe_kwargs['StartRecordName'] = self.record_name
+
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='hosted_zone_id', **kwargs):
     self.resource_key = 'route53'
     self.describe_method = 'list_resource_record_sets'
-    self.describe_kwargs = {'HostedZoneId': self.r53_entry['hosted_zone_id'], 'StartRecordType': self.r53_entry['entry'], 'StartRecordName': self.r53_entry['name']}
+    self.describe_kwarg_name = 'HostedZoneId'
     self.object_path='.ResourceRecordSets[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
   def title_info(self):
-    return '{0} {1}'.format(self.r53_entry['entry'], self.r53_entry['name'])
+    return '{0} {1}'.format(self.record_type, self.record_name)
 
 # LC
 class LCResourceLister(ResourceLister):
@@ -1523,7 +1561,6 @@ class LCResourceLister(ResourceLister):
       'instance type': 20,
     }
     self.describe_command = LCDescriber.opener
-    self.describe_selection_arg = 'lc_entry'
     self.open_command = ASGResourceLister.opener
     self.open_selection_arg = 'lc'
 
@@ -1535,16 +1572,13 @@ class LCDescriber(Describer):
   prefix = 'lc_browser'
   title = 'Launch Configuration'
 
-  def __init__(self, parent, alignment, dimensions, lc_entry, *args, **kwargs):
-    self.lc_name = lc_entry['name']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'autoscaling'
     self.describe_method = 'describe_launch_configurations'
-    self.describe_kwargs = {'LaunchConfigurationNames': [self.lc_name]}
+    self.describe_kwarg_name = 'LaunchConfigurationNames'
+    self.describe_kwarg_is_list = True
     self.object_path='.LaunchConfigurations[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.lc_name
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # LB
 class LBResourceLister(ResourceLister):
@@ -1571,7 +1605,6 @@ class LBResourceLister(ResourceLister):
       'arn': '.LoadBalancerArn',
     }
     self.describe_command = LBDescriber.opener
-    self.describe_selection_arg = 'lb_entry'
     self.open_command = ListenerResourceLister.opener
     self.open_selection_arg = 'lb'
 
@@ -1589,13 +1622,13 @@ class LBDescriber(Describer):
   prefix = 'lb_browser'
   title = 'Load Balancer'
 
-  def __init__(self, parent, alignment, dimensions, lb_entry, *args, **kwargs):
-    self.lb_name = lb_entry['name']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'elbv2'
     self.describe_method = 'describe_load_balancers'
-    self.describe_kwargs = {'Names': [self.lb_name]}
+    self.describe_kwarg_name = 'Names'
+    self.describe_kwarg_is_list = True
     self.object_path='.LoadBalancers[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
   def title_info(self):
     return self.lb_name
@@ -1629,7 +1662,6 @@ class ListenerResourceLister(ResourceLister):
       'name': '.ListenerArn',
     }
     self.describe_command = ListenerDescriber.opener
-    self.describe_selection_arg = 'listener_entry'
     self.open_command = ListenerActionResourceLister.opener
     self.open_selection_arg = 'listener'
     self.primary_key = 'arn'
@@ -1647,16 +1679,13 @@ class ListenerDescriber(Describer):
   prefix = 'listener_browser'
   title = 'Listener'
 
-  def __init__(self, parent, alignment, dimensions, listener_entry, *args, **kwargs):
-    self.listener_arn = listener_entry['name']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'elbv2'
     self.describe_method = 'describe_listeners'
-    self.describe_kwargs = {'ListenerArns': [self.listener_arn]}
+    self.describe_kwarg_name = 'ListenerArns'
+    self.describe_kwarg_is_list = True
     self.object_path='.Listeners[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.listener_arn
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # Action
 class ListenerActionResourceLister(ResourceLister):
@@ -1689,7 +1718,6 @@ class ListenerActionResourceLister(ResourceLister):
       'arn': '.RuleArn',
     }
     self.describe_command = ListenerActionDescriber.opener
-    self.describe_selection_arg = 'listener_entry'
     self.open_command = TargetGroupResourceLister.opener
     self.open_selection_arg = 'rule_entry'
 
@@ -1761,16 +1789,14 @@ class ListenerActionDescriber(Describer):
   prefix = 'listener_action_browser'
   title = 'Listener Rule'
 
-  def __init__(self, parent, alignment, dimensions, listener_entry, *args, **kwargs):
-    self.rule_arn = listener_entry['arn']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='arn', **kwargs):
     self.resource_key = 'elbv2'
     self.describe_method = 'describe_rules'
+    self.describe_kwarg_name = 'RuleArns'
+    self.describe_kwarg_is_list = True
     self.describe_kwargs = {'RuleArns': [self.rule_arn]}
     self.object_path='.Rules[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.rule_arn
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # Target Groups
 class TargetGroupResourceLister(ResourceLister):
@@ -1814,7 +1840,6 @@ class TargetGroupResourceLister(ResourceLister):
       'arn': '.TargetGroupArn',
     }
     self.describe_command = TargetGroupDescriber.opener
-    self.describe_selection_arg = 'tg_entry'
     #self.open_command = ListenerActionResourceLister.opener
     #self.open_selection_arg = 'listener'
 
@@ -1827,17 +1852,23 @@ class TargetGroupDescriber(Describer):
   prefix = 'tg_browser'
   title = 'Target Group'
 
-  def __init__(self, parent, alignment, dimensions, tg_entry, *args, **kwargs):
-    self.tg_arn = tg_entry['arn']
-    self.tg_name = tg_entry['name']
+  def populate_entry(self, *args, entry, **kwargs):
+    super().populate_entry(*args, entry=entry, **kwargs)
+    try:
+      self.name = entry['name']
+    except KeyError:
+      self.name = self.entry_id
+
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='arn', **kwargs):
     self.resource_key = 'elbv2'
     self.describe_method = 'describe_target_groups'
-    self.describe_kwargs = {'TargetGroupArns': [self.tg_arn]}
+    self.describe_kwarg_name = 'TargetGroupArns'
+    self.describe_kwarg_is_list = True
     self.object_path='.TargetGroups[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
   def title_info(self):
-    return self.tg_name
+    return self.name
 
 # VPC
 class VPCResourceLister(ResourceLister):
@@ -1863,7 +1894,6 @@ class VPCResourceLister(ResourceLister):
       'state': 9,
     }
     self.describe_command = VPCDescriber.opener
-    self.describe_selection_arg = 'vpc_entry'
     self.additional_commands = {
       't': {
         'command': SubnetResourceLister.opener,
@@ -1887,16 +1917,13 @@ class VPCDescriber(Describer):
   prefix = 'vpc_browser'
   title = 'VPC'
 
-  def __init__(self, parent, alignment, dimensions, vpc_entry, *args, **kwargs):
-    self.vpc_id = vpc_entry['id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_vpcs'
-    self.describe_kwargs = {'VpcIds': [self.vpc_id]}
+    self.describe_kwarg_name = 'VpcIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.Vpcs[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.vpc_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # Subnet
 class SubnetResourceLister(ResourceLister):
@@ -1951,7 +1978,6 @@ class SubnetResourceLister(ResourceLister):
       'public': 3,
     }
     self.describe_command = SubnetDescriber.opener
-    self.describe_selection_arg = 'subnet_entry'
     self.additional_commands = {
       't': {
         'command': RouteTableResourceLister.opener,
@@ -1980,16 +2006,13 @@ class SubnetDescriber(Describer):
   prefix = 'subnet_browser'
   title = 'Subnet'
 
-  def __init__(self, parent, alignment, dimensions, subnet_entry, *args, **kwargs):
-    self.subnet_id = subnet_entry['id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_subnets'
-    self.describe_kwargs = {'SubnetIds': [self.subnet_id]}
+    self.describe_kwarg_name = 'SubnetIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.Subnets[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.subnet_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # RouteTable
 class RouteTableResourceLister(ResourceLister):
@@ -2030,7 +2053,6 @@ class RouteTableResourceLister(ResourceLister):
       'subnet': 30,
     }
     self.describe_command = RouteTableDescriber.opener
-    self.describe_selection_arg = 'route_table_entry'
     self.open_command = RouteResourceLister.opener
     self.open_selection_arg = 'route_table'
 
@@ -2053,16 +2075,13 @@ class RouteTableDescriber(Describer):
   prefix = 'route_table_browser'
   title = 'Route Table'
 
-  def __init__(self, parent, alignment, dimensions, route_table_entry, *args, **kwargs):
-    self.route_table_id = route_table_entry['id']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='id', **kwargs):
     self.resource_key = 'ec2'
     self.describe_method = 'describe_route_tables'
-    self.describe_kwargs = {'RouteTableIds': [self.route_table_id]}
+    self.describe_kwarg_name = 'RouteTableIds'
+    self.describe_kwarg_is_list = True
     self.object_path='.RouteTables[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.route_table_id
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # Routes
 class RouteResourceLister(ResourceLister):
@@ -2180,7 +2199,6 @@ class DBSubnetGroupResourceLister(ResourceLister):
       'status': 30,
     }
     self.describe_command = DBSubnetGroupDescriber.opener
-    self.describe_selection_arg = 'dsg_entry'
     self.open_command = SubnetResourceLister.opener
     self.open_selection_arg = 'db_subnet_group'
     self.primary_key = 'name'
@@ -2193,16 +2211,13 @@ class DBSubnetGroupDescriber(Describer):
   prefix = 'subnet_browser'
   title = 'Subnet'
 
-  def __init__(self, parent, alignment, dimensions, dsg_entry, *args, **kwargs):
-    self.dsg_name = dsg_entry['name']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'rds'
     self.describe_method = 'describe_db_subnet_groups'
-    self.describe_kwargs = {'DBSubnetGroupName': self.dsg_name}
+    self.describe_kwarg_name = 'DBSubnetGroupName'
+    self.describe_kwarg_is_list = True
     self.object_path='.DBSubnetGroups[0]'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
-
-  def title_info(self):
-    return self.dsg_name
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
 # S3
 class S3ResourceLister(ResourceLister):
@@ -2222,7 +2237,6 @@ class S3ResourceLister(ResourceLister):
       'location': 20,
     }
     self.describe_command = S3Describer.opener
-    self.describe_selection_arg = 'bucket'
     self.open_command = S3ObjectLister.opener
     self.open_selection_arg = 'bucket'
     self.primary_key = 'name'
@@ -2239,13 +2253,12 @@ class S3Describer(Describer):
   prefix = 's3_browser'
   title = 'S3 Bucket'
 
-  def __init__(self, parent, alignment, dimensions, bucket, *args, **kwargs):
-    self.bucket = bucket['name']
+  def __init__(self, parent, alignment, dimensions, entry, *args, entry_key='name', **kwargs):
     self.resource_key = 'rds'
     self.describe_method = 'get_bucket_policy'
-    self.describe_kwargs = {'Bucket': self.bucket}
+    self.describe_kwarg_name = 'Bucket'
     self.object_path='.'
-    super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
 
   def title_info(self):
     return self.bucket
