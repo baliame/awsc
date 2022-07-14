@@ -15,7 +15,6 @@ class JsonHighlighter:
     try:
       c = browser.scheme['colors'][color_name]
     except KeyError as e:
-      print(e, file=sys.stderr)
       return browser.color
     return Color(Palette8Bit(), c['foreground'], background=c['background'])
 
@@ -27,7 +26,6 @@ class JsonHighlighter:
     result_lines = []
     for token in tokens:
       if token[0] is Token.Text:
-        print('Text token with value {0}'.format(token[1]), file=sys.stderr)
         brk = token[1].split('\n')
         while len(brk) > 1:
           current_line.append((brk[0], self._get_scheme_color(browser, 'syntax_highlight_{0}'.format(str(token[0]).lower().replace('.', '_')))))
@@ -90,10 +88,8 @@ class TextBrowser(Control):
   def add_text(self, text):
     add = text.split('\n')
     self.lines.extend(add)
-    print('Lines is now: \n{0}'.format(self.lines), file=sys.stderr)
     self._prefilter_lines.extend(add)
     self.display_lines = self.syntax_highlighter(self, self.lines)
-    print('Display lines is now: \n{0}'.format(self.display_lines), file=sys.stderr)
     Commons.UIInstance.dirty = True
 
   def clear(self):
@@ -234,13 +230,10 @@ class TextBrowser(Control):
       next_filter_last_pos = -1
       nfp_idx = 0
       if i in self.filter_positions:
-        #print(line, file=sys.stderr)
-        #print('POSITIONS: {0}'.format(self.filter_positions[i]), file=sys.stderr)
         for p in self.filter_positions[i]:
           if p >= pos:
             next_filter_pos = p
             next_filter_last_pos = p + len(self._filter) - 1
-            #print('SET FILTER POS: {0}-{1}'.format(next_filter_pos, next_filter_last_pos), file=sys.stderr)
             break
           elif p + len(self._filter) - 1 >= pos:
             next_filter_pos = p
@@ -260,19 +253,16 @@ class TextBrowser(Control):
         while len(buf) > 0:
           space = x1 - x + 1
           text = buf[:space]
-          #print('Printing {1} at x {0}'.format(x, text), file=sys.stderr)
           buf = buf[space:]
           while len(text) > 0:
             if next_filter_last_pos >= 0 and pos >= next_filter_pos and pos <= next_filter_last_pos:
               filt = next_filter_last_pos - pos + 1
               if filt >= len(text):
-                #print('PRINT: {1}@{0} (center of current filter), pos {2}, len {3}'.format(x, text, pos, len(text)), file=sys.stderr)
                 Commons.UIInstance.print(text, xy=(x, y), color=self.filtered_color)
                 x += len(text)
                 pos += len(text)
                 text = ""
               else:
-                #print('PRINT: {1}@{0} (end of current filter), pos {2}, len {3}'.format(x, text[:filt], pos, len(text[:filt])), file=sys.stderr)
                 Commons.UIInstance.print(text[:filt], xy=(x, y), color=self.filtered_color)
                 text = text[filt:]
                 x += filt
@@ -287,20 +277,17 @@ class TextBrowser(Control):
             elif next_filter_pos >= 0 and pos + len(text) > next_filter_pos:
               unfilt = next_filter_pos - pos
               if unfilt > 0:
-                #print('PRINT: {1}@{0} (beginning of filter), pos {2}, len {3}'.format(x, text[:unfilt], pos, len(text[:unfilt])), file=sys.stderr)
                 Commons.UIInstance.print(text[:unfilt], xy=(x, y), color=color)
                 text = text[unfilt:]
                 x += unfilt
                 pos += unfilt
               filt = next_filter_last_pos - next_filter_pos + 1
               if filt >= len(text):
-                #print('PRINT: {1}@{0} (middle of small filter), pos {2}, len {3}'.format(x, text, pos, len(text)), file=sys.stderr)
                 Commons.UIInstance.print(text, xy=(x, y), color=self.filtered_color)
                 x += len(text)
                 pos += len(text)
                 text = ""
               else:
-                #print('PRINT: {1}@{0} (end of small filter), pos {2}, len {3}'.format(x, text[:filt], pos, len(text[:filt])), file=sys.stderr)
                 Commons.UIInstance.print(text[:filt], xy=(x, y), color=self.filtered_color)
                 text = text[filt:]
                 x += filt
@@ -313,7 +300,6 @@ class TextBrowser(Control):
                   next_filter_pos = -1
                   next_filter_last_pos = -1
             else:
-              #print('PRINT: {1}@{0} (no filter active), pos {2}, len {3}'.format(x, text, pos, len(text)), file=sys.stderr)
               Commons.UIInstance.print(text, xy=(x, y), color=color)
               pos += len(text)
               x += len(text)

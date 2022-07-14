@@ -14,7 +14,7 @@ setup(
   name='awsc',
   url='https://github.com/baliame/awsc',
 
-  version='0.3.0',
+  version='0.3.1',
   description='AWS Commander',
   long_description=ld,
   long_description_content_type='text/markdown',

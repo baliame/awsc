@@ -1,3 +1,9 @@
+# 0.3.1
+
+## User changes
+
+* Removed an entire fleet of debug prints I left in the code. Sorry.
+
 # 0.3.0
 
 ## Developer changes
