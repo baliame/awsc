@@ -3,7 +3,7 @@ from .storage import Keystore
 from .scheme import Scheme
 import yaml
 
-last_config_version = 10
+last_config_version = 11
 
 class Config:
   def __init__(self, path=None):
@@ -19,6 +19,7 @@ class Config:
       8: self.update_8,
       9: self.update_9,
       10: self.update_10,
+      11: self.update_11,
     }
     if path is None:
       path = Path.home() / '.config' / 'awsc'
@@ -37,6 +38,9 @@ class Config:
     else:
       self.parse_config()
     self.update_version()
+
+  def post_initialize(self):
+    self.load_dot_aws()
 
   def update_1(self):
     self.config['default_region'] = 'us-east-1'
@@ -71,6 +75,9 @@ class Config:
     self.config['keypair_associations'] = {}
 
   def update_10(self):
+    self.scheme.backup_and_reset()
+
+  def update_11(self):
     self.scheme.backup_and_reset()
 
   def update_version(self):

@@ -1,3 +1,24 @@
+# 0.3.0
+
+## Developer changes
+
+* Broke up resources.py to smaller modules, using on-demand imports for openers.
+* Move command palette registration logic from main to individual lister classes.
+
+## User changes
+
+* Added JSON syntax highlighting to describe actions
+* Added ability to use EC2 Instance Connect for SSH.
+  * No actual checks are done if it's available on an instance.
+  * Makes a best effort to use the API and abort SSHing if it fails to do so for any reason.
+* Now automatically imports `~/.aws/credentials` on startup
+  * Does not currently import `~/.aws/config` but it is planned
+  * Note that import will happen on every startup for convenience
+  * Name of imported context will be the same as the name of the context in the credentials file
+  * **This will overwrite any existing context with the same name mercilessly**, but I see no compelling argument not to.
+  * Account ID field is automatically determined via an STS call. Any context which fails this STS call will not be imported.
+* Secret key field on add context dialog is now masked as a password.
+
 # 0.2.0
 
 ## User changes

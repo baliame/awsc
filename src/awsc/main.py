@@ -7,7 +7,7 @@ from .ssh import SSHList
 from .info import InfoDisplay
 from .aws import AWS
 from .commander import Commander, Filterer
-from .resources import *
+from . import resources
 from .meta import CommanderOptionsLister
 import os
 import sys
@@ -83,53 +83,18 @@ def main(*args, **kwargs):
 
     Common.initialize()
     Common.Session.service_provider = AWS()
+    Common.post_initialize()
     Common.Session.replace_frame(open_context_lister())
 
     Common.Session.info_display.commander_hook = open_commander
     Common.Session.info_display.filterer_hook = open_filterer
 
-    Common.Session.commander_options = {
-      'ctx': open_context_lister,
-      'context': open_context_lister,
-      'region': open_region_lister,
-      'ssh': open_ssh_lister,
-      'lc': LCResourceLister.opener,
-      'launchconfiguration': LCResourceLister.opener,
-      'r53': R53ResourceLister.opener,
-      'route53': R53ResourceLister.opener,
-      'cfn': CFNResourceLister.opener,
-      'cloudformation': CFNResourceLister.opener,
-      'rds': RDSResourceLister.opener,
-      'lb': LBResourceLister.opener,
-      'elbv2': LBResourceLister.opener,
-      'loadbalancing': LBResourceLister.opener,
-      'ami': AMIResourceLister.opener,
-      'image': AMIResourceLister.opener,
-      'ebs': EBSResourceLister.opener,
-      'ec2': EC2ResourceLister.opener,
-      'instance': EC2ResourceLister.opener,
-      'asg': ASGResourceLister.opener,
-      'autoscaling': ASGResourceLister.opener,
-      'rt': RouteTableResourceLister.opener,
-      'route': RouteResourceLister.opener,
-      'routetable': RouteTableResourceLister.opener,
-      'sg': SGResourceLister.opener,
-      'securitygroup': SGResourceLister.opener,
-      'subnet': SubnetResourceLister.opener,
-      'tg': TargetGroupResourceLister.opener,
-      'targetgroup': TargetGroupResourceLister.opener,
-      'vpc': VPCResourceLister.opener,
-      'dsg': DBSubnetGroupResourceLister.opener,
-      'dbsubnetgroup': DBSubnetGroupResourceLister.opener,
-      's3': S3ResourceLister.opener,
-      'it': InstanceClassResourceLister.opener,
-      'instancetype': InstanceClassResourceLister.opener,
-      'instanceclass': InstanceClassResourceLister.opener,
-      'key': KeyPairResourceLister.opener,
-      'keypair': KeyPairResourceLister.opener,
-      '?': CommanderOptionsLister.opener,
-      'help': CommanderOptionsLister.opener,
-    }
+    Common.Session.commander_options['ctx'] = open_context_lister
+    Common.Session.commander_options['context'] = open_context_lister
+    Common.Session.commander_options['region'] = open_region_lister
+    Common.Session.commander_options['ssh'] = open_ssh_lister
+    Common.Session.commander_options['?'] = CommanderOptionsLister.opener
+    Common.Session.commander_options['help'] = CommanderOptionsLister.opener
 
     Common.main()
   finally:

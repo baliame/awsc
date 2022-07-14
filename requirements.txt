@@ -6,3 +6,4 @@ boto3>=1.16.33
 jq>=1.1.1
 pyperclip>=1.8.1
 numpy>=1.17.4
+pygments>=2.12.0

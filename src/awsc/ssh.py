@@ -45,6 +45,7 @@ class SSHList(ListControl):
     else:
       self.add_hotkey('KEY_ENTER', self.select_ssh_key, 'Select ssh key')
     self.add_column('usage frequency', 12)
+    self.add_column('has public key', 12)
     self.add_column('default username', 20)
     self.add_column('default', 8)
     self.reload()
@@ -59,8 +60,10 @@ class SSHList(ListControl):
         d = '✓'
       else:
         d = ' '
+      pubkey = Path.home() / '.ssh' / '{0}.pub'.format(ssh_key)
+      has_pubkey = '✓' if pubkey.exists() else ' '
       du = Common.Configuration['default_ssh_usernames'][ssh_key] if ssh_key in Common.Configuration['default_ssh_usernames'] else ''
-      self.add_entry(ListEntry(ssh_key, **{'usage frequency': 0, 'default username': du, 'default': d}))
+      self.add_entry(ListEntry(ssh_key, **{'usage frequency': 0, 'has public key': has_pubkey, 'default username': du, 'default': d}))
       idx += 1
     if move:
       self.selected = defa

@@ -81,7 +81,7 @@ class ListControl(Control):
 
   def pagedown(self, *args):
     self.selected += self.rows
-    self.selected = min(len(self.filtered), self.selected)
+    self.selected = min(len(self.filtered) - 1, self.selected)
     rows = self.rows
     if self.selected >= self.top + rows:
       self.top = max(0, self.selected - rows + 1)
@@ -151,10 +151,10 @@ class ListControl(Control):
       self.before_paint_critical()
     finally:
       self.mutex.release()
-    if self.selected >= len(self.entries):
-      self.selected = len(self.entries) - 1
-    if self.selected < 0:
-      self.selected = 0
+    #if self.selected >= len(self.entries):
+    #  self.selected = len(self.entries) - 1
+    #if self.selected < 0:
+    #  self.selected = 0
 
   def sort(self):
     pass

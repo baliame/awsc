@@ -245,6 +245,14 @@ class DialogFieldResourceListSelector(DialogField):
 class ResourceLister(ResourceListerBase):
   prefix = 'CHANGEME'
   title = 'CHANGEME'
+  command_palette = []
+
+  @classmethod
+  def register(cls):
+    for cmd in cls.command_palette:
+      Common.Session.commander_options[cmd] = cls.opener
+    for subcls in cls.__subclasses__():
+      subcls.register()
 
   @classmethod
   def opener(cls, **kwargs):
@@ -391,7 +399,7 @@ class ResourceLister(ResourceListerBase):
       yield y
 
   def auto_refresh(self):
-    if self.dialog_mode:
+    if self.dialog_mode or self.primary_key is None:
       return
     if datetime.datetime.now() - self.auto_refresh_last > datetime.timedelta(seconds=10):
       self.refresh_data()
@@ -620,6 +628,8 @@ class Describer(TextBrowser):
       weight=0,
       color=Common.color('{0}_generic'.format(cls.prefix), 'generic'),
       filtered_color=Common.color('{0}_filtered'.format(cls.prefix), 'selection'),
+      syntax_highlighting=True,
+      scheme=Common.Configuration.scheme,
       **kwargs,
     )
     l.border=DefaultBorder(cls.prefix, cls.title, l.title_info())
@@ -697,3 +707,18 @@ class DeleteResourceDialog(SessionAwareDialog):
   def accept_and_close(self):
     self.callback()
     self.close()
+
+def format_timedelta(delta):
+  hours = int(delta.seconds / 3600)
+  minutes = int(delta.seconds / 60) - hours * 60
+  seconds = delta.seconds - hours * 3600 - minutes * 60
+  if delta.days > 0:
+    return '{0}d{1}h ago'.format(delta.days, hours)
+  elif hours > 0:
+    return '{0}h{1}m ago'.format(hours, minutes)
+  elif minutes > 0:
+    return '{0}m{1}s ago'.format(minutes, seconds)
+  elif seconds > 0:
+    return '{0}s ago'.format(seconds)
+  else:
+    return '<1s ago'

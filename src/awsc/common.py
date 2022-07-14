@@ -5,6 +5,10 @@ from .termui.bar_graph import BarGraph
 from .termui.color import Color, Palette8Bit
 from .termui.control import Border, BorderStyle
 from .termui.dialog import DialogControl
+from botocore import exceptions
+import configparser
+from pathlib import Path
+import sys
 
 DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension('100%', '100%-14')
@@ -60,11 +64,55 @@ class SessionAwareDialog(DialogControl):
 class Common:
   Configuration = None
   Session = None
+  initialized = False
+  init_hooks = set()
 
-  @staticmethod
-  def initialize():
-    Common.Configuration = Config()
-    Common.Session = Session(Common.Configuration, Common.color('info_display_title'), Common.color('info_display_value'))
+  @classmethod
+  def run_on_init(cls, hook):
+    if cls.initialized:
+      hook()
+    else:
+      cls.init_hooks.add(hook)
+
+  @classmethod
+  def initialize(cls):
+    cls.Configuration = Config()
+    cls.Session = Session(cls.Configuration, cls.color('info_display_title'), cls.color('info_display_value'))
+
+  @classmethod
+  def post_initialize(cls):
+    for hook in cls.init_hooks:
+      hook()
+    cls.load_dot_aws()
+
+  @classmethod
+  def load_dot_aws(cls):
+    aws_creds = Path.home() / '.aws' / 'credentials'
+    print('Loading ~/.aws/credentials', file=sys.stderr)
+    try:
+      with aws_creds.open('r') as f:
+        creds = f.read()
+    except OSError as e:
+      print('Failed to open ~/.aws/credentials: {0}'.format(str(e)), file=sys.stderr)
+      return
+    parser = configparser.ConfigParser(default_section="__default")
+    parser.read_string(creds)
+    for section in parser.sections():
+      if 'aws_access_key_id' not in parser[section]:
+        print('aws_access_key_id missing for credential {0}, skipping'.format(section), file=sys.stderr)
+        continue
+      if 'aws_secret_access_key' not in parser[section]:
+        print('aws_secret_access_key missing for credential {0}, skipping'.format(section), file=sys.stderr)
+        continue
+      access = parser[section]['aws_access_key_id']
+      secret = parser[section]['aws_secret_access_key']
+      try:
+        whoami = cls.Session.service_provider.whoami(keys={'access': access, 'secret': secret})
+      except exceptions.ClientError as e:
+        print('Failed to verify keys for credential {0}: {1}'.format(section, str(e)), file=sys.stderr)
+        continue
+      cls.Configuration.add_or_edit_context(section, whoami['Account'], access, secret)
+      print('Added {0} context from aws credentials file'.format(section), file=sys.stderr)
 
   @staticmethod
   def color(name, fallback=None):

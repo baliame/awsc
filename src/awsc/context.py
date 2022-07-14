@@ -103,7 +103,7 @@ class AddContextDialog(SessionAwareDialog):
     self.add_field(self.name_field)
     self.access_key_field = DialogFieldText('Access key:', label_min=16, color=Common.color('context_add_modal_dialog_textfield', 'modal_dialog_textfield'), selected_color=Common.color('context_add_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'), label_color=Common.color('context_add_modal_dialog_textfield_label', 'modal_dialog_textfield_label'))
     self.add_field(self.access_key_field)
-    self.secret_key_field = DialogFieldText('Secret key:', label_min=16, color=Common.color('context_add_modal_dialog_textfield', 'modal_dialog_textfield'), selected_color=Common.color('context_add_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'), label_color=Common.color('context_add_modal_dialog_textfield_label', 'modal_dialog_textfield_label'))
+    self.secret_key_field = DialogFieldText('Secret key:', label_min=16, color=Common.color('context_add_modal_dialog_textfield', 'modal_dialog_textfield'), selected_color=Common.color('context_add_modal_dialog_textfield_selected', 'modal_dialog_textfield_selected'), label_color=Common.color('context_add_modal_dialog_textfield_label', 'modal_dialog_textfield_label'), password=True)
     self.add_field(self.secret_key_field)
     self.caller = caller
 
