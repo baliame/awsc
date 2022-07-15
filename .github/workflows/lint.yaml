@@ -1,10 +1,14 @@
+name: 'Python Lint'
 on: [push, pull_request]
-steps:
-- uses: actions/checkout@v2
-- name: Python Linter
-  uses: sunnysid3up/python-linter@master
-  with:
-    source: "src"
-    mypy-options: "--show-error-codes"
-    pylint-options: "--rcfile=setup.cfg"
-    isort-options: "-w 100"
+jobs:
+  python_lint:
+    name: 'Python Lint'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Python Linter
+      uses: sunnysid3up/python-linter@master
+      with:
+        source: "src"
+        mypy-options: "--show-error-codes"
+        pylint-options: "--rcfile=setup.cfg"
+        isort-options: "-w 100"
