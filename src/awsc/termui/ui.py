@@ -1,4 +1,3 @@
-import curses
 import shutil
 import signal
 import tempfile
@@ -8,16 +7,12 @@ import time
 import tty
 from pathlib import Path
 
-import numpy as np
 from blessed import Terminal
 
-from .alignment import CenterAnchor, Dimension, TopLeftAnchor
+from .alignment import Dimension, TopLeftAnchor
 from .block import Block
-from .color import ColorGold, ColorGreen, ColorMagenta
 from .common import Commons
-from .control import Border, BorderStyleContinuous, Control
-from .dialog import DialogControl, DialogFieldLabel, DialogFieldText
-from .list_control import ListControl, ListEntry
+from .control import Control
 from .screen import Screen
 
 FrameRate = 0.02

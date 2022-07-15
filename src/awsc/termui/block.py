@@ -1,4 +1,3 @@
-from .alignment import Dimension, TopLeftAnchor
 from .common import Commons
 
 

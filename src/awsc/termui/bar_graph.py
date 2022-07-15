@@ -2,7 +2,7 @@ import datetime
 
 from .color import ColorDarkGreen, ColorGold
 from .common import Commons
-from .control import Border, Control
+from .control import Control
 
 
 class BarGraph(Control):

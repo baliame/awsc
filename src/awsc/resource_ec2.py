@@ -1,35 +1,17 @@
-import datetime
-import json
 import subprocess
-import time
 from pathlib import Path
 
-import botocore
-import jq
-
-from .arn import ARN
 from .base_control import (
     DeleteResourceDialog,
     Describer,
     DialogFieldResourceListSelector,
-    GenericDescriber,
-    MultiLister,
-    NoResults,
     ResourceLister,
     SingleRelationLister,
 )
-from .common import BaseChart, Common, SessionAwareDialog
-from .ssh import SSHList
+from .common import Common, SessionAwareDialog
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
-from .termui.dialog import (
-    DialogControl,
-    DialogFieldButton,
-    DialogFieldCheckbox,
-    DialogFieldLabel,
-    DialogFieldText,
-)
-from .termui.list_control import ListEntry
+from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldText
 from .termui.ui import ControlCodes
 
 
@@ -46,7 +28,6 @@ class EC2RelatedLister(SingleRelationLister):
         from .resource_ebs import EBSDescriber
         from .resource_ec2_class import InstanceClassDescriber
         from .resource_sg import SGDescriber
-        from .resource_subnet import SubnetClassDescriber
         from .resource_vpc import VPCDescriber
 
         self.resource_key = "ec2"

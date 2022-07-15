@@ -5,9 +5,9 @@ import time
 
 import jq
 
-from .info import HotkeyDisplay, InfoDisplay, NeutralDialog
+from .info import InfoDisplay, NeutralDialog
 from .termui.alignment import BottomLeftAnchor, Dimension, TopLeftAnchor
-from .termui.dialog import DialogControl, DialogFieldLabel
+from .termui.dialog import DialogFieldLabel
 from .termui.ui import UI, ControlCodes
 
 

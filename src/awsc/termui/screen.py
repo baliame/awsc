@@ -1,6 +1,3 @@
-from .color import Color
-
-
 class Character:
     def __init__(self):
         self.value = " "

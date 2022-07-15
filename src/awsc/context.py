@@ -1,13 +1,10 @@
-import re
-
 from botocore import exceptions
 
 from .common import Common, SessionAwareDialog
 from .info import HotkeyDisplay
-from .termui.alignment import CenterAnchor, Dimension, TopLeftAnchor, TopRightAnchor
-from .termui.common import Commons
-from .termui.control import Border, Control
-from .termui.dialog import DialogControl, DialogFieldLabel, DialogFieldText
+from .termui.alignment import CenterAnchor, Dimension, TopRightAnchor
+from .termui.control import Border
+from .termui.dialog import DialogFieldLabel, DialogFieldText
 from .termui.list_control import ListControl, ListEntry
 
 

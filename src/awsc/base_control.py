@@ -1,11 +1,9 @@
 import datetime
 import json
-import sys
 import threading
 import traceback
 from typing import List
 
-import jq
 import pyperclip
 
 from .common import (
@@ -19,7 +17,7 @@ from .info import HotkeyDisplay
 from .termui.alignment import Dimension, TopRightAnchor
 from .termui.color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold
 from .termui.control import Border
-from .termui.dialog import DialogControl, DialogField, DialogFieldLabel
+from .termui.dialog import DialogField, DialogFieldLabel
 from .termui.list_control import ListControl, ListEntry
 from .termui.text_browser import TextBrowser
 from .termui.ui import ControlCodes

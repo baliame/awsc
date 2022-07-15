@@ -1,18 +1,8 @@
-import sys
-
 import pyperclip
 from pygments.lexers import JsonLexer
 from pygments.token import Token
 
-from .color import (
-    Color,
-    ColorBlack,
-    ColorBlackOnGold,
-    ColorBlackOnOrange,
-    ColorGold,
-    ColorWhite,
-    Palette8Bit,
-)
+from .color import Color, ColorBlackOnGold, ColorGold, Palette8Bit
 from .common import Commons
 from .control import Control
 

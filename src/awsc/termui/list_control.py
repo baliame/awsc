@@ -1,12 +1,6 @@
 import datetime
 
-from .color import (
-    ColorBlack,
-    ColorBlackOnGold,
-    ColorBlackOnOrange,
-    ColorGold,
-    ColorWhite,
-)
+from .color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold
 from .common import Commons
 from .control import Control
 
