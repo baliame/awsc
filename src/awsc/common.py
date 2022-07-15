@@ -10,6 +10,7 @@ import configparser
 from pathlib import Path
 import sys
 from collections.abc import Callable
+from typing import Set
 
 DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension('100%', '100%-14')
@@ -66,7 +67,7 @@ class Common:
   Configuration = None
   Session = None
   initialized = False
-  init_hooks = Set[Callable[[], None]] = set()
+  init_hooks: Set[Callable[[], None]] = set()
 
   @classmethod
   def run_on_init(cls, hook):

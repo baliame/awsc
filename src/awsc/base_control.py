@@ -14,6 +14,7 @@ import threading
 import traceback
 import sys
 import pyperclip
+from typing import List
 
 def datetime_hack(x):
   if isinstance(x, datetime.datetime):
