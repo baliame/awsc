@@ -1,7 +1,8 @@
-from .color import ColorGold, ColorDarkGreen
-from .control import Control, Border
 import datetime
+
+from .color import ColorDarkGreen, ColorGold
 from .common import Commons
+from .control import Border, Control
 
 
 class BarGraph(Control):

@@ -1,34 +1,26 @@
-from .base_control import (
-    ResourceLister,
-    Describer,
-    MultiLister,
-    NoResults,
-    GenericDescriber,
-    DialogFieldResourceListSelector,
-    DeleteResourceDialog,
-    SingleRelationLister,
-)
-from .common import Common, SessionAwareDialog, BaseChart
-from .termui.dialog import (
-    DialogControl,
-    DialogFieldText,
-    DialogFieldLabel,
-    DialogFieldButton,
-    DialogFieldCheckbox,
-)
+import datetime
+import json
+import subprocess
+import time
+from pathlib import Path
+
+import botocore
+import jq
+
+from .arn import ARN
+from .base_control import (DeleteResourceDialog, Describer,
+                           DialogFieldResourceListSelector, GenericDescriber,
+                           MultiLister, NoResults, ResourceLister,
+                           SingleRelationLister)
+from .common import BaseChart, Common, SessionAwareDialog
+from .ssh import SSHList
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
+from .termui.dialog import (DialogControl, DialogFieldButton,
+                            DialogFieldCheckbox, DialogFieldLabel,
+                            DialogFieldText)
 from .termui.list_control import ListEntry
 from .termui.ui import ControlCodes
-from .ssh import SSHList
-import subprocess
-from pathlib import Path
-import json
-import jq
-import botocore
-import time
-import datetime
-from .arn import ARN
 
 
 class KeyPairResourceLister(ResourceLister):

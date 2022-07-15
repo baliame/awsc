@@ -1,6 +1,7 @@
-from .common import Commons
-from .block import Block
 import threading
+
+from .block import Block
+from .common import Commons
 
 
 class BorderStyle:

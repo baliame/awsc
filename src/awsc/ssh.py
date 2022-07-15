@@ -1,12 +1,14 @@
 import re
-from .common import Common, DefaultAnchor, DefaultDimension, DefaultBorder
-from .termui.alignment import TopLeftAnchor, TopRightAnchor, CenterAnchor, Dimension
+from pathlib import Path
+
+from .common import Common, DefaultAnchor, DefaultBorder, DefaultDimension
+from .info import HotkeyDisplay
+from .termui.alignment import (CenterAnchor, Dimension, TopLeftAnchor,
+                               TopRightAnchor)
+from .termui.common import Commons
+from .termui.control import Border, Control
 from .termui.dialog import DialogControl, DialogFieldLabel, DialogFieldText
 from .termui.list_control import ListControl, ListEntry
-from .termui.common import Commons
-from .termui.control import Control, Border
-from .info import HotkeyDisplay
-from pathlib import Path
 
 
 class SSHList(ListControl):

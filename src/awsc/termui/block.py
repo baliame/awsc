@@ -1,5 +1,5 @@
+from .alignment import Dimension, TopLeftAnchor
 from .common import Commons
-from .alignment import TopLeftAnchor, Dimension
 
 
 class Block:

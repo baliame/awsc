@@ -1,18 +1,13 @@
-from .control import Control
-from .common import Commons
-from .color import (
-    Color,
-    ColorBlack,
-    ColorGold,
-    ColorBlackOnGold,
-    ColorBlackOnOrange,
-    ColorWhite,
-    Palette8Bit,
-)
+import sys
+
 import pyperclip
 from pygments.lexers import JsonLexer
 from pygments.token import Token
-import sys
+
+from .color import (Color, ColorBlack, ColorBlackOnGold, ColorBlackOnOrange,
+                    ColorGold, ColorWhite, Palette8Bit)
+from .common import Commons
+from .control import Control
 
 
 class NullHighlighter:

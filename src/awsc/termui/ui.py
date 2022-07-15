@@ -1,22 +1,24 @@
 import curses
-from blessed import Terminal
-import termios
-import tty
-import signal
-import time
-from .alignment import TopLeftAnchor, Dimension, CenterAnchor
-from .common import Commons
-from .control import Control, Border, BorderStyleContinuous
-from .list_control import ListControl, ListEntry
-from .dialog import DialogControl, DialogFieldLabel, DialogFieldText
-from .color import ColorGold, ColorGreen, ColorMagenta
-from .block import Block
-import numpy as np
-from .screen import Screen
 import shutil
+import signal
 import tempfile
-from pathlib import Path
+import termios
 import threading
+import time
+import tty
+from pathlib import Path
+
+import numpy as np
+from blessed import Terminal
+
+from .alignment import CenterAnchor, Dimension, TopLeftAnchor
+from .block import Block
+from .color import ColorGold, ColorGreen, ColorMagenta
+from .common import Commons
+from .control import Border, BorderStyleContinuous, Control
+from .dialog import DialogControl, DialogFieldLabel, DialogFieldText
+from .list_control import ListControl, ListEntry
+from .screen import Screen
 
 FrameRate = 0.02
 

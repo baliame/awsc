@@ -1,12 +1,13 @@
-from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from cryptography.hazmat.primitives.ciphers.modes import CBC
-from cryptography.hazmat.primitives.ciphers import Cipher
-from cryptography.hazmat.primitives.padding import PKCS7
-import hashlib
 import getpass
+import hashlib
 import os
 import sys
+
 import yaml
+from cryptography.hazmat.primitives.ciphers import Cipher
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from cryptography.hazmat.primitives.ciphers.modes import CBC
+from cryptography.hazmat.primitives.padding import PKCS7
 
 
 class Keystore:

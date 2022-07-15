@@ -1,26 +1,23 @@
-import jq
-from .common import (
-    Common,
-    DefaultAnchor,
-    DefaultDimension,
-    DefaultBorder,
-    SessionAwareDialog,
-)
-from .termui.alignment import TopRightAnchor, Dimension
-from .termui.dialog import DialogControl, DialogFieldLabel, DialogField
-from .termui.list_control import ListControl, ListEntry
-from .termui.ui import ControlCodes
-from .termui.text_browser import TextBrowser
-from .termui.control import Border
-from .termui.color import ColorGold, ColorBlackOnGold, ColorBlackOnOrange
-from .info import HotkeyDisplay
 import datetime
 import json
+import sys
 import threading
 import traceback
-import sys
-import pyperclip
 from typing import List
+
+import jq
+import pyperclip
+
+from .common import (Common, DefaultAnchor, DefaultBorder, DefaultDimension,
+                     SessionAwareDialog)
+from .info import HotkeyDisplay
+from .termui.alignment import Dimension, TopRightAnchor
+from .termui.color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold
+from .termui.control import Border
+from .termui.dialog import DialogControl, DialogField, DialogFieldLabel
+from .termui.list_control import ListControl, ListEntry
+from .termui.text_browser import TextBrowser
+from .termui.ui import ControlCodes
 
 
 def datetime_hack(x):

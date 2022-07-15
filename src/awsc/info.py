@@ -1,7 +1,7 @@
-from .termui.control import Control
 from .termui.common import Commons
-from .termui.ui import ControlCodes
+from .termui.control import Control
 from .termui.dialog import DialogControl
+from .termui.ui import ControlCodes
 
 
 class InfoDisplay(Control):

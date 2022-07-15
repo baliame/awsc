@@ -1,6 +1,5 @@
-from .common import Common
 from .base_control import ResourceLister
-
+from .common import Common
 from .resource_ami import *
 from .resource_asg import *
 from .resource_beanstalk import *
@@ -22,6 +21,5 @@ from .resource_sg import *
 from .resource_subnet import *
 from .resource_tg import *
 from .resource_vpc import *
-
 
 Common.run_on_init(ResourceLister.register)

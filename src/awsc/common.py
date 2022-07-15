@@ -1,16 +1,18 @@
+import configparser
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Set
+
+from botocore import exceptions
+
 from .config.config import Config
-from .termui.alignment import TopLeftAnchor, Dimension, CenterAnchor
 from .session import Session
+from .termui.alignment import CenterAnchor, Dimension, TopLeftAnchor
 from .termui.bar_graph import BarGraph
 from .termui.color import Color, Palette8Bit
 from .termui.control import Border, BorderStyle
 from .termui.dialog import DialogControl
-from botocore import exceptions
-import configparser
-from pathlib import Path
-import sys
-from collections.abc import Callable
-from typing import Set
 
 DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension("100%", "100%-14")

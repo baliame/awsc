@@ -1,17 +1,19 @@
-from .common import Common, DefaultAnchor, DefaultDimension, DefaultBorder, BaseChart
-from .termui.alignment import TopLeftAnchor, Dimension
-from .termui.control import Border
-from .context import ContextList
-from .region import RegionList
-from .ssh import SSHList
-from .info import InfoDisplay
-from .aws import AWS
-from .commander import Commander, Filterer
-from . import resources
-from .meta import CommanderOptionsLister
+import datetime
 import os
 import sys
-import datetime
+
+from . import resources
+from .aws import AWS
+from .commander import Commander, Filterer
+from .common import (BaseChart, Common, DefaultAnchor, DefaultBorder,
+                     DefaultDimension)
+from .context import ContextList
+from .info import InfoDisplay
+from .meta import CommanderOptionsLister
+from .region import RegionList
+from .ssh import SSHList
+from .termui.alignment import Dimension, TopLeftAnchor
+from .termui.control import Border
 
 
 def awscheck():

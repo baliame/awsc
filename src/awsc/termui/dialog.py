@@ -1,6 +1,7 @@
-from .control import Control
+from .color import (ColorBlackOnGold, ColorBlackOnGray, ColorBlackOnOrange,
+                    ColorGold)
 from .common import Commons
-from .color import ColorGold, ColorBlackOnGold, ColorBlackOnGray, ColorBlackOnOrange
+from .control import Control
 
 
 class DialogField:

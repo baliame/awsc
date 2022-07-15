@@ -1,8 +1,10 @@
+from multiprocessing import Pipe, Process
+
 import boto3
-from .common import Common
 from botocore import config as botoconf
 from botocore import exceptions
-from multiprocessing import Process, Pipe
+
+from .common import Common
 
 
 class AWSSubprocessWrapper:

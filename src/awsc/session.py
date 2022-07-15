@@ -1,12 +1,14 @@
-from .info import InfoDisplay, NeutralDialog, HotkeyDisplay
-from .termui.ui import UI, ControlCodes
-from .termui.dialog import DialogFieldLabel, DialogControl
-from .termui.alignment import TopLeftAnchor, BottomLeftAnchor, Dimension
-import time
+import os
 import subprocess
 import tempfile
-import os
+import time
+
 import jq
+
+from .info import HotkeyDisplay, InfoDisplay, NeutralDialog
+from .termui.alignment import BottomLeftAnchor, Dimension, TopLeftAnchor
+from .termui.dialog import DialogControl, DialogFieldLabel
+from .termui.ui import UI, ControlCodes
 
 
 class Session:

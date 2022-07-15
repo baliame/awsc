@@ -1,34 +1,26 @@
-from .base_control import (
-    ResourceLister,
-    Describer,
-    MultiLister,
-    NoResults,
-    GenericDescriber,
-    DialogFieldResourceListSelector,
-    DeleteResourceDialog,
-    SingleRelationLister,
-)
-from .common import Common, SessionAwareDialog, BaseChart
-from .termui.dialog import (
-    DialogControl,
-    DialogFieldText,
-    DialogFieldLabel,
-    DialogFieldButton,
-    DialogFieldCheckbox,
-)
+import datetime
+import json
+import subprocess
+import time
+from pathlib import Path
+
+import botocore
+import jq
+
+from .arn import ARN
+from .base_control import (DeleteResourceDialog, Describer,
+                           DialogFieldResourceListSelector, GenericDescriber,
+                           MultiLister, NoResults, ResourceLister,
+                           SingleRelationLister)
+from .common import BaseChart, Common, SessionAwareDialog
+from .ssh import SSHList
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
+from .termui.dialog import (DialogControl, DialogFieldButton,
+                            DialogFieldCheckbox, DialogFieldLabel,
+                            DialogFieldText)
 from .termui.list_control import ListEntry
 from .termui.ui import ControlCodes
-from .ssh import SSHList
-import subprocess
-from pathlib import Path
-import json
-import jq
-import botocore
-import time
-import datetime
-from .arn import ARN
 
 
 class EC2RelatedLister(SingleRelationLister):
@@ -39,13 +31,13 @@ class EC2RelatedLister(SingleRelationLister):
         return self.instance_id
 
     def __init__(self, *args, ec2_entry=None, **kwargs):
-        from .resource_sg import SGDescriber
-        from .resource_cfn import CFNDescriber
-        from .resource_vpc import VPCDescriber
-        from .resource_ebs import EBSDescriber
         from .resource_ami import AMIDescriber
+        from .resource_cfn import CFNDescriber
+        from .resource_ebs import EBSDescriber
         from .resource_ec2_class import InstanceClassDescriber
+        from .resource_sg import SGDescriber
         from .resource_subnet import SubnetClassDescriber
+        from .resource_vpc import VPCDescriber
 
         self.resource_key = "ec2"
         self.instance_id = ec2_entry["instance id"]
@@ -449,11 +441,11 @@ class EC2SSHDialog(SessionAwareDialog):
 
 class EC2LaunchDialog(SessionAwareDialog):
     def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
+        from .resource_ami import AMIResourceLister
         from .resource_ec2_class import InstanceClassResourceLister
         from .resource_keypair import KeyPairResourceLister
-        from .resource_ami import AMIResourceLister
-        from .resource_subnet import SubnetResourceLister
         from .resource_sg import SGResourceLister
+        from .resource_subnet import SubnetResourceLister
 
         kwargs["border"] = Border(
             Common.border("default"),

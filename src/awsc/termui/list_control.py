@@ -1,13 +1,9 @@
-from .control import Control
-from .common import Commons
-from .color import (
-    ColorBlack,
-    ColorGold,
-    ColorBlackOnGold,
-    ColorBlackOnOrange,
-    ColorWhite,
-)
 import datetime
+
+from .color import (ColorBlack, ColorBlackOnGold, ColorBlackOnOrange,
+                    ColorGold, ColorWhite)
+from .common import Commons
+from .control import Control
 
 
 class ListControl(Control):

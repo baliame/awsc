@@ -1,7 +1,9 @@
 from pathlib import Path
-from .storage import Keystore
-from .scheme import Scheme
+
 import yaml
+
+from .scheme import Scheme
+from .storage import Keystore
 
 last_config_version = 11
 
