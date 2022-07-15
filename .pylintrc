@@ -4,4 +4,7 @@ ignore=
 disable=
 	import-error,
 	missing-module-docstring,
-	missing-function-docstring
+	missing-function-docstring,
+	missing-class-docstring,
+	R,
+	C
