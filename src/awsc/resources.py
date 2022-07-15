@@ -3,6 +3,7 @@ from .base_control import ResourceLister
 
 from .resource_ami import *
 from .resource_asg import *
+from .resource_beanstalk import *
 from .resource_cfn import *
 from .resource_cloudwatch import *
 from .resource_dsg import *

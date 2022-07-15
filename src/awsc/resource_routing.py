@@ -86,7 +86,7 @@ class RouteTableDescriber(Describer):
 
 # Routes
 class RouteResourceLister(ResourceLister):
-  prefix = 'routee_list'
+  prefix = 'route_list'
   title = 'Routes'
   command_palette = ['route']
 

@@ -5,7 +5,6 @@ from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.list_control import ListEntry
 from .termui.ui import ControlCodes
-from .ssh import SSHList
 import subprocess
 from pathlib import Path
 import json
@@ -65,6 +64,3 @@ class LBDescriber(Describer):
     self.describe_kwarg_is_list = True
     self.object_path='.LoadBalancers[0]'
     super().__init__(parent, alignment, dimensions, *args, entry=entry, entry_key=entry_key, **kwargs)
-
-  def title_info(self):
-    return self.lb_name

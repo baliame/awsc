@@ -1,3 +1,8 @@
+# 0.3.2
+
+* Fix EC2 launch dialog
+* Fix ELB describe view
+
 # 0.3.1
 
 ## User changes

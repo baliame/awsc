@@ -268,6 +268,11 @@ class EC2SSHDialog(SessionAwareDialog):
 
 class EC2LaunchDialog(SessionAwareDialog):
   def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
+    from .resource_ec2_class import InstanceClassResourceLister
+    from .resource_keypair import KeyPairResourceLister
+    from .resource_ami import AMIResourceLister
+    from .resource_subnet import SubnetResourceLister
+    from .resource_sg import SGResourceLister
     kwargs['border'] = Border(Common.border('default'), Common.color('modal_dialog_border'), 'Launch EC2 instance', Common.color('modal_dialog_border_title'))
     super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
     self.add_field(DialogFieldLabel('Enter AWS instance details'))
