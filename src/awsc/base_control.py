@@ -8,8 +8,13 @@ from typing import List
 import jq
 import pyperclip
 
-from .common import (Common, DefaultAnchor, DefaultBorder, DefaultDimension,
-                     SessionAwareDialog)
+from .common import (
+    Common,
+    DefaultAnchor,
+    DefaultBorder,
+    DefaultDimension,
+    SessionAwareDialog,
+)
 from .info import HotkeyDisplay
 from .termui.alignment import Dimension, TopRightAnchor
 from .termui.color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold

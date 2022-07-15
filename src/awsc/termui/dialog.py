@@ -1,5 +1,4 @@
-from .color import (ColorBlackOnGold, ColorBlackOnGray, ColorBlackOnOrange,
-                    ColorGold)
+from .color import ColorBlackOnGold, ColorBlackOnGray, ColorBlackOnOrange, ColorGold
 from .common import Commons
 from .control import Control
 

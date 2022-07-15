@@ -3,8 +3,7 @@ from pathlib import Path
 
 from .common import Common, DefaultAnchor, DefaultBorder, DefaultDimension
 from .info import HotkeyDisplay
-from .termui.alignment import (CenterAnchor, Dimension, TopLeftAnchor,
-                               TopRightAnchor)
+from .termui.alignment import CenterAnchor, Dimension, TopLeftAnchor, TopRightAnchor
 from .termui.common import Commons
 from .termui.control import Border, Control
 from .termui.dialog import DialogControl, DialogFieldLabel, DialogFieldText
