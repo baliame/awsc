@@ -1,0 +1,7 @@
+[pylint]
+ignore=
+	resources.py,
+disable=
+	import-error,
+	missing-module-docstring,
+	missing-function-docstring
