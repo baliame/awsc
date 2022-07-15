@@ -12,4 +12,4 @@ jobs:
         source: "src"
         mypy-options: "--ignore-missing-imports --show-error-codes"
         pylint-options: "--rcfile=setup.cfg"
-        isort-options: "-w 100"
+        isort-options: "--profile black"
