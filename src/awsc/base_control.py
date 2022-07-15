@@ -245,7 +245,7 @@ class DialogFieldResourceListSelector(DialogField):
 class ResourceLister(ResourceListerBase):
   prefix = 'CHANGEME'
   title = 'CHANGEME'
-  command_palette = []
+  command_palette: List[str] = []
 
   @classmethod
   def register(cls):

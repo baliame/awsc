@@ -140,7 +140,7 @@ class BarGraph(Control):
       self.highlight = len(self.datapoints) - 1
       Commons.UIInstance.dirty = True
 
-  @Control.border.setter
+  @Control.border.setter # type: ignore[attr-defined]
   def border(self, value):
     self._border = value
     # Do not execute on border initialization

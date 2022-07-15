@@ -3,7 +3,7 @@ from .common import Common, SessionAwareDialog, BaseChart
 from .termui.dialog import DialogControl, DialogFieldText, DialogFieldLabel, DialogFieldButton, DialogFieldCheckbox
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
-from .termui.list_control import ListEntry
+from .termui.list_control import ListEntry, ListControl
 from .termui.ui import ControlCodes
 from .ssh import SSHList
 import subprocess
