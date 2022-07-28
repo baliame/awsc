@@ -159,7 +159,7 @@ class DialogFieldText(DialogField):
                 Commons.UIInstance.dirty = True
                 return True
             elif inkey.name == "KEY_END":
-                self.left = len(self.text) - drawable
+                self.left = len(self.text) - self.drawable
                 if self.left < 0:
                     self.left = 0
                 Commons.UIInstance.dirty = True

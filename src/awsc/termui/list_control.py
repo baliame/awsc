@@ -49,7 +49,6 @@ class ListControl(Control):
     @filter.setter
     def filter(self, value):
         Commons.UIInstance.dirty = True
-        sel = self.selection
         self._filter = value
         self.top = 0
         self.selected = 0
@@ -85,37 +84,49 @@ class ListControl(Control):
             self._cache = [e for e in self.entries if e.matches_filter(self._filter)]
         return self._cache
 
-    def list_down(self, *args):
+    def list_down(
+        self, *args
+    ):  # pylint: disable=unused-argument # hotkey hooks will always be passed an extra argument
         if self.selected < len(self.filtered) - 1:
             self.selected += 1
         rows = self.rows
         if self.selected >= self.top + rows:
             self.top = max(0, self.selected - rows + 1)
 
-    def list_up(self, *args):
+    def list_up(
+        self, *args
+    ):  # pylint: disable=unused-argument # hotkey hooks will always be passed an extra argument
         if self.selected > 0:
             self.selected -= 1
         if self.selected < self.top:
             self.top = self.selected
 
-    def pagedown(self, *args):
+    def pagedown(
+        self, *args
+    ):  # pylint: disable=unused-argument # hotkey hooks will always be passed an extra argument
         self.selected += self.rows
         self.selected = min(len(self.filtered) - 1, self.selected)
         rows = self.rows
         if self.selected >= self.top + rows:
             self.top = max(0, self.selected - rows + 1)
 
-    def pageup(self, *args):
+    def pageup(
+        self, *args
+    ):  # pylint: disable=unused-argument # hotkey hooks will always be passed an extra argument
         self.selected -= self.rows
         self.selected = max(0, self.selected)
         if self.selected < self.top:
             self.top = self.selected
 
-    def home(self, *args):
+    def home(
+        self, *args
+    ):  # pylint: disable=unused-argument # hotkey hooks will always be passed an extra argument
         self.selected = 0
         self.top = 0
 
-    def end(self, *args):
+    def end(
+        self, *args
+    ):  # pylint: disable=unused-argument # hotkey hooks will always be passed an extra argument
         self.selected = len(self.filtered) - 1
         self.top = max(0, self.selected - self.rows + 1)
 
@@ -263,12 +274,21 @@ class ListEntry:
             self.controller_data = controller_data
         self.updated = datetime.datetime.now()
 
+    def dict(self):
+        return self.columns.copy()
+
+    def __str__(self):
+        return str(self.dict())
+
     def __getitem__(self, item):
         return self.columns[item]
 
     def __setitem__(self, item, value):
-        self.columns["item"] = value
+        self.columns[item] = value
         Commons.UIInstance.dirty = True
+
+    def __contains__(self, item):
+        return item in self.columns
 
     def matches_filter(self, filter):
         if filter is None:

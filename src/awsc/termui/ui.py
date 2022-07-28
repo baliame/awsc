@@ -1,5 +1,6 @@
 import shutil
 import signal
+import sys
 import tempfile
 import termios
 import threading
@@ -194,12 +195,15 @@ class UI:
         self.dirty = False
 
     def unraw(self, cmd, *args, **kwargs):
-        termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
+        # termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
+        termios.tcsetattr(self.term._keyboard_fd, termios.TCSANOW, self.restore)
         self.term._line_buffered = True
         self.term.stream.write(self.term.normal_cursor)
         self.term.stream.flush()
         self.term.stream.write(self.term.exit_fullscreen)
         self.term.stream.flush()
+        time.sleep(5)
+        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
         try:
             return cmd(*args, **kwargs)
         finally:

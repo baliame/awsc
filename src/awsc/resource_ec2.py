@@ -27,7 +27,9 @@ class EC2RelatedLister(SingleRelationLister):
         from .resource_cfn import CFNDescriber
         from .resource_ebs import EBSDescriber
         from .resource_ec2_class import InstanceClassDescriber
+        from .resource_iam import InstanceProfileDescriber
         from .resource_sg import SGDescriber
+        from .resource_subnet import SubnetDescriber
         from .resource_vpc import VPCDescriber
 
         self.resource_key = "ec2"
@@ -78,6 +80,11 @@ class EC2RelatedLister(SingleRelationLister):
                 "base_path": "[.SubnetId]",
                 "type": "Subnet",
                 "describer": SubnetDescriber.opener,
+            },
+            {
+                "base_path": "[.IamInstanceProfile.Arn]",
+                "type": "Instance Profile",
+                "describer": InstanceProfileDescriber.opener,
             },
         ]
         super().__init__(*args, **kwargs)
@@ -205,7 +212,7 @@ class EC2ResourceLister(ResourceLister):
         if self.selection is not None:
             Common.Session.push_frame(EC2RelatedLister.opener(ec2_entry=self.selection))
 
-    def do_start(self):
+    def do_start(self, **kwargs):
         if self.selection is not None:
             try:
                 resp = Common.Session.service_provider("ec2").start_instances(
@@ -219,7 +226,7 @@ class EC2ResourceLister(ResourceLister):
                 Common.Session.set_message(str(e), Common.color("message_error"))
         self.refresh_data()
 
-    def do_stop(self):
+    def do_stop(self, **kwargs):
         if self.selection is not None:
             try:
                 resp = Common.Session.service_provider("ec2").stop_instances(
@@ -233,7 +240,7 @@ class EC2ResourceLister(ResourceLister):
                 Common.Session.set_message(str(e), Common.color("message_error"))
         self.refresh_data()
 
-    def do_terminate(self):
+    def do_terminate(self, **kwargs):
         if self.selection is not None:
             try:
                 resp = Common.Session.service_provider("ec2").terminate_instances(

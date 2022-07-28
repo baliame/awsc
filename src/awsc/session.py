@@ -93,7 +93,9 @@ class Session:
                 new_frame[0].add_hotkey("KEY_ESCAPE", self.pop_frame, "Back")
         self.ui.dirty = True
 
-    def pop_frame(self, *args):
+    def pop_frame(
+        self, *args
+    ):  # pylint: disable=unused-argument # hotkey hooks will always be passed an extra argument
         for elem in self.stack_frame:
             if hasattr(elem, "on_close"):
                 elem.on_close()

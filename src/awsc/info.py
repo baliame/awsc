@@ -122,10 +122,32 @@ class HotkeyDisplay(Control):
         "KEY_PGUP": "pgup",
         "KEY_PGDOWN": "pgdn",
         "KEY_INSERT": "ins",
+        ControlCodes.A: "ctrl-a",
+        ControlCodes.B: "ctrl-b",
         ControlCodes.C: "ctrl-c",
         ControlCodes.D: "ctrl-d",
+        ControlCodes.E: "ctrl-e",
+        ControlCodes.F: "ctrl-f",
+        ControlCodes.G: "ctrl-g",
+        ControlCodes.H: "ctrl-h",
+        ControlCodes.I: "ctrl-i",
+        ControlCodes.J: "ctrl-j",
+        ControlCodes.K: "ctrl-k",
+        ControlCodes.L: "ctrl-l",
+        ControlCodes.M: "ctrl-m",
+        ControlCodes.N: "ctrl-n",
+        ControlCodes.O: "ctrl-o",
+        ControlCodes.P: "ctrl-p",
+        ControlCodes.Q: "ctrl-q",
         ControlCodes.R: "ctrl-r",
         ControlCodes.S: "ctrl-s",
+        ControlCodes.T: "ctrl-t",
+        ControlCodes.U: "ctrl-u",
+        ControlCodes.V: "ctrl-v",
+        ControlCodes.W: "ctrl-w",
+        ControlCodes.X: "ctrl-x",
+        ControlCodes.Y: "ctrl-y",
+        ControlCodes.Z: "ctrl-z",
     }
 
     def __init__(
@@ -198,7 +220,7 @@ class HotkeyDisplay(Control):
             Commons.UIInstance.print(
                 display, xy=(x, y), color=self.highlight_color, bold=True
             )
-            t = tooltip
+            t = tooltip if not callable(tooltip) else tooltip()
             if len(t) > colw - longest[col]:
                 t = t[: colw - longest[col]]
             Commons.UIInstance.print(

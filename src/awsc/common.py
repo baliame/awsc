@@ -1,8 +1,7 @@
 import configparser
 import sys
-from collections.abc import Callable
 from pathlib import Path
-from typing import Set
+from typing import Callable, Set
 
 from botocore import exceptions
 

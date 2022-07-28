@@ -42,9 +42,6 @@ class Config:
             self.parse_config()
         self.update_version()
 
-    def post_initialize(self):
-        self.load_dot_aws()
-
     def update_1(self):
         self.config["default_region"] = "us-east-1"
 
@@ -82,6 +79,9 @@ class Config:
 
     def update_11(self):
         self.scheme.backup_and_reset()
+
+    def update_12(self):
+        self.config["editor_use_fshook"] = False
 
     def update_version(self):
         if "version" not in self.config:
