@@ -9,6 +9,10 @@ from .info import InfoDisplay, NeutralDialog
 from .termui.alignment import BottomLeftAnchor, Dimension, TopLeftAnchor
 from .termui.dialog import DialogFieldLabel
 from .termui.ui import UI, ControlCodes
+from .version import version as current_version
+from packaging import version
+import urllib.request
+import json
 
 
 class Session:
@@ -29,6 +33,7 @@ class Session:
             highlight_color=highlight_color,
             generic_color=generic_color,
             info=[
+                "AWSC Version",
                 "Context",
                 "Region",
                 "UserId",
@@ -71,6 +76,43 @@ class Session:
         self.filterer = None
         self.commander = None
         self.commander_options = {}
+
+        self.set_version_information()
+
+    def set_version_information(self):
+        update_character = "↑"
+        version_str = current_version
+        latest_tag = version.parse(current_version)
+        latest_stable = latest_tag
+        current_tag = latest_tag
+        resp = urllib.request.urlopen("https://pypi.org/pypi/awsc/json")
+        if resp.status == 200:
+            package_info = resp.read()
+            package_info_json = json.loads(package_info)
+            for release in package_info_json["releases"].keys():
+                release_tag = version.parse(release)
+                if release_tag > latest_tag:
+                    latest_tag = release_tag
+                if not release_tag.is_prerelease and release_tag > latest_stable:
+                    latest_stable = release_tag
+            if latest_tag != current_tag:
+                if latest_stable != current_tag:
+                    version_str = "{current} ({update_character}{stable}, {update_character}?{development}".format(
+                        current=str(current_tag),
+                        stable=str(latest_stable),
+                        development=str(latest_tag),
+                        update_character=update_character,
+                    )
+                else:
+                    version_str = "{current} ({update_character}?{development}".format(
+                        current=str(current_tag),
+                        development=str(latest_tag),
+                        update_character=update_character,
+                    )
+            else:
+                version_str = str(current_tag)
+
+        self.info_display["AWSC Version"] = version_str
 
     def set_message(self, text, color):
         l1 = text
