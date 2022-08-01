@@ -1,11 +1,13 @@
+import datetime
+import json
+
+import yaml
+
 from .base_control import GenericDescriber, datetime_hack
 from .common import Common, DefaultAnchor, DefaultBorder, DefaultDimension
 from .info import HotkeyDisplay
-from .termui.alignment import TopRightAnchor, Dimension
+from .termui.alignment import Dimension, TopRightAnchor
 from .termui.list_control import ListControl, ListEntry
-import json
-import yaml
-import datetime
 
 
 class LogLister(ListControl):

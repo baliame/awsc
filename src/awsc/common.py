@@ -1,8 +1,11 @@
 import configparser
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Set
 
+import yaml
 from botocore import exceptions
 
 from .config.config import Config
@@ -12,9 +15,6 @@ from .termui.bar_graph import BarGraph
 from .termui.color import Color, Palette8Bit
 from .termui.control import Border, BorderStyle
 from .termui.dialog import DialogControl
-import yaml
-import json
-from datetime import datetime, timezone
 
 DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension("100%", "100%-14")

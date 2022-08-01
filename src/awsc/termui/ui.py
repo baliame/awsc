@@ -1,11 +1,11 @@
 import shutil
 import signal
+import sys
 import tempfile
 import termios
 import threading
 import time
 import tty
-import sys
 from pathlib import Path
 
 from blessed import Terminal

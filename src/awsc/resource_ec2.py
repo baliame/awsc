@@ -26,10 +26,10 @@ class EC2RelatedLister(SingleRelationLister):
         from .resource_ami import AMIDescriber
         from .resource_cfn import CFNDescriber
         from .resource_ebs import EBSDescriber
-        from .resource_iam import InstanceProfileDescriber
         from .resource_ec2_class import InstanceClassDescriber
-        from .resource_subnet import SubnetDescriber
+        from .resource_iam import InstanceProfileDescriber
         from .resource_sg import SGDescriber
+        from .resource_subnet import SubnetDescriber
         from .resource_vpc import VPCDescriber
 
         self.resource_key = "ec2"

@@ -1,3 +1,5 @@
+from botocore import exceptions as botoerror
+
 from .base_control import (
     DeleteResourceDialog,
     Describer,
@@ -10,7 +12,6 @@ from .common import Common
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.common import Commons
 from .termui.ui import ControlCodes
-from botocore import exceptions as botoerror
 
 
 class InlinePolicyAttacher:

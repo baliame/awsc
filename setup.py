@@ -13,7 +13,7 @@ with open("README.md", "r") as readme:
 setup(
     name="awsc",
     url="https://github.com/baliame/awsc",
-    version="0.4.0rc1",
+    version="0.4.0rc2",
     description="AWS Commander",
     long_description=ld,
     long_description_content_type="text/markdown",
