@@ -1,18 +1,18 @@
+import json
 import os
 import subprocess
 import tempfile
 import time
+import urllib.request
 
 import jq
+from packaging import version
 
 from .info import InfoDisplay, NeutralDialog
 from .termui.alignment import BottomLeftAnchor, Dimension, TopLeftAnchor
 from .termui.dialog import DialogFieldLabel
 from .termui.ui import UI, ControlCodes
 from .version import version as current_version
-from packaging import version
-import urllib.request
-import json
 
 
 class Session:
