@@ -1,11 +1,11 @@
 import shutil
 import signal
-import sys
 import tempfile
 import termios
 import threading
 import time
 import tty
+import sys
 from pathlib import Path
 
 from blessed import Terminal
@@ -68,7 +68,6 @@ class UI:
             raise RuntimeError("UI is a singleton.")
         Commons.UIInstance = self
         self.debug = 1
-        self.clear_log()
         self.top_block = Block(
             None, TopLeftAnchor(0, 0), Dimension("100%", "100%"), tag="top"
         )
@@ -85,19 +84,6 @@ class UI:
         self.mutex = threading.Lock()
         self.input_buffer = []
         self.dirty = False
-
-    def clear_log(self):
-        if self.debug == 0:
-            return
-        with open("log.log", "w") as f:
-            pass
-
-    def log(self, line, level=1):
-        if self.debug < level:
-            return
-        with open("log.log", "a") as f:
-            f.write(line)
-            f.write("\n")
 
     def filecache(self, obj, cb, *args, **kwargs):
         if self.cache_dir is None:
@@ -202,7 +188,6 @@ class UI:
         self.term.stream.flush()
         self.term.stream.write(self.term.exit_fullscreen)
         self.term.stream.flush()
-        time.sleep(5)
         termios.tcflush(sys.stdin, termios.TCIOFLUSH)
         try:
             return cmd(*args, **kwargs)
@@ -258,7 +243,6 @@ class UI:
                             if self.dirty or time.time() - self.last_paint > 3:
                                 self.paint()
                             t2 = time.time()
-                            # self.log('Frame time: {0:.2f}ms'.format((t2 - st) * 1000), level=1)
                             d = FrameRate - (t2 - st)
                             if d > 0:
                                 time.sleep(d)

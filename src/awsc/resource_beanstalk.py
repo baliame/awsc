@@ -34,17 +34,19 @@ class EBApplicationResourceLister(ResourceLister):
     def do_delete(self, force, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("elasticbeanstalk").delete_application(
-                ApplicationName=self.selection["name"],
-                TerminateEnvByForce=force,
-            )
-            Common.Session.set_message(
-                "Deleting application {0}".format(self.selection["name"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        api_kwargs = {
+            "ApplicationName": self.selection["name"],
+            "TerminateEnvByForce": force,
+        }
+        Common.generic_api_call(
+            "elasticbeanstalk",
+            "delete_application",
+            api_kwargs,
+            "Delete application",
+            "Elastic Beanstalk",
+            success_template="Deleting application {0}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def __init__(self, *args, **kwargs):
@@ -131,19 +133,19 @@ class EBApplicationVersionResourceLister(ResourceLister):
     def do_delete(self, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider(
-                "elasticbeanstalk"
-            ).delete_application_version(
-                ApplicationName=self.selection["application"],
-                VersionLabel=self.selection["version"],
-            )
-            Common.Session.set_message(
-                "Deleting application version {0}".format(self.selection["version"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        api_kwargs = {
+            "ApplicationName": self.selection["application"],
+            "VersionLabel": self.selection["version"],
+        }
+        Common.generic_api_call(
+            "elasticbeanstalk",
+            "delete_application_version",
+            api_kwargs,
+            "Delete appversion",
+            "Elastic Beanstalk",
+            success_template="Deleting application version {0}",
+            resource=self.selection["version"],
+        )
         self.refresh_data()
 
     def __init__(self, *args, application=None, **kwargs):
@@ -234,18 +236,20 @@ class EBEnvironmentLister(ResourceLister):
     def do_delete(self, force, terminate_resources_field, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("elasticbeanstalk").terminate_environment(
-                EnvironmentName=self.selection["name"],
-                TerminateResources=terminate_resources_field.checked,
-                ForceTerminate=force,
-            )
-            Common.Session.set_message(
-                "Terminating environment {0}".format(self.selection["name"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        api_kwargs = {
+            "EnvironmentName": self.selection["name"],
+            "ForceTerminate": force,
+            "TerminateResources": terminate_resources_field.checked,
+        }
+        Common.generic_api_call(
+            "elasticbeanstalk",
+            "terminate_environment",
+            api_kwargs,
+            "Terminate environment",
+            "Elastic Beanstalk",
+            success_template="Terminating environment {0}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def delete_environment_config(self, _):
@@ -265,17 +269,19 @@ class EBEnvironmentLister(ResourceLister):
     def do_delete_config(self, force, terminate_resources_field, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("elasticbeanstalk").terminate_environment(
-                EnvironmentName=self.selection["name"],
-                ApplicationName=self.selection["application"],
-            )
-            Common.Session.set_message(
-                "Deleting environment {0} configuration".format(self.selection["name"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        api_kwargs = {
+            "EnvironmentName": self.selection["name"],
+            "ApplicationName": self.selection["application"],
+        }
+        Common.generic_api_call(
+            "elasticbeanstalk",
+            "delete_environment_configuration",
+            api_kwargs,
+            "Delete envconfig",
+            "Elastic Beanstalk",
+            success_template="Deleting environment {0} configuration",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def rebuild_environment(self, _):
@@ -295,16 +301,18 @@ class EBEnvironmentLister(ResourceLister):
     def do_rebuild(self, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("elasticbeanstalk").rebuild_environment(
-                EnvironmentName=self.selection["name"]
-            )
-            Common.Session.set_message(
-                "Rebuilding environment {0}".format(self.selection["name"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        api_kwargs = {
+            "EnvironmentName": self.selection["name"],
+        }
+        Common.generic_api_call(
+            "elasticbeanstalk",
+            "rebuild_environment",
+            api_kwargs,
+            "Rebuild environment",
+            "Elastic Beanstalk",
+            success_template="Rebuilding environment {0}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def swap_cnames(self, _):
@@ -326,24 +334,26 @@ class EBEnvironmentLister(ResourceLister):
         if self.selection is None:
             return
         if other_env == self.selection["name"]:
-            Common.Session.set_message(
+            Common.Session.error(
                 "Source and destination environments are the same.",
-                Common.color("message_error"),
+                "Swap Cnames",
+                "Elastic Beanstalk",
+                resource=self.selection["name"],
             )
             return
-        try:
-            Common.Session.service_provider("elasticbeanstalk").swap_environment_cnames(
-                SourceEnvironmentName=self.selection["name"],
-                DestinationEnvironmentName=other_env,
-            )
-            Common.Session.set_message(
-                "Swapping cnames of environments '{0}' and '{1}'".format(
-                    self.selection["name"], other_env
-                ),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        api_kwargs = {
+            "SourceEnvironmentName": self.selection["name"],
+            "DestinationEnvironmentName": other_env,
+        }
+        Common.generic_api_call(
+            "elasticbeanstalk",
+            "swap_environment_cnames",
+            api_kwargs,
+            "Swap Cnames",
+            "Elastic Beanstalk",
+            success_template="Swapping cnames for environments {0}",
+            resource="{0}, {1}".format(self.selection["name"], other_env),
+        )
         self.refresh_data()
 
     def __init__(self, *args, app=None, **kwargs):

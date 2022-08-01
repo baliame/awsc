@@ -26,10 +26,10 @@ class EC2RelatedLister(SingleRelationLister):
         from .resource_ami import AMIDescriber
         from .resource_cfn import CFNDescriber
         from .resource_ebs import EBSDescriber
-        from .resource_ec2_class import InstanceClassDescriber
         from .resource_iam import InstanceProfileDescriber
-        from .resource_sg import SGDescriber
+        from .resource_ec2_class import InstanceClassDescriber
         from .resource_subnet import SubnetDescriber
+        from .resource_sg import SGDescriber
         from .resource_vpc import VPCDescriber
 
         self.resource_key = "ec2"
@@ -213,45 +213,54 @@ class EC2ResourceLister(ResourceLister):
             Common.Session.push_frame(EC2RelatedLister.opener(ec2_entry=self.selection))
 
     def do_start(self, **kwargs):
-        if self.selection is not None:
-            try:
-                resp = Common.Session.service_provider("ec2").start_instances(
-                    InstanceIds=[self.selection["instance id"]]
-                )
-                Common.Session.set_message(
-                    "Starting instance {0}".format(self.selection["instance id"]),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        api_kwargs = {
+            "InstanceIds": [self.selection["instance id"]],
+        }
+        Common.generic_api_call(
+            "ec2",
+            "start_instances",
+            api_kwargs,
+            "Starting instance {0}",
+            "Start instance",
+            "EC2",
+            resource=self.selection["instance id"],
+        )
         self.refresh_data()
 
     def do_stop(self, **kwargs):
-        if self.selection is not None:
-            try:
-                resp = Common.Session.service_provider("ec2").stop_instances(
-                    InstanceIds=[self.selection["instance id"]]
-                )
-                Common.Session.set_message(
-                    "Stopping instance {0}".format(self.selection["instance id"]),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        api_kwargs = {
+            "InstanceIds": [self.selection["instance id"]],
+        }
+        Common.generic_api_call(
+            "ec2",
+            "stop_instances",
+            api_kwargs,
+            "Stopping instance {0}",
+            "Stop instance",
+            "EC2",
+            resource=self.selection["instance id"],
+        )
         self.refresh_data()
 
     def do_terminate(self, **kwargs):
-        if self.selection is not None:
-            try:
-                resp = Common.Session.service_provider("ec2").terminate_instances(
-                    InstanceIds=[self.selection["instance id"]]
-                )
-                Common.Session.set_message(
-                    "Terminating instance {0}".format(self.selection["instance id"]),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        api_kwargs = {
+            "InstanceIds": [self.selection["instance id"]],
+        }
+        Common.generic_api_call(
+            "ec2",
+            "terminate_instances",
+            api_kwargs,
+            "Terminating instance {0}",
+            "Terminate instance",
+            "EC2",
+            resource=self.selection["instance id"],
+        )
         self.refresh_data()
 
     def new_instance(self, _):
@@ -267,18 +276,22 @@ class EC2ResourceLister(ResourceLister):
         if self.selection is None:
             return
         key = Common.Session.ssh_key
-        try:
-            kp = Common.Session.service_provider("ec2").describe_key_pairs(
-                KeyNames=[self.selection["key name"]]
-            )
+        kpr = Common.generic_api_call(
+            "ec2",
+            "describe_key_pairs",
+            {"KeyNames": self.selection["key name"]},
+            "Describe Key Pair",
+            "EC2",
+            resource=self.selection["instance id"],
+        )
+        if kpr["Success"]:
+            kp = kpr["Response"]
             if len(kp["KeyPairs"]) > 0:
                 assoc = Common.Session.get_keypair_association(
                     kp["KeyPairs"][0]["KeyPairId"]
                 )
                 if assoc != "":
                     key = assoc
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
         p = Path.home() / ".ssh" / key
         if not p.exists():
             Common.Session.set_message(
@@ -405,18 +418,32 @@ class EC2SSHDialog(SessionAwareDialog):
                     ),
                     Common.color("message_error"),
                 )
-            try:
-                with ph_pub.open("r") as f:
-                    pubkey = f.read()
-                ec2ic = Common.Session.service_provider("ec2-instance-connect")
-                ec2ic.send_ssh_public_key(
-                    InstanceId=self.instance_id,
-                    InstanceOSUser=self.username_textfield.text,
-                    SSHPublicKey=pubkey,
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+            with ph_pub.open("r") as f:
+                pubkey = f.read()
+            api_kwargs = {
+                "InstanceId": self.instance_id,
+                "InstanceOSUser": self.username_textfield.text,
+                "SSHPublicKey": pubkey,
+            }
+            resp = Common.generic_api_call(
+                "ec2-instance-connect",
+                "send_ssh_public_key",
+                api_kwargs,
+                None,
+                "Instance Connect",
+                "EC2",
+                resource=self.instance_id,
+            )
+            if not resp["Success"]:
+                self.close()
+                return
         ssh_cmd = "{0}@{1}".format(self.username_textfield.text, self.ip)
+        Common.info(
+            "SSH to instance: {0}".format(self.ssh_cmd),
+            "SSH to instance",
+            "EC2",
+            resource=self.instance_id,
+        )
         ex = Common.Session.ui.unraw(
             subprocess.run,
             [
@@ -533,45 +560,62 @@ class EC2LaunchDialog(SessionAwareDialog):
             self.error_label.text = "Key pair cannot be blank."
             return
 
-        try:
-            ec2 = Common.Session.service_provider("ec2")
-            kwa = {
-                "ImageId": self.image_field.text,
-                "InstanceType": self.instance_type_field.text,
-                "KeyName": self.keypair_field.text,
-                "MinCount": 1,
-                "MaxCount": 1,
-                "TagSpecifications": [
-                    {
-                        "ResourceType": "instance",
-                        "Tags": [{"Key": "Name", "Value": self.name_field.text}],
-                    },
-                ],
-            }
-            if self.subnet_field.text != "":
-                kwa["SubnetId"] = self.subnet_field.text
-                if self.secgroup_field.text != "":
-                    sg = ec2.describe_security_groups(
-                        GroupIds=[self.secgroup_field.text]
-                    )["SecurityGroups"][0]
-                    sn = ec2.describe_subnets(SubnetIds=[self.subnet_field.text])[
-                        "Subnets"
-                    ][0]
-                    if sg["VpcId"] == sn["VpcId"]:
-                        kwa["SecurityGroupIds"] = [self.secgroup_field.text]
-                    else:
-                        Common.Session.set_message(
-                            "Security group and subnet belong to different VPCs.",
-                            Common.color("message_error"),
-                        )
-                        return
-            resp = ec2.run_instances(**kwa)
-            Common.Session.set_message(
-                "Instance {0} is launching".format(resp["Instances"][0]["InstanceId"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        api_kwargs = {
+            "ImageId": self.image_field.text,
+            "InstanceType": self.instance_type_field.text,
+            "KeyName": self.keypair_field.text,
+            "MinCount": 1,
+            "MaxCount": 1,
+            "TagSpecifications": [
+                {
+                    "ResourceType": "instance",
+                    "Tags": [{"Key": "Name", "Value": self.name_field.text}],
+                },
+            ],
+        }
+        if self.subnet_field.text != "":
+            api_kwargs["SubnetId"] = self.subnet_field.text
+            if self.secgroup_field.text != "":
+                sgr = Common.generic_api_call(
+                    "ec2",
+                    "describe_security_groups",
+                    {"GroupIds": self.secgroup_field.text},
+                    "Describe Security Group",
+                    "EC2",
+                    resource=self.secgroup_field.text,
+                )
+                if not sgr["Success"]:
+                    return
+                sg = sgr["Response"]
+
+                snr = Common.generic_api_call(
+                    "ec2",
+                    "describe_subnets",
+                    {"SubnetIds": self.subnet_field.text},
+                    "Describe Subnet",
+                    "EC2",
+                    resource=self.subnet_field.text,
+                )
+                if not snr["Success"]:
+                    return
+                sn = snr["Response"]
+
+                if sg["VpcId"] == sn["VpcId"]:
+                    api_kwargs["SecurityGroupIds"] = [self.secgroup_field.text]
+                else:
+                    Common.Session.set_message(
+                        "Security group and subnet belong to different VPCs.",
+                        Common.color("message_error"),
+                    )
+                    return
+        Common.generic_api_call(
+            "ec2",
+            "run_instances",
+            api_kwargs,
+            "Launch Instance",
+            "EC2",
+            success_template="Instance {0} is launching",
+        )
 
         super().accept_and_close()
 

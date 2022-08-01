@@ -89,12 +89,12 @@ class R53RecordLister(ResourceLister):
                     )
                     return
                 newcontent = newcontent.split("\n")
-                try:
-                    Common.Session.service_provider(
-                        self.resource_key
-                    ).change_resource_record_sets(
-                        HostedZoneId=self.selection["hosted_zone_id"],
-                        ChangeBatch={
+                Common.generic_api_call(
+                    "route53",
+                    "change_resource_record_sets",
+                    {
+                        "HostedZoneId": self.selection["hosted_zone_id"],
+                        "ChangeBatch": {
                             "Changes": [
                                 {
                                     "Action": "UPSERT",
@@ -109,16 +109,12 @@ class R53RecordLister(ResourceLister):
                                 }
                             ]
                         },
-                    )
-                except botocore.errorfactory.InvalidInput as e:
-                    Common.Session.ui.log(str(e))
-                    Common.Session.set_message(
-                        "AWS API returned error, logged.", Common.color("message_error")
-                    )
-                    return
-                    Common.Session.set_message(
-                        "Entry modified, refreshing...", Common.color("message_success")
-                    )
+                    },
+                    "Edit DNS record",
+                    "Route53",
+                    success_template="Modified DNS entry for zone {0}",
+                    resource=self.selection["hosted_zone_id"],
+                )
 
                 self.refresh_data()
             else:

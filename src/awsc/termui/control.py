@@ -54,7 +54,6 @@ class Border:
         self.title_info_color = title_info_color
 
     def paint(self, block):
-        Commons.UIInstance.log("Painting Border", level=2)
         if self.style is None or self.color is None:
             return
         corners = block.corners()
@@ -152,7 +151,6 @@ class Control(Block):
         *args,
         **kwargs
     ):
-        Commons.UIInstance.log("Initializing Control", level=2)
         super().__init__(parent, alignment, dimensions, weight, tag, *args, **kwargs)
         self.border = border
         self.thread_share = {}
@@ -181,7 +179,6 @@ class Control(Block):
         return self.w if self.border is None else self.w - 2
 
     def paint(self):
-        Commons.UIInstance.log("Painting Control", level=2)
         if self.border is not None:
             self.border.paint(self)
         super().paint()

@@ -5,7 +5,7 @@ import yaml
 from .scheme import Scheme
 from .storage import Keystore
 
-last_config_version = 11
+last_config_version = 12
 
 
 class Config:
@@ -23,6 +23,7 @@ class Config:
             9: self.update_9,
             10: self.update_10,
             11: self.update_11,
+            12: self.update_12,
         }
         if path is None:
             path = Path.home() / ".config" / "awsc"
@@ -81,6 +82,13 @@ class Config:
         self.scheme.backup_and_reset()
 
     def update_12(self):
+        self.config["log_retention"] = {
+            "max_lines": -1,
+            "max_age": 2419200,
+        }
+
+    # TODO: Weigh whether it's worth implementing fshook (may be potentially dangerous)
+    def update_X(self):
         self.config["editor_use_fshook"] = False
 
     def update_version(self):
@@ -106,6 +114,10 @@ class Config:
             "default_ssh_usernames": {},
             "keypair_associations": {},
             "editor_command": "nano {0}",
+            "log_retention": {
+                "max_lines": -1,
+                "max_age": 2419200,
+            },
             "usage_statistics": {
                 "regions": {},
                 "resources": {},

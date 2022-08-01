@@ -53,7 +53,9 @@ class Session:
             weight=-10,
         )
         self._message_label = DialogFieldLabel("")
+        self._message_label_l2 = DialogFieldLabel("")
         self.message_display.add_field(self._message_label)
+        self.message_display.add_field(self._message_label_l2)
         self._context = None
         self.context = config["default_context"]
         self.region = config["default_region"]
@@ -71,8 +73,16 @@ class Session:
         self.commander_options = {}
 
     def set_message(self, text, color):
-        self._message_label.texts = [(text, color)]
-        self.message_time = 5.0
+        l1 = text
+        l2 = ""
+        if len(text) > self.ui.w:
+            l1 = text[: self.ui.w]
+            l2 = text[self.ui.w :]
+            if len(l2) > self.ui.w:
+                l2 = l2[: self.ui.w]
+        self._message_label.texts = [(l1, color)]
+        self._message_label_l2.texts = [(l2, color)]
+        self.message_time = min(len(text) / 10.0, 5.0)
         self.last_tick = time.time()
         self.ui.dirty = True
 
@@ -122,6 +132,7 @@ class Session:
             self.message_time -= delta
             if self.message_time <= 0:
                 self._message_label.texts = []
+                self._message_label_l2.texts = []
         if hasattr(self.resource_main, "auto_refresh"):
             self.resource_main.auto_refresh()
 

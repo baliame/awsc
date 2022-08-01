@@ -108,8 +108,17 @@ class ResourceListerBase(ListControl):
             ] = "Refresh thread execution failed: {0}: {1}".format(
                 e.__class__.__name__, str(e)
             )
-            Common.Session.ui.log(str(e), 1)
-            Common.Session.ui.log(traceback.format_exc(), 1)
+            Common.error(
+                "Refresh thread execution failed: {0}: {1}\n{2}".format(
+                    e.__class__.__name__, str(e), traceback.format_exc()
+                ),
+                "Refresh Thread Error",
+                "Core",
+                set_message=False,
+            )
+            Common.Session.set_message(
+                "Refresh thread execution failed", Common.color("message_error")
+            )
         self.mutex.acquire()
         try:
             self.thread_share["updating"] = False
@@ -175,15 +184,17 @@ class ResourceListerBase(ListControl):
                 .first()
             )
             if it is None:
-                Common.Session.ui.log(
-                    "get_data_generic for {0}.{1}({2}) returned None on path {3}".format(
-                        resource_key, list_method, list_kwargs, item_path
-                    )
-                )
-                Common.Session.ui.log(
-                    "API response was:\n{0}".format(
-                        json.dumps(response, default=datetime_hack)
-                    )
+                Common.error(
+                    "get_data_generic returned None for {0}.{1}({2}) on path {3}\nAPI response was:\n{4}".format(
+                        resource_key,
+                        list_method,
+                        list_kwargs,
+                        item_path,
+                        json.dumps(response, default=datetime_hack),
+                    ),
+                    "Get Data Generic returned None",
+                    "Core",
+                    set_message=False,
                 )
                 return []
 
@@ -614,7 +625,6 @@ class ResourceLister(ResourceListerBase):
             self.column_order = []
         self.column_order.extend(self.imported_column_order)
         self.refresh_data()
-        Common.Session.ui.log("ResourceLister init has returned")
 
     def copy_arn(self, *args):
         if self.selection is not None:

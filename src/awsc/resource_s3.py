@@ -33,10 +33,18 @@ class S3ResourceLister(ResourceLister):
         super().__init__(*args, **kwargs)
 
     def determine_location(self, entry):
-        loc_resp = Common.Session.service_provider("s3").get_bucket_location(
-            Bucket=entry["Name"]
+        loc_resps = Common.generic_api_call(
+            "s3",
+            "get_bucket_location",
+            {"Bucket": entry["name"]},
+            "Get Bucket Location",
+            "S3",
+            resource=entry["name"],
         )
-        return loc_resp["LocationConstraint"]
+        if loc_resps["Success"]:
+            loc_resp = loc_resps["Response"]
+            return loc_resp["LocationConstraint"]
+        return "<n/a>"
 
 
 class S3Describer(Describer):
@@ -227,9 +235,18 @@ class S3ObjectLister(ResourceLister):
                     raise CancelDownload()
                 Common.Session.ui.progress_bar_paint(perc)
 
-            Common.Session.service_provider("s3").download_file(
-                Bucket=self.bucket, Key=sp, Filename=obj, Callback=fn
+            Common.generic_api_call(
+                "s3",
+                "download_file",
+                {"Bucket": self.bucket, "Key": sp, "Filename": obj, "Callback": fn},
+                "Download File",
+                "S3",
+                resource="{0}/{1}".format(self.bucket, sp),
             )
+
+            # Common.Session.service_provider("s3").download_file(
+            #    Bucket=self.bucket, Key=sp, Filename=obj, Callback=fn
+            # )
             try:
                 with open(obj, "r") as f:
                     return f.read()

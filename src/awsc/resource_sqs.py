@@ -34,16 +34,15 @@ class SQSLister(ResourceLister):
     def do_delete(self, force, terminate_resources_field, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("sqs").delete_queue(
-                QueueUrl=self.selection["url"],
-            )
-            Common.Session.set_message(
-                "Deleting queue {0}".format(self.selection["url"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "sqs",
+            "delete_queue",
+            {"QueueUrl": self.selection["url"]},
+            "Delete Queue",
+            "SQS",
+            success_template="Deleting queue {0}",
+            resource=self.selection["url"],
+        )
         self.refresh_data()
 
     def purge_queue(self, _):
@@ -63,16 +62,15 @@ class SQSLister(ResourceLister):
     def do_purge(self, force, terminate_resources_field, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("sqs").purge_queue(
-                QueueUrl=self.selection["url"],
-            )
-            Common.Session.set_message(
-                "Purging queue {0}".format(self.selection["url"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "sqs",
+            "purge_queue",
+            {"QueueUrl": self.selection["url"]},
+            "Purge Queue",
+            "SQS",
+            success_template="Purging queue {0}",
+            resource=self.selection["url"],
+        )
         self.refresh_data()
 
     def send_message(self, _):
@@ -150,18 +148,35 @@ class SQSLister(ResourceLister):
         self.add_hotkey(ControlCodes.P, self.purge_queue, "Purge Queue")
         self.add_hotkey(ControlCodes.S, self.send_message, "Send Message")
         self.add_hotkey(ControlCodes.N, self.create_queue, "Create Queue")
+        self._attrib_cache = {}
+
+    def refresh_data(self, *args, **kwargs):
+        self._attrib_cache = {}
+        return super().refresh_data(*args, **kwargs)
+
+    def get_attrib_cache(self, url, attrib):
+        if url not in self._attrib_cache:
+            resps = Common.generic_api_call(
+                "sqs",
+                "get_queue_attributes",
+                {"QueueUrl": url, "AttributeNames": ["All"]},
+                "Get Queue Attributes",
+                "SQS",
+                resource=url,
+            )
+            if resps["Success"]:
+                attribs = resps["Response"]
+                self._attrib_cache[url] = attribs
+        try:
+            return self._attrib_cache[url]["Attributes"][attrib]
+        except KeyError:
+            return "<n/a>"
 
     def determine_queue_arn(self, v):
-        attribs = Common.Session.service_provider("sqs").get_queue_attributes(
-            QueueUrl=v, AttributeNames=["QueueArn"]
-        )
-        return attribs["Attributes"]["QueueArn"]
+        return self.get_attrib_cache(v, "QueueArn")
 
     def determine_available_messages(self, v):
-        attribs = Common.Session.service_provider("sqs").get_queue_attributes(
-            QueueUrl=v, AttributeNames=["ApproximateNumberOfMessages"]
-        )
-        return attribs["Attributes"]["ApproximateNumberOfMessages"]
+        return self.get_attrib_cache(v, "ApproximateNumberOfMessages")
 
 
 class SQSDescriber(Describer):

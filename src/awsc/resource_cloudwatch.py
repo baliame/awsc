@@ -71,25 +71,37 @@ class MetricViewer(BaseChart):
         self.load_data()
 
     def load_data(self):
-        data = Common.Session.service_provider("cloudwatch").get_metric_data(
-            MetricDataQueries=[
-                {
-                    "Id": "metric",
-                    "MetricStat": {
-                        "Metric": {
-                            "Namespace": self.metric_namespace,
-                            "MetricName": self.metric_name,
-                            "Dimensions": [self.metric_dimension],
+        api_kwargs = {
+            "MetricDataQueries": (
+                [
+                    {
+                        "Id": "metric",
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": self.metric_namespace,
+                                "MetricName": self.metric_name,
+                                "Dimensions": [self.metric_dimension],
+                            },
+                            "Period": 300,
+                            "Stat": "Average",
                         },
-                        "Period": 300,
-                        "Stat": "Average",
-                    },
-                }
-            ],
-            StartTime=datetime.datetime.now() - datetime.timedelta(hours=24),
-            EndTime=datetime.datetime.now(),
+                    }
+                ],
+            ),
+            "StartTime": (datetime.datetime.now() - datetime.timedelta(hours=24),),
+            "EndTime": (datetime.datetime.now(),),
+        }
+        call = Common.generic_api_call(
+            "cloudwatch",
+            "get_metric_data",
+            api_kwargs,
+            "Retrieve metrics",
+            "Cloudwatch",
+            resource="{0}/{1}".format(self.metric_namespace, self.metric_name),
         )
-        for idx in range(len(data["MetricDataResults"][0]["Timestamps"])):
-            ts = data["MetricDataResults"][0]["Timestamps"][idx]
-            val = data["MetricDataResults"][0]["Values"][idx]
-            self.add_datapoint(ts, val)
+        if call["Success"]:
+            data = call["Response"]
+            for idx in range(len(data["MetricDataResults"][0]["Timestamps"])):
+                ts = data["MetricDataResults"][0]["Timestamps"][idx]
+                val = data["MetricDataResults"][0]["Values"][idx]
+                self.add_datapoint(ts, val)

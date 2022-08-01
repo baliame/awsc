@@ -8,6 +8,7 @@ from .commander import Commander, Filterer
 from .common import BaseChart, Common, DefaultAnchor, DefaultBorder, DefaultDimension
 from .context import ContextList
 from .info import InfoDisplay
+from .log import LogLister, LogViewer
 from .meta import CommanderOptionsLister
 from .region import RegionList
 from .ssh import SSHList
@@ -43,6 +44,10 @@ def open_region_lister():
 
 def open_ssh_lister():
     return SSHList.opener()
+
+
+def open_logs_lister():
+    return LogLister.opener()
 
 
 def open_filterer():
@@ -103,6 +108,7 @@ def main(*args, **kwargs):
         Common.Session.commander_options["context"] = open_context_lister
         Common.Session.commander_options["region"] = open_region_lister
         Common.Session.commander_options["ssh"] = open_ssh_lister
+        Common.Session.commander_options["logs"] = open_logs_lister
         Common.Session.commander_options["?"] = CommanderOptionsLister.opener
         Common.Session.commander_options["help"] = CommanderOptionsLister.opener
 

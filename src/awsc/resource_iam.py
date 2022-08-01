@@ -10,16 +10,16 @@ from .common import Common
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.common import Commons
 from .termui.ui import ControlCodes
+from botocore import exceptions as botoerror
 
 
 class InlinePolicyAttacher:
     def __init__(self, parent, datatype):
         self.datatype = datatype
         self.parent = parent
+        self.client = Common.Session.service_provider("iam")
 
-        self.get = getattr(
-            Common.Session.service_provider("iam"), "get_{0}_policy".format(datatype)
-        )
+        self.get = getattr(self.client, "get_{0}_policy".format(datatype))
         self.put_method = "put_{0}_policy".format(datatype)
         self.arg = "{0}Name".format(datatype.capitalize())
 
@@ -41,7 +41,6 @@ class InlinePolicyAttacher:
     def do_attach_inline(self, name, selection_is_policy=False):
         if self.parent.selection is None:
             return
-        client = Common.Session.service_provider("iam")
         if selection_is_policy:
             kwargs = {"PolicyName": self.parent.selection["name"], self.arg: name}
         else:
@@ -49,7 +48,7 @@ class InlinePolicyAttacher:
         try:
             chk = self.get(**kwargs)
             initial_document = {"PolicyDocument": chk["PolicyDocument"]}
-        except client.exceptions.NoSuchEntityException:
+        except self.client.exceptions.NoSuchEntityException:
             initial_document = {
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -64,6 +63,23 @@ class InlinePolicyAttacher:
                     ],
                 }
             }
+        except botoerror.ClientError as e:
+            Common.clienterror(
+                e,
+                "Retrieve Inline {0} Policy".format(self.datatype.capitalize()),
+                "IAM",
+                set_message=True,
+            )
+            return
+        except Exception as e:
+            Common.error(
+                str(e),
+                "Retrieve Inline {0} Policy".format(self.datatype.capitalize()),
+                "IAM",
+                set_message=True,
+            )
+            return
+
         creator = ListResourceDocumentCreator(
             "iam",
             self.put_method,
@@ -120,32 +136,34 @@ class UserLister(ResourceLister):
     def do_delete(self, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("iam").delete_user(
-                UserName=self.selection["name"]
-            )
-            Common.Session.set_message(
-                "Deleting user {0}".format(self.selection["name"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "iam",
+            "delete_user",
+            {
+                "UserName": self.selection["name"],
+            },
+            "Delete User",
+            "IAM",
+            success_template="Deleting user {UserName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def do_attach(self, policy_arn):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").attach_user_policy(
-                    UserName=self.selection["name"], PolicyArn=policy_arn
-                )
-                Common.Session.set_message(
-                    "Attaching policy {0} to user {1}".format(
-                        policy_arn, self.selection["name"]
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "attach_user_policy",
+            {
+                "UserName": self.selection["name"],
+                "PolicyArn": policy_arn,
+            },
+            "Attach Managed User Policy",
+            "IAM",
+            success_template="Attaching policy {PolicyArn} to user {UserName}",
+            resource=self.selection["name"],
+        )
 
     def attach_policy(self, _):
         if self.selection is None:
@@ -176,16 +194,15 @@ class UserLister(ResourceLister):
     def do_add_to_group(self, group):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("iam").add_user_to_group(
-                UserName=self.selection["name"], GroupName=group
-            )
-            Common.Session.set_message(
-                "Adding user {1} to group {0}".format(group, self.selection["name"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "iam",
+            "add_user_to_group",
+            {"UserName": self.selection["name"], "GroupName": group},
+            "Add User to Group",
+            "IAM",
+            success_template="Adding user {UserName} to group {GroupName}",
+            resource=self.selection["name"],
+        )
 
     def remove_from_group(self, _):
         if self.selection is None:
@@ -206,18 +223,15 @@ class UserLister(ResourceLister):
     def do_remove(self, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("iam").remove_user_from_group(
-                UserName=self.selection["name"], GroupName=self.group["name"]
-            )
-            Common.Session.set_message(
-                "Removing user {0} from group {1}".format(
-                    self.selection["name"], self.group["name"]
-                ),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "iam",
+            "remove_user_from_group",
+            {"UserName": self.selection["name"], "GroupName": self.group["name"]},
+            "Remove User to Group",
+            "IAM",
+            success_template="Removing user {UserName} from group {GroupName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def __init__(self, *args, group=None, **kwargs):
@@ -306,19 +320,17 @@ class GroupLister(ResourceLister):
         return "User: {0}".format(self.user["name"]) if self.user is not None else None
 
     def do_attach(self, policy_arn):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").attach_group_policy(
-                    GroupName=self.selection["name"], PolicyArn=policy_arn
-                )
-                Common.Session.set_message(
-                    "Attaching policy {0} to group {1}".format(
-                        policy_arn, self.selection["name"]
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "attach_group_policy",
+            {"GroupName": self.selection["name"], "PolicyArn": policy_arn},
+            "Attach Managed Group Policy",
+            "IAM",
+            success_template="Attaching policy {PolicyArn} to group {GroupName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def attach_policy(self, _):
@@ -348,14 +360,15 @@ class GroupLister(ResourceLister):
         )
 
     def do_create(self, name):
-        try:
-            Common.Session.service_provider("iam").create_group(GroupName=name)
-            Common.Session.set_message(
-                "Creating group {0}".format(name),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "iam",
+            "create_group",
+            {"GroupName": name},
+            "Create Group",
+            "IAM",
+            success_template="Creating group {GroupName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def delete_group(self, _):
@@ -375,16 +388,15 @@ class GroupLister(ResourceLister):
     def do_delete(self, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("iam").delete_group(
-                GroupName=self.selection["name"]
-            )
-            Common.Session.set_message(
-                "Deleting group {0}".format(self.selection["name"]),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "iam",
+            "delete_group",
+            {"GroupName": self.selection["name"]},
+            "Delete Group",
+            "IAM",
+            success_template="Deleting group {GroupName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def remove_from_group(self, _):
@@ -406,18 +418,15 @@ class GroupLister(ResourceLister):
     def do_remove(self, **kwargs):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("iam").remove_user_from_group(
-                UserName=self.user["name"], GroupName=self.selection["name"]
-            )
-            Common.Session.set_message(
-                "Removing user {1} from group {0}".format(
-                    self.selection["name"], self.user["name"]
-                ),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "iam",
+            "remove_user_from_group",
+            {"GroupName": self.selection["name"], "UserName": self.user["name"]},
+            "Remove User From Group",
+            "IAM",
+            success_template="Removing user {UserName} from group {GroupName}",
+            resource=self.user["name"],
+        )
         self.refresh_data()
 
     def add_user(self, _):
@@ -436,16 +445,15 @@ class GroupLister(ResourceLister):
     def do_add(self, user):
         if self.selection is None:
             return
-        try:
-            Common.Session.service_provider("iam").add_user_to_group(
-                UserName=user, GroupName=self.selection["name"]
-            )
-            Common.Session.set_message(
-                "Adding user {1} to group {0}".format(self.selection["name"], user),
-                Common.color("message_success"),
-            )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
+        Common.generic_api_call(
+            "iam",
+            "add_user_to_group",
+            {"GroupName": self.selection["name"], "UserName": user},
+            "Add User to Group",
+            "IAM",
+            success_template="Adding user {UserName} to group {GroupName}",
+            resource=self.selection["name"],
+        )
 
     def __init__(self, *args, user=None, **kwargs):
         self.resource_key = "iam"
@@ -598,17 +606,17 @@ class PolicyLister(ResourceLister):
         )
 
     def do_delete(self, **kwargs):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").delete_policy(
-                    PolicyArn=self.selection["arn"]
-                )
-                Common.Session.set_message(
-                    "Deleting policy {0}".format(self.selection["arn"]),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "delete_policy",
+            {"PolicyArn": self.selection["arn"]},
+            "Delete Policy",
+            "IAM",
+            success_template="Deleting policy {PolicyArn}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def detach_policy(self, _):
@@ -637,24 +645,34 @@ class PolicyLister(ResourceLister):
         )
 
     def do_detach(self, **kwargs):
-        if self.selection is not None:
-            if self.user is not None:
-                method = "detach_user_policy"
-                arg_name = "UserName"
-                arg_value = self.user.name
-            elif self.group is not None:
-                method = "detach_group_policy"
-                arg_name = "GroupName"
-                arg_value = self.group.name
-            elif self.role is not None:
-                method = "detach_role_policy"
-                arg_name = "RoleName"
-                arg_value = self.role.name
-            kwargs = {"PolicyArn": self.selection["arn"], arg_name: arg_value}
-            try:
-                getattr(Common.Session.service_provider("iam"), method)(**kwargs)
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        if self.user is not None:
+            method = "detach_user_policy"
+            arg_name = "UserName"
+            arg_value = self.user.name
+            resource = "user"
+        elif self.group is not None:
+            method = "detach_group_policy"
+            arg_name = "GroupName"
+            arg_value = self.group.name
+            resource = "group"
+        elif self.role is not None:
+            method = "detach_role_policy"
+            arg_name = "RoleName"
+            arg_value = self.role.name
+            resource = "role"
+        else:
+            return
+        Common.generic_api_call(
+            "iam",
+            method,
+            {"PolicyArn": self.selection["arn"], arg_name: arg_value},
+            "Detach {0} Policy".format(resource.capitalize()),
+            "IAM",
+            success_template="Detaching policy {PolicyArn} from {resource}",
+            resource="{0} {1}".format(resource, arg_value),
+        )
         self.refresh_data()
 
     def __init__(self, *args, user=None, group=None, role=None, **kwargs):
@@ -926,19 +944,17 @@ class RoleLister(ResourceLister):
         self.refresh_data()
 
     def do_attach(self, policy_arn):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").attach_role_policy(
-                    RoleName=self.selection["name"], PolicyArn=policy_arn
-                )
-                Common.Session.set_message(
-                    "Attaching policy {0} to role {1}".format(
-                        policy_arn, self.selection["name"]
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "attach_role_policy",
+            {"PolicyArn": policy_arn, "RoleName": self.selection["name"]},
+            "Attach Managed Role Policy",
+            "IAM",
+            success_template="Attaching policy {PolicyArn} to role {RoleName}",
+            resource=self.selection["name"],
+        )
 
     def attach_policy(self, _):
         if self.selection is None:
@@ -967,19 +983,17 @@ class RoleLister(ResourceLister):
         )
 
     def do_add(self, ip):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").add_role_to_instance_profile(
-                    RoleName=self.selection["name"], InstanceProfileName=ip
-                )
-                Common.Session.set_message(
-                    "Adding role {1} to instance profile {0}".format(
-                        ip, self.selection["name"]
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "add_role_to_instance_profile",
+            {"InstanceProfileName": ip, "RoleName": self.selection["name"]},
+            "Add Role to Instance Profile",
+            "IAM",
+            success_template="Adding role {RoleName} to instance profile {InstanceProfileName}",
+            resource=self.selection["name"],
+        )
 
     def detach_from_instance_profile(self, _):
         if self.selection is None:
@@ -998,22 +1012,20 @@ class RoleLister(ResourceLister):
         )
 
     def do_detach(self, **kwargs):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider(
-                    "iam"
-                ).remove_role_from_instance_profile(
-                    RoleName=self.selection["name"],
-                    InstanceProfileName=self.instanceprofile["name"],
-                )
-                Common.Session.set_message(
-                    "Removing role {0} to instance profile {1}".format(
-                        self.selection["name"], self.instanceprofile["name"]
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "remove_role_from_instance_profile",
+            {
+                "InstanceProfileName": self.instanceprofile["name"],
+                "RoleName": self.selection["name"],
+            },
+            "Remove Role from Instance Profile",
+            "IAM",
+            success_template="Removing role {RoleName} from instance profile {InstanceProfileName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def delete_role(self, _):
@@ -1029,17 +1041,17 @@ class RoleLister(ResourceLister):
         )
 
     def do_delete(self, **kwargs):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").delete_role(
-                    RoleName=self.selection["name"]
-                )
-                Common.Session.set_message(
-                    "Deleting role {0}".format(self.selection["arn"]),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "delete_role",
+            {"RoleName": self.selection["name"]},
+            "Delete Role",
+            "IAM",
+            success_template="Deleting role {RoleName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def __init__(self, *args, instanceprofile=None, **kwargs):
@@ -1162,19 +1174,17 @@ class InstanceProfileLister(ResourceLister):
         )
 
     def do_add(self, role):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").add_role_to_instance_profile(
-                    RoleName=role, InstanceProfileName=self.selection["name"]
-                )
-                Common.Session.set_message(
-                    "Adding role {1} to instance profile {0}".format(
-                        self.selection["name"], role
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "add_role_to_instance_profile",
+            {"InstanceProfileName": self.selection["name"], "RoleName": role},
+            "Add Role to Instance Profile",
+            "IAM",
+            success_template="Adding role {RoleName} to instance profile {InstanceProfileName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def remove_from_role(self, _):
@@ -1194,22 +1204,20 @@ class InstanceProfileLister(ResourceLister):
         )
 
     def do_detach(self, **kwargs):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider(
-                    "iam"
-                ).remove_role_from_instance_profile(
-                    RoleName=self.role["name"],
-                    InstanceProfileName=self.selection["name"],
-                )
-                Common.Session.set_message(
-                    "Removing role {1} to instance profile {0}".format(
-                        self.selection["name"], self.role["name"]
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "remove_role_from_instance_profile",
+            {
+                "RoleName": self.role["name"],
+                "InstanceProfileName": self.selection["name"],
+            },
+            "Remove Role from Instance Profile",
+            "IAM",
+            success_template="Removing to role {RoleName} from instance profile {InstanceProfileName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def delete_instance_profile(self, _):
@@ -1225,17 +1233,19 @@ class InstanceProfileLister(ResourceLister):
         )
 
     def do_delete(self, **kwargs):
-        if self.selection is not None:
-            try:
-                Common.Session.service_provider("iam").delete_instance_profile(
-                    InstanceProfileName=self.selection["name"]
-                )
-                Common.Session.set_message(
-                    "Deleting instance profile {0}".format(self.selection["arn"]),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "iam",
+            "delete_instance_profile",
+            {
+                "InstanceProfileName": self.selection["name"],
+            },
+            "Delete Instance Profile",
+            "IAM",
+            success_template="Deleting instance profile {InstanceProfileName}",
+            resource=self.selection["name"],
+        )
         self.refresh_data()
 
     def __init__(self, *args, role=None, **kwargs):

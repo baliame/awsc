@@ -35,6 +35,7 @@ class CommanderOptionsLister(ListControl):
             "context": "AWS Contexts",
             "region": "AWS Region",
             "ssh": "SSH Keys",
+            "logs": "Logs",
         }
         self.hotkey_display = HotkeyDisplay(
             self.parent,

@@ -80,9 +80,17 @@ class SubnetResourceLister(ResourceLister):
         return ""
 
     def get_db_subnet_ids(self, *args):
-        dsg = Common.Session.service_provider("rds").describe_db_subnet_groups(
-            DBSubnetGroupName=self.db_subnet_group.name
+        dsg_resp = Common.generic_api_call(
+            "rds",
+            "describe_db_subnet_groups",
+            {"DBSubnetGroupName": self.db_subnet_group.name},
+            "Describe DB Subnet Group",
+            "rds",
+            resource=self.db_subnet_group.name,
         )
+        if not dsg_resp["Success"]:
+            return {"SubnetIds": []}
+        dsg = dsg_resp["Response"]
         return {
             "SubnetIds": [
                 s["SubnetIdentifier"] for s in dsg["DBSubnetGroups"][0]["Subnets"]

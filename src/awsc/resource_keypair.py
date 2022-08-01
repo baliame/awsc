@@ -108,18 +108,23 @@ class KeyPairCreateDialog(SessionAwareDialog):
             self.error_label.text = "Filename cannot contain path separators."
             return
 
-        try:
-            resp = Common.Session.service_provider("ec2").create_key_pair(
-                KeyName=self.name_field.text
-            )
+        resps = Common.generic_api_call(
+            "ec2",
+            "create_key_pair",
+            {"KeyName": self.name_field.text},
+            "Create Keypair",
+            "EC2",
+            success_template="Creating keypair {0}",
+            resource=self.name_field.text,
+        )
+        if resps["Success"]:
+            resp = resps["Response"]
             data = resp["KeyMaterial"]
             with (self.dotssh / self.save_as_field.text).open("w") as f:
                 f.write(data)
             Common.Session.set_keypair_association(
                 resp["KeyPairId"], self.save_as_field.text
             )
-        except Exception as e:
-            Common.Session.set_message(str(e), Common.color("message_error"))
 
         super().accept_and_close()
 

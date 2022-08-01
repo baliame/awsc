@@ -12,9 +12,18 @@ from .termui.bar_graph import BarGraph
 from .termui.color import Color, Palette8Bit
 from .termui.control import Border, BorderStyle
 from .termui.dialog import DialogControl
+import yaml
+import json
+from datetime import datetime, timezone
 
 DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension("100%", "100%-14")
+
+
+def datetime_hack(x):
+    if isinstance(x, datetime.datetime):
+        return x.isoformat()
+    raise TypeError("Unknown type")
 
 
 class BaseChart(BarGraph):
@@ -30,7 +39,7 @@ class BaseChart(BarGraph):
             *args,
             weight=0,
             color=Common.color("generic"),
-            **kwargs
+            **kwargs,
         )
         ret.border = DefaultBorder(cls.prefix, cls.title, ret.title_info())
         return [ret]
@@ -48,7 +57,7 @@ class SessionAwareDialog(DialogControl):
             Dimension("80%|40", "10"),
             caller=caller,
             *args,
-            **kwargs
+            **kwargs,
         )
 
     def __init__(self, *args, caller, **kwargs):
@@ -77,6 +86,7 @@ class SessionAwareDialog(DialogControl):
 class Common:
     Configuration = None
     Session = None
+    _logholder = None
     initialized = False
     init_hooks: Set[Callable[[], None]] = set()
 
@@ -95,6 +105,7 @@ class Common:
             cls.color("info_display_title"),
             cls.color("info_display_value"),
         )
+        cls._logholder = LogHolder()
 
     @classmethod
     def post_initialize(cls):
@@ -135,16 +146,21 @@ class Common:
                 continue
             access = parser[section]["aws_access_key_id"]
             secret = parser[section]["aws_secret_access_key"]
+            api_keypair = {"access": access, "secret": secret}
             try:
-                whoami = cls.Session.service_provider.whoami(
-                    keys={"access": access, "secret": secret}
-                )
+                whoami = cls.Session.service_provider.whoami(keys=api_keypair)
             except exceptions.ClientError as e:
-                print(
-                    "Failed to verify keys for credential {0}: {1}".format(
-                        section, str(e)
-                    ),
-                    file=sys.stderr,
+                cls.clienterror(
+                    e,
+                    "Verify Credentials",
+                    "Bootstrap",
+                    section,
+                    set_message=False,
+                    api_provider="sts",
+                    api_method="get_caller_identity",
+                    api_keypair=api_keypair,
+                    api_args={},
+                    credentials_section=section,
                 )
                 continue
             cls.Configuration.add_or_edit_context(
@@ -193,6 +209,153 @@ class Common:
     def main():
         Common.Session.ui.main()
 
+    @staticmethod
+    def confdir():
+        return Path.home() / ".config" / "awsc"
+
+    @classmethod
+    def log(
+        cls,
+        message,
+        summary,
+        category,
+        message_type,
+        resource=None,
+        set_message=True,
+        **kwargs,
+    ):
+        cls._logholder.log(
+            message,
+            summary,
+            category,
+            message_type,
+            resource=resource,
+            set_message=set_message,
+            **kwargs,
+        )
+
+    @classmethod
+    def error(
+        cls, message, summary, category, resource=None, set_message=True, **kwargs
+    ):
+        cls.log(
+            message,
+            summary,
+            category,
+            "error",
+            resource=resource,
+            set_message=set_message,
+            **kwargs,
+        )
+
+    @classmethod
+    def clienterror(
+        cls, error, summary, category, resource=None, set_message=True, **kwargs
+    ):
+        errtype = error.response["Error"]["Code"]
+        errmsg = error.response["Error"]["Message"]
+        cls.log(
+            errmsg,
+            "AWS: {0}".format(errtype),
+            category,
+            "error",
+            resource=resource,
+            set_message=set_message,
+            **kwargs,
+        )
+
+    @classmethod
+    def success(
+        cls, message, summary, category, resource=None, set_message=True, **kwargs
+    ):
+        cls.log(
+            message,
+            summary,
+            category,
+            "success",
+            resource=resource,
+            set_message=set_message,
+            **kwargs,
+        )
+
+    @classmethod
+    def info(
+        cls, message, summary, category, resource=None, set_message=True, **kwargs
+    ):
+        cls.log(
+            message,
+            summary,
+            category,
+            "info",
+            resource=resource,
+            set_message=set_message,
+            **kwargs,
+        )
+
+    @classmethod
+    def generic_api_call(
+        cls,
+        service,
+        method,
+        api_kwargs,
+        summary,
+        category,
+        success_template=None,
+        resource=None,
+        **kwargs,
+    ):
+        try:
+            response = getattr(cls.Session.service_provider(service), method)(
+                **api_kwargs
+            )
+            if success_template is not None:
+                cls.success(
+                    success_template.format(resource, resource=resource, **api_kwargs),
+                    summary,
+                    category,
+                    resource=resource,
+                    set_message=True,
+                    api_provider=service,
+                    api_method=method,
+                    api_args=api_kwargs,
+                    **kwargs,
+                )
+            return {"Success": True, "Response": response}
+        except exceptions.ClientError as e:
+            cls.clienterror(
+                e,
+                summary,
+                category,
+                resource=resource,
+                set_message=True,
+                api_provider=service,
+                api_method=method,
+                api_args=api_kwargs,
+                **kwargs,
+            )
+            return {"Success": False, "Response": response}
+        except Exception as e:
+            cls.error(
+                str(e),
+                summary,
+                category,
+                resource=resource,
+                set_message=True,
+                api_provider=service,
+                api_method=method,
+                api_args=api_kwargs,
+                **kwargs,
+            )
+            return {
+                "Success": False,
+                "Response": {
+                    "Error": {
+                        "Code": "Python.{0}".format(type(e).__name__),
+                        "Message": str(e),
+                    }
+                },
+            }
+
 
 def DefaultBorder(prefix, title, title_info=None):
     return Border(
@@ -203,3 +366,90 @@ def DefaultBorder(prefix, title, title_info=None):
         title_info,
         Common.color("{0}_border_title_info".format(prefix), "border_title_info"),
     )
+
+
+class LogHolder:
+    def __init__(self):
+        self.raw_entries = []
+        self.control = None
+        self.parse_log_messages()
+
+    def parse_log_messages(self):
+        file = Common.confdir() / "log.yaml"
+        if file.exists():
+            with file.open("r") as f:
+                self.raw_entries = yaml.safe_load(f.read())
+        else:
+            self.raw_entries = []
+        self.parse_raw_entries()
+
+    def parse_raw_entries(self):
+        if self.control is not None:
+            self.control.entries.clear()
+            for entry in self.raw_entries:
+                self.control.add_raw_entry(entry)
+            self.control.sort()
+
+    def write_raw_entries(self):
+        file = Common.confdir() / "log.yaml"
+        limit = Common.Configuration["log_retention"]["max_lines"]
+        if limit > 0:
+            max_idx = limit
+        else:
+            max_idx = len(self.raw_entries)
+        age_limit = Common.Configuration["log_retention"]["max_age"]
+        now = datetime.now(timezone.utc).timestamp()
+        if age_limit > 0:
+            for idx in range(len(self.raw_entries)):
+                if now - self.raw_entries[idx]["timestamp"] > age_limit:
+                    max_idx = idx
+                    break
+
+        self.raw_entries = self.raw_entries[:max_idx]
+
+        with file.open("w") as f:
+            f.write(yaml.dump(self.raw_entries))
+
+    def attach(self, control):
+        self.control = control
+        for entry in self.raw_entries:
+            self.control.add_raw_entry(entry)
+
+    def detach(self):
+        self.control = None
+
+    def add_raw_entry(self, entry):
+        if self.control is not None:
+            self.control.add_raw_entry(entry)
+        self.write_raw_entries()
+
+    def log(
+        self,
+        message,
+        summary,
+        category,
+        message_type,
+        resource=None,
+        set_message=True,
+        **kwargs,
+    ):
+        if set_message:
+            color = "message_info"
+            if message_type == "success":
+                color = "message_success"
+            elif message_type == "error":
+                color = "message_error"
+            Common.Session.set_message(message, Common.color(color))
+        self.raw_entries.insert(
+            0,
+            {
+                "summary": summary,
+                "category": category,
+                "type": message_type,
+                "message": message,
+                "resource": resource,
+                "timestamp": datetime.now(timezone.utc).timestamp(),
+                "context": json.dumps(kwargs, default=datetime_hack),
+            },
+        )
+        self.add_raw_entry(self.raw_entries[0])
