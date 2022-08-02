@@ -57,6 +57,7 @@ class LogLister(ListControl):
             self.add_hotkey("KEY_ENTER", self.describe, "Show full entry")
         self.add_column("type", 12)
         self.add_column("category", 20)
+        self.add_column("subcategory", 20)
         self.add_column("resource", 20)
         self.add_column("timestamp", 20)
         self.logholder = Common._logholder
@@ -68,6 +69,11 @@ class LogLister(ListControl):
                 entry["summary"],
                 **{
                     "category": entry["category"],
+                    "subcategory": entry["subcategory"]
+                    if "subcategory" in entry
+                    and entry["subcategory"] is not None
+                    and entry["subcategory"] != "null"
+                    else "<n/a>",
                     "resource": entry["resource"]
                     if entry["resource"] is not None
                     else "",

@@ -154,7 +154,8 @@ class Common:
                     e,
                     "Verify Credentials",
                     "Bootstrap",
-                    section,
+                    subcategory="Credentials Import",
+                    resource=section,
                     set_message=False,
                     api_provider="sts",
                     api_method="get_caller_identity",
@@ -220,6 +221,7 @@ class Common:
         summary,
         category,
         message_type,
+        subcategory=None,
         resource=None,
         set_message=True,
         **kwargs,
@@ -229,6 +231,7 @@ class Common:
             summary,
             category,
             message_type,
+            subcategory=subcategory,
             resource=resource,
             set_message=set_message,
             **kwargs,
@@ -236,13 +239,21 @@ class Common:
 
     @classmethod
     def error(
-        cls, message, summary, category, resource=None, set_message=True, **kwargs
+        cls,
+        message,
+        summary,
+        category,
+        subcategory=None,
+        resource=None,
+        set_message=True,
+        **kwargs,
     ):
         cls.log(
             message,
             summary,
             category,
             "error",
+            subcategory=subcategory,
             resource=resource,
             set_message=set_message,
             **kwargs,
@@ -250,7 +261,14 @@ class Common:
 
     @classmethod
     def clienterror(
-        cls, error, summary, category, resource=None, set_message=True, **kwargs
+        cls,
+        error,
+        summary,
+        category,
+        subcategory=None,
+        resource=None,
+        set_message=True,
+        **kwargs,
     ):
         errtype = error.response["Error"]["Code"]
         errmsg = error.response["Error"]["Message"]
@@ -259,6 +277,7 @@ class Common:
             "AWS: {0}".format(errtype),
             category,
             "error",
+            subcategory=subcategory,
             resource=resource,
             set_message=set_message,
             **kwargs,
@@ -266,13 +285,21 @@ class Common:
 
     @classmethod
     def success(
-        cls, message, summary, category, resource=None, set_message=True, **kwargs
+        cls,
+        message,
+        summary,
+        category,
+        subcategory=None,
+        resource=None,
+        set_message=True,
+        **kwargs,
     ):
         cls.log(
             message,
             summary,
             category,
             "success",
+            subcategory=subcategory,
             resource=resource,
             set_message=set_message,
             **kwargs,
@@ -280,13 +307,21 @@ class Common:
 
     @classmethod
     def info(
-        cls, message, summary, category, resource=None, set_message=True, **kwargs
+        cls,
+        message,
+        summary,
+        category,
+        subcategory=None,
+        resource=None,
+        set_message=True,
+        **kwargs,
     ):
         cls.log(
             message,
             summary,
             category,
             "info",
+            subcategory=subcategory,
             resource=resource,
             set_message=set_message,
             **kwargs,
@@ -300,6 +335,7 @@ class Common:
         api_kwargs,
         summary,
         category,
+        subcategory=None,
         success_template=None,
         resource=None,
         **kwargs,
@@ -313,6 +349,7 @@ class Common:
                     success_template.format(resource, resource=resource, **api_kwargs),
                     summary,
                     category,
+                    subcategory=subcategory,
                     resource=resource,
                     set_message=True,
                     api_provider=service,
@@ -326,6 +363,7 @@ class Common:
                 e,
                 summary,
                 category,
+                subcategory=subcategory,
                 resource=resource,
                 set_message=True,
                 api_provider=service,
@@ -333,12 +371,13 @@ class Common:
                 api_args=api_kwargs,
                 **kwargs,
             )
-            return {"Success": False, "Response": response}
+            return {"Success": False, "Response": e.response}
         except Exception as e:
             cls.error(
                 str(e),
                 summary,
                 category,
+                subcategory=subcategory,
                 resource=resource,
                 set_message=True,
                 api_provider=service,
@@ -429,6 +468,7 @@ class LogHolder:
         summary,
         category,
         message_type,
+        subcategory=None,
         resource=None,
         set_message=True,
         **kwargs,
@@ -445,6 +485,7 @@ class LogHolder:
             {
                 "summary": summary,
                 "category": category,
+                "subcategory": subcategory,
                 "type": message_type,
                 "message": message,
                 "resource": resource,

@@ -97,6 +97,7 @@ class MetricViewer(BaseChart):
             api_kwargs,
             "Retrieve metrics",
             "Cloudwatch",
+            subcategory="Metrics",
             resource="{0}/{1}".format(self.metric_namespace, self.metric_name),
         )
         if call["Success"]:

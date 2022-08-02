@@ -44,6 +44,7 @@ class EBApplicationResourceLister(ResourceLister):
             api_kwargs,
             "Delete application",
             "Elastic Beanstalk",
+            subcategory="Application",
             success_template="Deleting application {0}",
             resource=self.selection["name"],
         )
@@ -143,6 +144,7 @@ class EBApplicationVersionResourceLister(ResourceLister):
             api_kwargs,
             "Delete appversion",
             "Elastic Beanstalk",
+            subcategory="Application",
             success_template="Deleting application version {0}",
             resource=self.selection["version"],
         )
@@ -247,6 +249,7 @@ class EBEnvironmentLister(ResourceLister):
             api_kwargs,
             "Terminate environment",
             "Elastic Beanstalk",
+            subcategory="Environment",
             success_template="Terminating environment {0}",
             resource=self.selection["name"],
         )
@@ -279,6 +282,7 @@ class EBEnvironmentLister(ResourceLister):
             api_kwargs,
             "Delete envconfig",
             "Elastic Beanstalk",
+            subcategory="Environment",
             success_template="Deleting environment {0} configuration",
             resource=self.selection["name"],
         )
@@ -310,6 +314,7 @@ class EBEnvironmentLister(ResourceLister):
             api_kwargs,
             "Rebuild environment",
             "Elastic Beanstalk",
+            subcategory="Environment",
             success_template="Rebuilding environment {0}",
             resource=self.selection["name"],
         )
@@ -351,6 +356,7 @@ class EBEnvironmentLister(ResourceLister):
             api_kwargs,
             "Swap Cnames",
             "Elastic Beanstalk",
+            subcategory="Environment",
             success_template="Swapping cnames for environments {0}",
             resource="{0}, {1}".format(self.selection["name"], other_env),
         )

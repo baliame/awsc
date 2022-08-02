@@ -39,6 +39,7 @@ class S3ResourceLister(ResourceLister):
             {"Bucket": entry["name"]},
             "Get Bucket Location",
             "S3",
+            subcategory="Bucket",
             resource=entry["name"],
         )
         if loc_resps["Success"]:
@@ -241,6 +242,7 @@ class S3ObjectLister(ResourceLister):
                 {"Bucket": self.bucket, "Key": sp, "Filename": obj, "Callback": fn},
                 "Download File",
                 "S3",
+                subcategory="Object",
                 resource="{0}/{1}".format(self.bucket, sp),
             )
 

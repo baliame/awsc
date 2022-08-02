@@ -85,7 +85,8 @@ class SubnetResourceLister(ResourceLister):
             "describe_db_subnet_groups",
             {"DBSubnetGroupName": self.db_subnet_group.name},
             "Describe DB Subnet Group",
-            "rds",
+            "RDS",
+            subcategory="Subnet Group",
             resource=self.db_subnet_group.name,
         )
         if not dsg_resp["Success"]:

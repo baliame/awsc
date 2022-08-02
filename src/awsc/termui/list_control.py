@@ -303,11 +303,9 @@ class ListEntry:
         up = False
         if self.name != other.name or len(self.columns) != len(other.columns):
             up = True
-            Commons.UIInstance.log("Up because name or col len")
         else:
             for col in self.columns:
                 if col not in other.columns or self.columns[col] != other.columns[col]:
-                    Commons.UIInstance.log("Up because col {0}".format(col))
                     up = True
                     break
         if not up:

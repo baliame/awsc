@@ -7,6 +7,8 @@ from .base_control import (
     DialogFieldResourceListSelector,
     ResourceLister,
     SingleRelationLister,
+    SingleNameDialog,
+    ListResourceDocumentCreator,
 )
 from .common import Common, SessionAwareDialog
 from .termui.alignment import CenterAnchor, Dimension
@@ -26,10 +28,10 @@ class EC2RelatedLister(SingleRelationLister):
         from .resource_ami import AMIDescriber
         from .resource_cfn import CFNDescriber
         from .resource_ebs import EBSDescriber
-        from .resource_ec2_class import InstanceClassDescriber
         from .resource_iam import InstanceProfileDescriber
-        from .resource_sg import SGDescriber
+        from .resource_ec2_class import InstanceClassDescriber
         from .resource_subnet import SubnetDescriber
+        from .resource_sg import SGDescriber
         from .resource_vpc import VPCDescriber
 
         self.resource_key = "ec2"
@@ -149,8 +151,51 @@ class EC2ResourceLister(ResourceLister):
         self.add_hotkey("l", self.new_instance, "Launch new instance")
         self.add_hotkey("m", self.metrics, "Metrics")
         self.add_hotkey("r", self.related, "View related resources")
+        self.add_hotkey(ControlCodes.A, self.create_ami, "Create AMI from instance")
         self.add_hotkey(ControlCodes.S, self.stop_start_instance, "Stop/start instance")
         self.add_hotkey(ControlCodes.D, self.terminate_instance, "Terminate instance")
+
+    def create_ami(self, _):
+        if self.selection is None:
+            return
+        ListResourceDocumentCreator(
+            "ec2",
+            "create_image",
+            None,
+            initial_document={
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "string",
+                        "VirtualName": "string",
+                        "Ebs": {
+                            "DeleteOnTermination": False,
+                            "Iops": 123,
+                            "SnapshotId": "string",
+                            "VolumeSize": 123,
+                            "VolumeType": "gp2",
+                            "KmsKeyId": "string",
+                            "Throughput": 123,
+                            "OutpostArn": "string",
+                            "Encrypted": False,
+                        },
+                        "NoDevice": "string",
+                    },
+                ],
+                "Description": "string",
+                "Name": "string",
+                "NoReboot": True,
+                "TagSpecifications": [
+                    {
+                        "ResourceType": "capacity-reservation",
+                        "Tags": [
+                            {"Key": "string", "Value": "string"},
+                        ],
+                    },
+                ],
+            },
+            as_json=["BlockDeviceMappings", "TagSpecifications"],
+            static_fields={"InstanceId": self.selection["instance id"]},
+        ).edit()
 
     def stop_start_instance(self, _):
         if self.selection is not None:
@@ -222,9 +267,10 @@ class EC2ResourceLister(ResourceLister):
             "ec2",
             "start_instances",
             api_kwargs,
-            "Starting instance {0}",
             "Start instance",
             "EC2",
+            subcategory="Instance",
+            success_template="Starting instance {0}",
             resource=self.selection["instance id"],
         )
         self.refresh_data()
@@ -239,9 +285,10 @@ class EC2ResourceLister(ResourceLister):
             "ec2",
             "stop_instances",
             api_kwargs,
-            "Stopping instance {0}",
             "Stop instance",
             "EC2",
+            subcategory="Instance",
+            success_template="Stopping instance {0}",
             resource=self.selection["instance id"],
         )
         self.refresh_data()
@@ -256,9 +303,10 @@ class EC2ResourceLister(ResourceLister):
             "ec2",
             "terminate_instances",
             api_kwargs,
-            "Terminating instance {0}",
             "Terminate instance",
             "EC2",
+            subcategory="Instance",
+            success_template="Terminating instance {0}",
             resource=self.selection["instance id"],
         )
         self.refresh_data()
@@ -282,6 +330,7 @@ class EC2ResourceLister(ResourceLister):
             {"KeyNames": self.selection["key name"]},
             "Describe Key Pair",
             "EC2",
+            subcategory="Key Pair",
             resource=self.selection["instance id"],
         )
         if kpr["Success"]:
@@ -429,9 +478,9 @@ class EC2SSHDialog(SessionAwareDialog):
                 "ec2-instance-connect",
                 "send_ssh_public_key",
                 api_kwargs,
-                None,
                 "Instance Connect",
                 "EC2",
+                subcategory="Instance Connect",
                 resource=self.instance_id,
             )
             if not resp["Success"]:
@@ -582,6 +631,7 @@ class EC2LaunchDialog(SessionAwareDialog):
                     {"GroupIds": self.secgroup_field.text},
                     "Describe Security Group",
                     "EC2",
+                    subcategory="Security Group",
                     resource=self.secgroup_field.text,
                 )
                 if not sgr["Success"]:
@@ -594,6 +644,7 @@ class EC2LaunchDialog(SessionAwareDialog):
                     {"SubnetIds": self.subnet_field.text},
                     "Describe Subnet",
                     "EC2",
+                    subcategory="Subnet",
                     resource=self.subnet_field.text,
                 )
                 if not snr["Success"]:
@@ -614,6 +665,7 @@ class EC2LaunchDialog(SessionAwareDialog):
             api_kwargs,
             "Launch Instance",
             "EC2",
+            subcategory="Instance",
             success_template="Instance {0} is launching",
         )
 

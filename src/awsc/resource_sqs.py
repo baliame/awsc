@@ -40,6 +40,7 @@ class SQSLister(ResourceLister):
             {"QueueUrl": self.selection["url"]},
             "Delete Queue",
             "SQS",
+            subcategory="Queue",
             success_template="Deleting queue {0}",
             resource=self.selection["url"],
         )
@@ -68,6 +69,7 @@ class SQSLister(ResourceLister):
             {"QueueUrl": self.selection["url"]},
             "Purge Queue",
             "SQS",
+            subcategory="Queue",
             success_template="Purging queue {0}",
             resource=self.selection["url"],
         )
@@ -162,6 +164,7 @@ class SQSLister(ResourceLister):
                 {"QueueUrl": url, "AttributeNames": ["All"]},
                 "Get Queue Attributes",
                 "SQS",
+                subcategory="Queue",
                 resource=url,
             )
             if resps["Success"]:

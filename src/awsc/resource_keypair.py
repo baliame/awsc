@@ -114,6 +114,7 @@ class KeyPairCreateDialog(SessionAwareDialog):
             {"KeyName": self.name_field.text},
             "Create Keypair",
             "EC2",
+            subcategory="Key Pair",
             success_template="Creating keypair {0}",
             resource=self.name_field.text,
         )

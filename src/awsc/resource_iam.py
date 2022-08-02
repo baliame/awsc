@@ -145,6 +145,7 @@ class UserLister(ResourceLister):
             },
             "Delete User",
             "IAM",
+            subcategory="User",
             success_template="Deleting user {UserName}",
             resource=self.selection["name"],
         )
@@ -162,6 +163,7 @@ class UserLister(ResourceLister):
             },
             "Attach Managed User Policy",
             "IAM",
+            subcategory="User",
             success_template="Attaching policy {PolicyArn} to user {UserName}",
             resource=self.selection["name"],
         )
@@ -201,6 +203,7 @@ class UserLister(ResourceLister):
             {"UserName": self.selection["name"], "GroupName": group},
             "Add User to Group",
             "IAM",
+            subcategory="User",
             success_template="Adding user {UserName} to group {GroupName}",
             resource=self.selection["name"],
         )
@@ -228,12 +231,72 @@ class UserLister(ResourceLister):
             "iam",
             "remove_user_from_group",
             {"UserName": self.selection["name"], "GroupName": self.group["name"]},
-            "Remove User to Group",
+            "Remove User from Group",
             "IAM",
+            subcategory="User",
             success_template="Removing user {UserName} from group {GroupName}",
             resource=self.selection["name"],
         )
         self.refresh_data()
+
+    def determine_login_profile(self, user):
+        resp = Common.generic_api_call(
+            "iam",
+            "get_login_profile",
+            {"UserName": user},
+            "Get Login Profile",
+            "IAM",
+            subcategory="User",
+            resource=user,
+        )
+        if resp["Success"]:
+            return True
+        return False
+
+    def get_or_create_login_profile(self, _):
+        if self.selection is None:
+            return
+        has_login_profile = self.determine_login_profile(self.selection["name"])
+        if has_login_profile:
+            Common.Session.push_frame(
+                LoginProfileDescriber.opener(
+                    entry=self.selection, caller=self, pushed=True
+                )
+            )
+        else:
+            SingleNameDialog(
+                self.parent,
+                "Create login profile for {0}".format(self.selection["name"]),
+                self.do_create_login_profile,
+                label="Password:",
+                what="password",
+                subject="login profile",
+                default="",
+                caller=self,
+            )
+
+    def do_create_login_profile(self, password):
+        if self.selection is None:
+            return
+        resp = Common.generic_api_call(
+            "iam",
+            "create_login_profile",
+            {
+                "UserName": self.selection["name"],
+                "Password": password,
+                "PasswordResetRequired": True,
+            },
+            "Create Login Profile",
+            "IAM",
+            subcategory="User",
+            resource=self.selection["name"],
+        )
+        if resp["Success"]:
+            Common.Session.push_frame(
+                LoginProfileDescriber.opener(
+                    entry=self.selection, caller=self, pushed=True
+                )
+            )
 
     def __init__(self, *args, group=None, **kwargs):
         self.resource_key = "iam"
@@ -251,7 +314,9 @@ class UserLister(ResourceLister):
             "path": 40,
             "last login": 15,
         }
-        self.hidden_columns = {"arn": ".Arn"}
+        self.hidden_columns = {
+            "arn": ".Arn",
+        }
         self.describe_command = UserDescriber.opener
         self.open_command = "m"
         self.open_selection_arg = "user"
@@ -283,6 +348,9 @@ class UserLister(ResourceLister):
         self.add_hotkey("a", self.attach_policy, "Attach Policy")
         self.add_hotkey("c", self.create_user, "Create User")
         self.add_hotkey("i", self.inliner.attach_inline_policy, "Put Inline Policy")
+        self.add_hotkey(
+            "p", self.get_or_create_login_profile, "Get/Create Login Profile"
+        )
         if self.group is None:
             self.add_hotkey("j", self.add_user_to_group, "Add to Group")
             self.add_hotkey(ControlCodes.D, self.delete_user, "Delete User")
@@ -312,6 +380,50 @@ class UserDescriber(Describer):
         )
 
 
+class LoginProfileDescriber(Describer):
+    prefix = "login_profile_browser"
+    title = "Login Profile"
+
+    def title_info(self):
+        return "User: {0}".format(self.user["name"])
+
+    def __init__(
+        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
+    ):
+        self.user = entry
+        self.resource_key = "iam"
+        self.describe_method = "get_login_profile"
+        self.describe_kwarg_name = "UserName"
+        self.object_path = ".LoginProfile"
+        super().__init__(
+            parent,
+            alignment,
+            dimensions,
+            *args,
+            entry=entry,
+            entry_key=entry_key,
+            **kwargs
+        )
+        self.add_hotkey(
+            ControlCodes.D, self.delete_login_profile, "Delete Login Profile"
+        )
+
+    def delete_login_profile(self, _):
+        resp = Common.generic_api_call(
+            "iam",
+            "delete_login_profile",
+            {
+                "UserName": self.user["name"],
+            },
+            "Delete Login Profile",
+            "IAM",
+            subcategory="User",
+            resource=self.user["name"],
+        )
+        if resp["Success"]:
+            self.close()
+
+
 class GroupLister(ResourceLister):
     prefix = "group_list"
     title = "Groups"
@@ -329,6 +441,7 @@ class GroupLister(ResourceLister):
             {"GroupName": self.selection["name"], "PolicyArn": policy_arn},
             "Attach Managed Group Policy",
             "IAM",
+            subcategory="Group",
             success_template="Attaching policy {PolicyArn} to group {GroupName}",
             resource=self.selection["name"],
         )
@@ -367,6 +480,7 @@ class GroupLister(ResourceLister):
             {"GroupName": name},
             "Create Group",
             "IAM",
+            subcategory="Group",
             success_template="Creating group {GroupName}",
             resource=self.selection["name"],
         )
@@ -395,6 +509,7 @@ class GroupLister(ResourceLister):
             {"GroupName": self.selection["name"]},
             "Delete Group",
             "IAM",
+            subcategory="Group",
             success_template="Deleting group {GroupName}",
             resource=self.selection["name"],
         )
@@ -425,12 +540,13 @@ class GroupLister(ResourceLister):
             {"GroupName": self.selection["name"], "UserName": self.user["name"]},
             "Remove User From Group",
             "IAM",
+            subcategory="Group",
             success_template="Removing user {UserName} from group {GroupName}",
             resource=self.user["name"],
         )
         self.refresh_data()
 
-    def add_user(self, _):
+    def add_user_to_group(self, _):
         if self.selection is None:
             return
         SingleSelectorDialog(
@@ -452,6 +568,7 @@ class GroupLister(ResourceLister):
             {"GroupName": self.selection["name"], "UserName": user},
             "Add User to Group",
             "IAM",
+            subcategory="Group",
             success_template="Adding user {UserName} to group {GroupName}",
             resource=self.selection["name"],
         )
@@ -615,6 +732,7 @@ class PolicyLister(ResourceLister):
             {"PolicyArn": self.selection["arn"]},
             "Delete Policy",
             "IAM",
+            subcategory="Policy",
             success_template="Deleting policy {PolicyArn}",
             resource=self.selection["name"],
         )
@@ -671,6 +789,7 @@ class PolicyLister(ResourceLister):
             {"PolicyArn": self.selection["arn"], arg_name: arg_value},
             "Detach {0} Policy".format(resource.capitalize()),
             "IAM",
+            subcategory="Policy",
             success_template="Detaching policy {PolicyArn} from {resource}",
             resource="{0} {1}".format(resource, arg_value),
         )
@@ -953,6 +1072,7 @@ class RoleLister(ResourceLister):
             {"PolicyArn": policy_arn, "RoleName": self.selection["name"]},
             "Attach Managed Role Policy",
             "IAM",
+            subcategory="Role",
             success_template="Attaching policy {PolicyArn} to role {RoleName}",
             resource=self.selection["name"],
         )
@@ -992,6 +1112,7 @@ class RoleLister(ResourceLister):
             {"InstanceProfileName": ip, "RoleName": self.selection["name"]},
             "Add Role to Instance Profile",
             "IAM",
+            subcategory="Role",
             success_template="Adding role {RoleName} to instance profile {InstanceProfileName}",
             resource=self.selection["name"],
         )
@@ -1024,6 +1145,7 @@ class RoleLister(ResourceLister):
             },
             "Remove Role from Instance Profile",
             "IAM",
+            subcategory="Role",
             success_template="Removing role {RoleName} from instance profile {InstanceProfileName}",
             resource=self.selection["name"],
         )
@@ -1050,6 +1172,7 @@ class RoleLister(ResourceLister):
             {"RoleName": self.selection["name"]},
             "Delete Role",
             "IAM",
+            subcategory="Role",
             success_template="Deleting role {RoleName}",
             resource=self.selection["name"],
         )
@@ -1183,6 +1306,7 @@ class InstanceProfileLister(ResourceLister):
             {"InstanceProfileName": self.selection["name"], "RoleName": role},
             "Add Role to Instance Profile",
             "IAM",
+            subcategory="Role",
             success_template="Adding role {RoleName} to instance profile {InstanceProfileName}",
             resource=self.selection["name"],
         )
@@ -1216,6 +1340,7 @@ class InstanceProfileLister(ResourceLister):
             },
             "Remove Role from Instance Profile",
             "IAM",
+            subcategory="Instance Profile",
             success_template="Removing to role {RoleName} from instance profile {InstanceProfileName}",
             resource=self.selection["name"],
         )
@@ -1244,6 +1369,7 @@ class InstanceProfileLister(ResourceLister):
             },
             "Delete Instance Profile",
             "IAM",
+            subcategory="Instance Profile",
             success_template="Deleting instance profile {InstanceProfileName}",
             resource=self.selection["name"],
         )

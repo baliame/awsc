@@ -112,6 +112,7 @@ class R53RecordLister(ResourceLister):
                     },
                     "Edit DNS record",
                     "Route53",
+                    subcategory="Hosted Zone",
                     success_template="Modified DNS entry for zone {0}",
                     resource=self.selection["hosted_zone_id"],
                 )

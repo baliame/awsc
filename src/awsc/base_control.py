@@ -1143,7 +1143,7 @@ class DeleteResourceDialog(SessionAwareDialog):
         from_what_name=None,
         undoable=False,
         can_force=False,
-        extra_fields=[],
+        extra_fields={},
         **kwargs
     ):
         kwargs["ok_action"] = self.accept_and_close
@@ -1249,6 +1249,7 @@ class ListResourceDocumentEditor:
         entry_key="name",
         entry_name_arg_update=None,
         as_json=True,
+        message="Update successful",
     ):
         """
         Initializes a ListResourceDocumentEditor.
@@ -1267,6 +1268,8 @@ class ListResourceDocumentEditor:
                     representation via json.dumps before passing. For a ListResourceDocumentEditor, this only affects the root object.
         """
         self.provider = Common.Session.service_provider(provider)
+        self.provider_name = provider
+        self.retrieve_method = retrieve_method
         if retrieve_method is not None:
             self.retrieve = getattr(self.provider, retrieve_method)
         if update_method is not None:
@@ -1280,6 +1283,8 @@ class ListResourceDocumentEditor:
             else entry_name_arg
         )
         self.as_json = as_json
+        self.update_method = update_method
+        self.message = message
 
     def retrieve_content(self, selection):
         r_kwargs = {self.retrieve_entry_name_arg: self.selection[self.entry_key]}
@@ -1304,20 +1309,38 @@ class ListResourceDocumentEditor:
                 else newcontent,
             }
             self.update(**u_kwargs)
-            Common.Session.set_message(
-                "Update successful", Common.color("message_success")
+            Common.success(
+                self.message,
+                self.update_method,
+                self.provider_name.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.update_method,
             )
         except json.JSONDecodeError as e:
-            Common.Session.set_message(
-                "JSON parse error: {0}".format(str(e)), Common.color("message_error")
+            Common.error(
+                "JSON decode error: {0}".format(str(e)),
+                self.update_method,
+                self.provider_name.capitalize(),
+                raw=newcontent,
             )
         except botoerror.ClientError as e:
-            Common.Session.set_message(
-                "AWS API call error: {0}".format(str(e)), Common.color("message_error")
+            Common.clienterror(
+                e,
+                self.update_method,
+                self.provider.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.update_method,
             )
         except botoerror.ParamValidationError as e:
-            Common.Session.set_message(
-                "Validation error: {0}".format(str(e)), Common.color("message_error")
+            Common.error(
+                "Parameter validation error: {0}".format(str(e)),
+                self.update_method,
+                self.provider.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.update_method,
             )
 
     def edit(self, selection):
@@ -1364,6 +1387,9 @@ class ListResourceDocumentCreator(ListResourceDocumentEditor):
         self.initial_document = initial_document
         self.golden = self.display_content(self.initial_document)
         self.static_fields = static_fields
+        self.create_method = create_method
+        self.provider_name = provider
+        self.message = message
 
     def retrieve_content(self, selection):
         from copy import deepcopy
@@ -1402,14 +1428,31 @@ class ListResourceDocumentCreator(ListResourceDocumentEditor):
             u_kwargs[field] = self.static_fields[field]
         try:
             self.update(**u_kwargs)
-            Common.Session.set_message(self.message, Common.color("message_success"))
+            Common.success(
+                self.message,
+                self.create_method,
+                self.provider_name.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.create_method,
+            )
         except botoerror.ClientError as e:
-            Common.Session.set_message(
-                "AWS API call error: {0}".format(str(e)), Common.color("message_error")
+            Common.clienterror(
+                e,
+                self.create_method,
+                self.provider_name.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.create_method,
             )
         except botoerror.ParamValidationError as e:
-            Common.Session.set_message(
-                "Validation error: {0}".format(str(e)), Common.color("message_error")
+            Common.error(
+                "Parameter validation error: {0}".format(str(e)),
+                self.create_method,
+                self.provider_name.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.create_method,
             )
 
     def edit(self, selection=None):
