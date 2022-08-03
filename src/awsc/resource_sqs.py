@@ -137,9 +137,7 @@ class SQSLister(ResourceLister):
             "url": 80,
             "available": 9,
         }
-        self.hidden_columns = {
-            "arn": self.determine_queue_arn,
-        }
+        self.hidden_columns = {"arn": self.determine_queue_arn, "name": "."}
         self.describe_command = SQSDescriber.opener
 
         self.imported_column_order = ["url", "available"]

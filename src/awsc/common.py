@@ -104,6 +104,7 @@ class Common:
             cls.Configuration,
             cls.color("info_display_title"),
             cls.color("info_display_value"),
+            cls,
         )
         cls._logholder = LogHolder()
 

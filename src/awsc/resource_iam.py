@@ -409,6 +409,20 @@ class LoginProfileDescriber(Describer):
         )
 
     def delete_login_profile(self, _):
+        DeleteResourceDialog(
+            self.parent,
+            CenterAnchor(0, 0),
+            Dimension("80%|40", "10"),
+            caller=self,
+            resource_type="login profile",
+            resource_identifier=self.user["name"],
+            from_what="user",
+            from_what_name=self.user["name"],
+            callback=self.do_delete_login_profile,
+            action_name="Delete",
+        )
+
+    def do_delete_login_profile(self, *args, **kwargs):
         resp = Common.generic_api_call(
             "iam",
             "delete_login_profile",
@@ -419,9 +433,10 @@ class LoginProfileDescriber(Describer):
             "IAM",
             subcategory="User",
             resource=self.user["name"],
+            success_template="Deleting login profile for {UserName}",
         )
         if resp["Success"]:
-            self.close()
+            Common.Session.pop_frame()
 
 
 class GroupLister(ResourceLister):

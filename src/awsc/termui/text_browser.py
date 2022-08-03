@@ -21,13 +21,16 @@ class JsonHighlighter:
         return Color(Palette8Bit(), c["foreground"], background=c["background"])
 
     def __call__(self, browser, lines):
+        import sys
+
         joined = "\n".join(lines)
         lexer = JsonLexer(tabsize=2, stripnl=False, stripall=False)
         tokens = lexer.get_tokens(joined)
         current_line = []
         result_lines = []
         for token in tokens:
-            if token[0] is Token.Text:
+            print("Token: {0}".format(token), file=sys.stderr)
+            if token[0] in Token.Text:
                 brk = token[1].split("\n")
                 while len(brk) > 1:
                     current_line.append(
@@ -261,7 +264,13 @@ class TextBrowser(Control):
         pyperclip.copy(self.raw())
 
     def paint(self):
+        import sys
+
         super().paint()
+        print(
+            "Lines ({0}): {1}".format(len(self.display_lines), self.display_lines),
+            file=sys.stderr,
+        )
         c = self.corners()
         y = c[1][0] + (0 if self.border is None else 1)
         y1 = c[1][1] - (0 if self.border is None else 1)

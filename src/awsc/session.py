@@ -21,7 +21,7 @@ class Session:
             self.jqc[stmt] = jq.compile(stmt)
         return self.jqc[stmt]
 
-    def __init__(self, config, highlight_color, generic_color):
+    def __init__(self, config, highlight_color, generic_color, common):
         self.jqc = {}
         self.ui = UI()
         self.config = config
@@ -76,6 +76,7 @@ class Session:
         self.filterer = None
         self.commander = None
         self.commander_options = {}
+        self.common = common
 
         self.set_version_information()
 
@@ -164,7 +165,13 @@ class Session:
     def remove_from_frame(self, control):
         if hasattr(control, "on_close"):
             control.on_close()
-        self.stack_frame.remove(control)
+        try:
+            self.stack_frame.remove(control)
+        except ValueError as e:
+            for elem in reversed(self.stack):
+                if control in elem:
+                    elem.remove(control)
+                    return
         self.ui.dirty = True
 
     def tick(self):
