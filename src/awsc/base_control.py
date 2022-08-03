@@ -165,6 +165,14 @@ class ResourceListerBase(ListControl):
         try:
             provider = Common.Session.service_provider(resource_key)
         except KeyError:
+            Common.error(
+                "boto3 does not recognize provider",
+                "Invalid provider",
+                "Core",
+                subcategory="ResourceListerBase",
+                api_provider=self.resource_key,
+                classname=type(self).__name__,
+            )
             return
         if callable(list_kwargs):
             list_kwargs = list_kwargs()
@@ -176,7 +184,20 @@ class ResourceListerBase(ListControl):
             it_list_kwargs = list_kwargs.copy()
             if next_marker is not None and next_marker_arg is not None:
                 it_list_kwargs[next_marker_arg] = next_marker
-            response = getattr(provider, list_method)(**it_list_kwargs)
+            try:
+                response = getattr(provider, list_method)(**it_list_kwargs)
+            except botoerror.ClientError as e:
+                Common.clienterror(
+                    e,
+                    "List Resources",
+                    "Core",
+                    subcategory="ResourceListerBase",
+                    api_provider=resource_key,
+                    api_method=list_method,
+                    api_kwargs=it_list_kwargs,
+                )
+                # pylint: disable=raise-missing-from # StopLoadingData is a special exception to stop this generator from being used.
+                raise StopLoadingData
 
             it = (
                 Common.Session.jq(item_path)
@@ -185,16 +206,15 @@ class ResourceListerBase(ListControl):
             )
             if it is None:
                 Common.error(
-                    "get_data_generic returned None for {0}.{1}({2}) on path {3}\nAPI response was:\n{4}".format(
-                        resource_key,
-                        list_method,
-                        list_kwargs,
-                        item_path,
-                        json.dumps(response, default=datetime_hack),
-                    ),
+                    "get_data_generic returned None",
                     "Get Data Generic returned None",
                     "Core",
                     set_message=False,
+                    api_provider=resource_key,
+                    api_method=list_method,
+                    api_kwargs=list_kwargs,
+                    item_path=item_path,
+                    api_response=response,
                 )
                 return []
 
@@ -241,30 +261,6 @@ class ResourceListerBase(ListControl):
 
     def empty(self, _):
         return ""
-
-
-class DialogFieldButton(DialogField):
-    def __init__(self, text, action, color=ColorGold, selected_color=ColorBlackOnGold):
-        super().__init__()
-        self.highlightable = True
-        self.text = text
-        self.color = color
-        self.selected_color = selected_color
-        self.centered = True
-        self.action = action
-
-    def input(self, inkey):
-        if inkey.is_sequence and inkey.name == "KEY_ENTER":
-            self.action()
-            Commons.UIInstance.dirty = True
-        return True
-
-    def paint(self, x0, x1, y, selected=False):
-        x = x0
-        if self.centered:
-            textlen = len(self.text) + 4
-            w = x1 - x0 + 1
-            x = int(w / 2) - int(textlen / 2) + x0
 
 
 class DialogFieldResourceListSelector(DialogField):
@@ -793,8 +789,28 @@ class SingleRelationLister(ResourceListerBase):
             try:
                 provider = Common.Session.service_provider(self.resource_key)
             except KeyError:
+                Common.error(
+                    "boto3 does not recognize provider",
+                    "Invalid provider",
+                    "Core",
+                    subcategory="SingleRelationLister",
+                    api_provider=self.resource_key,
+                    classname=type(self).__name__,
+                )
                 return
-            resp = getattr(provider, self.describe_method)(**self.describe_kwargs)
+            try:
+                resp = getattr(provider, self.describe_method)(**self.describe_kwargs)
+            except botoerror.ClientError as e:
+                Common.clienterror(
+                    e,
+                    "List Resources",
+                    "Core",
+                    subcategory="SingleRelationLister",
+                    api_provider=self.resource_key,
+                    api_method=self.describe_method,
+                    api_kwargs=self.describe_kwargs,
+                )
+                return
             self.descriptor = (
                 Common.Session.jq(self.object_path)
                 .input(text=json.dumps(resp, default=datetime_hack))
@@ -1109,13 +1125,31 @@ class Describer(TextBrowser):
         )
 
     def refresh_data(self, *args, **kwargs):
-        pass
-
         try:
             provider = Common.Session.service_provider(self.resource_key)
         except KeyError:
+            Common.error(
+                "boto3 does not recognize provider",
+                "Invalid provider",
+                "Core",
+                subcategory="Describer",
+                api_provider=self.resource_key,
+                classname=type(self).__name__,
+            )
             return
-        response = getattr(provider, self.describe_method)(**self.describe_kwargs)
+        try:
+            response = getattr(provider, self.describe_method)(**self.describe_kwargs)
+        except botoerror.ClientError as e:
+            Common.clienterror(
+                e,
+                "List Resources",
+                "Core",
+                subcategory="Describer",
+                api_provider=self.resource_key,
+                api_method=self.describe_method,
+                api_kwargs=self.describe_kwargs,
+            )
+            return
         self.clear()
         self.add_text(
             json.dumps(

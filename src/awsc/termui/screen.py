@@ -1,10 +1,14 @@
 class Character:
     def __init__(self):
         self.value = " "
-        self.color = None
+        self.color = Character.nullcolor
         self.bold = False
         self.out = " "
         self.dirty = False
+
+    @staticmethod
+    def nullcolor(x, **kwargs):
+        return x
 
     def clear(self):
         self.out = "\033[38;5;220m \033[0m"

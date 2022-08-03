@@ -210,6 +210,7 @@ class DialogControl(Control):
         parent,
         alignment,
         dimensions,
+        *args,
         ok_action=None,
         cancel_action=None,
         background_color=None,
@@ -217,7 +218,6 @@ class DialogControl(Control):
         cancel_text="Cancel",
         color=ColorGold,
         selected_color=ColorBlackOnGold,
-        *args,
         **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
@@ -257,8 +257,8 @@ class DialogControl(Control):
                 self.highlighted = i
                 break
 
-    def input(self, inkey):
-        if inkey == "\t":
+    def input(self, key):
+        if key == "\t":
             orig = self.highlighted
             while True:
                 self.highlighted += 1
@@ -270,7 +270,7 @@ class DialogControl(Control):
                     break
             Commons.UIInstance.dirty = True
             return True
-        elif inkey.is_sequence and inkey.name == "KEY_BTAB":
+        elif key.is_sequence and key.name == "KEY_BTAB":
             orig = self.highlighted
             while True:
                 self.highlighted -= 1
@@ -282,7 +282,7 @@ class DialogControl(Control):
                     break
             Commons.UIInstance.dirty = True
             return True
-        self.fields[self.highlighted].input(inkey)
+        self.fields[self.highlighted].input(key)
         return True  # Modals should prevent input from being piped to others.
 
     def paint(self):

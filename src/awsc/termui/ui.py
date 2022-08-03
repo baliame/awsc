@@ -84,6 +84,7 @@ class UI:
         self.mutex = threading.Lock()
         self.input_buffer = []
         self.dirty = False
+        self.restore = None
 
     def filecache(self, obj, cb, *args, **kwargs):
         if self.cache_dir is None:
@@ -182,7 +183,9 @@ class UI:
 
     def unraw(self, cmd, *args, **kwargs):
         # termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
+        # pylint: disable=protected-access
         termios.tcsetattr(self.term._keyboard_fd, termios.TCSANOW, self.restore)
+        # pylint: disable=protected-access
         self.term._line_buffered = True
         self.term.stream.write(self.term.normal_cursor)
         self.term.stream.flush()
@@ -196,7 +199,9 @@ class UI:
             self.term.stream.flush()
             self.term.stream.write(self.term.hide_cursor)
             self.term.stream.flush()
+            # pylint: disable=protected-access
             tty.setraw(self.term._keyboard_fd, termios.TCSANOW)
+            # pylint: disable=protected-access
             self.term._line_buffered = False
 
     def buffer_input(self):
@@ -225,7 +230,7 @@ class UI:
             self.mutex.release()
 
     def main(self):
-        global FrameRate
+        # pylint: disable=protected-access
         self.restore = termios.tcgetattr(self.term._keyboard_fd)
         try:
             with self.term.fullscreen():

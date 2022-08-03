@@ -1,3 +1,5 @@
+from typing import Callable
+
 from .termui.common import Commons
 from .termui.control import Control
 from .termui.dialog import DialogControl
@@ -10,30 +12,32 @@ class InfoDisplay(Control):
         parent,
         alignment,
         dimensions,
-        info=[],
+        *args,
+        info=None,
         cols=2,
         highlight_color=None,
         generic_color=None,
-        *args,
         **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
         self.info = {}
-        self.order = info[:]
+        self.order = info[:] if info is not None else []
         self.special_colors = {}
         for k in info:
             self.info[k] = None
         self.cols = cols
         self.highlight_color = highlight_color
         self.generic_color = generic_color
-        self.commander_hook = None
-        self.filterer_hook = None
+        self.commander_hook: Callable[[], None] = None
+        self.filterer_hook: Callable[[], None] = None
 
-    def input(self, inkey):
-        if inkey == ":" and self.commander_hook is not None:
+    def input(self, key):
+        if key == ":" and self.commander_hook is not None:
+            # pylint: disable=not-callable # Member is callable or None, and check asserts that it is not None
             self.commander_hook()
             return True
-        if inkey == "/" and self.filterer_hook is not None:
+        if key == "/" and self.filterer_hook is not None:
+            # pylint: disable=not-callable # Member is callable or None, and check asserts that it is not None
             self.filterer_hook()
             return True
         return False
@@ -101,7 +105,7 @@ class InfoDisplay(Control):
 
 
 class NeutralDialog(DialogControl):
-    def input(self, inkey):
+    def input(self, key):
         return False
 
 
@@ -153,11 +157,11 @@ class HotkeyDisplay(Control):
         alignment,
         dimensions,
         holder,
+        *args,
         session=None,
         cols=2,
         highlight_color=None,
         generic_color=None,
-        *args,
         **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)

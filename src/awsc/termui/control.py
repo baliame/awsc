@@ -5,7 +5,9 @@ from .common import Commons
 
 
 class BorderStyle:
-    def __init__(self, chars=["-", "|", "-", "-", "-", "-"]):
+    def __init__(self, chars=None):
+        if chars is None:
+            chars = ["-", "|", "-", "-", "-", "-"]
         self.chars = chars
 
     @property
@@ -145,13 +147,15 @@ class Control(Block):
         parent,
         alignment,
         dimensions,
+        *args,
         weight=0,
         tag="default",
         border=None,
-        *args,
         **kwargs
     ):
-        super().__init__(parent, alignment, dimensions, weight, tag, *args, **kwargs)
+        super().__init__(
+            parent, alignment, dimensions, *args, weight=weight, tag=tag, **kwargs
+        )
         self.border = border
         self.thread_share = {}
         self.mutex = threading.Lock()

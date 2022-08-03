@@ -84,7 +84,7 @@ class SessionAwareDialog(DialogControl):
 
 
 class Common:
-    Configuration = None
+    Configuration = {}
     Session = None
     _logholder = None
     initialized = False

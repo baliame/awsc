@@ -31,7 +31,7 @@ class SQSLister(ResourceLister):
             action_name="Delete",
         )
 
-    def do_delete(self, force, terminate_resources_field, **kwargs):
+    def do_delete(self, **kwargs):
         if self.selection is None:
             return
         Common.generic_api_call(

@@ -11,10 +11,10 @@ class ListControl(Control):
         parent,
         alignment,
         dimensions,
+        *args,
         color=ColorGold,
         selection_color=ColorBlackOnGold,
         title_color=ColorBlackOnOrange,
-        *args,
         **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)

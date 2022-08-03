@@ -1,4 +1,7 @@
 import pyperclip
+
+# TODO: Figure out why this is a false positive.
+# pylint: disable=no-name-in-module # I mean this is dangerous but I am getting a false positive here...
 from pygments.lexers import JsonLexer
 from pygments.token import Token
 
@@ -16,7 +19,7 @@ class JsonHighlighter:
     def _get_scheme_color(self, browser, color_name):
         try:
             c = browser.scheme["colors"][color_name]
-        except KeyError as e:
+        except KeyError:
             return browser.color
         return Color(Palette8Bit(), c["foreground"], background=c["background"])
 
@@ -80,11 +83,11 @@ class TextBrowser(Control):
         parent,
         alignment,
         dimensions,
+        *args,
         color=ColorGold,
         filtered_color=ColorBlackOnGold,
         scheme=None,
         syntax_highlighting=False,
-        *args,
         **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)

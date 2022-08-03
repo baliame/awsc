@@ -3,7 +3,7 @@ from .common import Commons
 
 class Block:
     def __init__(
-        self, parent, alignment, dimensions, weight=0, tag="default", *args, **kwargs
+        self, parent, alignment, dimensions, *args, weight=0, tag="default", **kwargs
     ):
         self.blocks = []
         self.weight = weight
@@ -73,7 +73,7 @@ class Block:
     def remove_block(self, block):
         try:
             self.blocks.remove(block)
-        except:
+        except ValueError:
             pass
 
     def input(self, key):

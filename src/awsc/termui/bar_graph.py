@@ -15,9 +15,9 @@ class BarGraph(Control):
         parent,
         alignment,
         dimensions,
+        *args,
         color=ColorGold,
         highlight_color=ColorDarkGreen,
-        *args,
         **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
