@@ -3,7 +3,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Set, Union, Any, Dict
+from typing import Any, Callable, Dict, Set, Union
 
 import yaml
 from botocore import exceptions
@@ -68,11 +68,11 @@ class SessionAwareDialog(DialogControl):
         kwargs["cancel_action"] = self.close
         super().__init__(*args, **kwargs)
 
-    def input(self, inkey):
-        if inkey.is_sequence and inkey.name == "KEY_ESCAPE":
+    def input(self, key):
+        if key.is_sequence and key.name == "KEY_ESCAPE":
             self.close()
             return True
-        return super().input(inkey)
+        return super().input(key)
 
     def accept_and_close(self):
         self.close()
@@ -373,6 +373,7 @@ class Common:
                 **kwargs,
             )
             return {"Success": False, "Response": e.response}
+        # pylint: disable=broad-except # Anything else that may occur is irrelevant and should just get logged and thrown back as an error.
         except Exception as e:
             cls.error(
                 str(e),
