@@ -3,7 +3,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Set
+from typing import Callable, Set, Union, Any, Dict
 
 import yaml
 from botocore import exceptions
@@ -84,7 +84,7 @@ class SessionAwareDialog(DialogControl):
 
 
 class Common:
-    Configuration = {}
+    Configuration: Union[Config, Dict[Any, Any]] = {}
     Session = None
     _logholder = None
     initialized = False
