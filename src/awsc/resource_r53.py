@@ -220,7 +220,7 @@ class R53RecordLister(ResourceLister):
         R53RecordCreator(self.r53_entry["id"]).edit()
         self.refresh_data()
 
-    # TODO: Use new editor class if possible.
+    # TODO: Use new editor class if possible, or make one like create
     def edit(self, _):
         if self.selection is not None:
             raw = self.selection.controller_data
