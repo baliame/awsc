@@ -62,7 +62,7 @@ class R53ResourceLister(ResourceLister):
                     "VPCRegion": "",
                     "VPCId": "",
                 },
-                "CallerReference": datetime.now().isoformat(),
+                "CallerReference": datetime.datetime.now().isoformat(),
                 "HostedZoneConfig": {
                     "Comment": "",
                     "PrivateZone": False,
