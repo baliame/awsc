@@ -7,7 +7,6 @@ from .base_control import (
     DialogFieldResourceListSelector,
     ListResourceDocumentCreator,
     ResourceLister,
-    SingleNameDialog,
     SingleRelationLister,
 )
 from .common import Common, SessionAwareDialog
@@ -113,7 +112,7 @@ class EC2ResourceLister(ResourceLister):
                     }
                 ]
             }
-            self.title_info_data = "ASG: {0}".format(kwargs["asg"]["name"])
+            self.title_info_data = f"ASG: {kwargs['asg']['name']}"
         self.item_path = "[.Reservations[].Instances[]]"
         self.column_paths = {
             "instance id": ".InstanceId",
@@ -324,7 +323,7 @@ class EC2ResourceLister(ResourceLister):
         if self.selection is None:
             return
         key = Common.Session.ssh_key
-        kpr = Common.generic_api_call(
+        keypair_call = Common.generic_api_call(
             "ec2",
             "describe_key_pairs",
             {"KeyNames": self.selection["key name"]},
@@ -333,16 +332,16 @@ class EC2ResourceLister(ResourceLister):
             subcategory="Key Pair",
             resource=self.selection["instance id"],
         )
-        if kpr["Success"]:
-            kp = kpr["Response"]
-            if len(kp["KeyPairs"]) > 0:
+        if keypair_call["Success"]:
+            keypair_response = keypair_call["Response"]
+            if len(keypair_response["KeyPairs"]) > 0:
                 assoc = Common.Session.get_keypair_association(
-                    kp["KeyPairs"][0]["KeyPairId"]
+                    keypair_response["KeyPairs"][0]["KeyPairId"]
                 )
                 if assoc != "":
                     key = assoc
-        p = Path.home() / ".ssh" / key
-        if not p.exists():
+        path = Path.home() / ".ssh" / key
+        if not path.exists():
             Common.Session.set_message(
                 "Selected SSH key does not exist", Common.color("message_error")
             )
@@ -376,7 +375,7 @@ class EC2Describer(Describer):
         entry,
         *args,
         entry_key="instance id",
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "ec2"
         self.describe_method = "describe_instances"
@@ -390,7 +389,7 @@ class EC2Describer(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -400,10 +399,10 @@ class EC2SSHDialog(SessionAwareDialog):
         parent,
         alignment,
         dimensions,
+        *args,
         instance_entry=None,
         caller=None,
-        *args,
-        **kwargs
+        **kwargs,
     ):
         kwargs["border"] = Border(
             Common.border("ec2_ssh", "default"),
@@ -457,18 +456,16 @@ class EC2SSHDialog(SessionAwareDialog):
         self.caller = caller
 
     def accept_and_close(self):
-        ph = Path.home() / ".ssh" / Common.Session.ssh_key
-        ph_pub = Path.home() / ".ssh" / "{0}.pub".format(Common.Session.ssh_key)
+        path = Path.home() / ".ssh" / Common.Session.ssh_key
+        path_pub = Path.home() / ".ssh" / f"{Common.Session.ssh_key}.pub"
         if self.use_instance_connect:
-            if not ph_pub.exists():
+            if not path_pub.exists():
                 Common.Session.set_message(
-                    'Public key "{0}.pub" does not exist in ~/.ssh'.format(
-                        Common.Session.ssh_key
-                    ),
+                    f'Public key "{Common.Session.ssh_key}.pub" does not exist in ~/.ssh',
                     Common.color("message_error"),
                 )
-            with ph_pub.open("r") as f:
-                pubkey = f.read()
+            with path_pub.open("r") as file:
+                pubkey = file.read()
             api_kwargs = {
                 "InstanceId": self.instance_id,
                 "InstanceOSUser": self.username_textfield.text,
@@ -486,25 +483,23 @@ class EC2SSHDialog(SessionAwareDialog):
             if not resp["Success"]:
                 self.close()
                 return
-        ssh_cmd = "{0}@{1}".format(self.username_textfield.text, self.ip)
+        ssh_cmd = f"{self.username_textfield.text}@{self.ip}"
         Common.info(
-            "SSH to instance: {0}".format(self.ssh_cmd),
+            f"SSH to instance: {ssh_cmd}",
             "SSH to instance",
             "EC2",
             resource=self.instance_id,
         )
-        ex = Common.Session.ui.unraw(
+        exit_code = Common.Session.ui.unraw(
             subprocess.run,
             [
                 "bash",
                 "-c",
-                "ssh -o StrictHostKeyChecking=no -i {0} {1}".format(
-                    str(ph.resolve()), ssh_cmd
-                ),
+                f"ssh -o StrictHostKeyChecking=no -i {path.resolve()} {ssh_cmd}",
             ],
         )
         Common.Session.set_message(
-            "ssh exited with code {0}".format(ex.returncode),
+            f"ssh exited with code {exit_code.returncode}",
             Common.color("message_info"),
         )
         self.close()
@@ -514,7 +509,7 @@ class EC2SSHDialog(SessionAwareDialog):
 
 
 class EC2LaunchDialog(SessionAwareDialog):
-    def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
+    def __init__(self, parent, alignment, dimensions, *args, caller=None, **kwargs):
         from .resource_ami import AMIResourceLister
         from .resource_ec2_class import InstanceClassResourceLister
         from .resource_keypair import KeyPairResourceLister
@@ -625,7 +620,7 @@ class EC2LaunchDialog(SessionAwareDialog):
         if self.subnet_field.text != "":
             api_kwargs["SubnetId"] = self.subnet_field.text
             if self.secgroup_field.text != "":
-                sgr = Common.generic_api_call(
+                secgroup_call = Common.generic_api_call(
                     "ec2",
                     "describe_security_groups",
                     {"GroupIds": self.secgroup_field.text},
@@ -634,11 +629,11 @@ class EC2LaunchDialog(SessionAwareDialog):
                     subcategory="Security Group",
                     resource=self.secgroup_field.text,
                 )
-                if not sgr["Success"]:
+                if not secgroup_call["Success"]:
                     return
-                sg = sgr["Response"]
+                secgroup = secgroup_call["Response"]
 
-                snr = Common.generic_api_call(
+                subnet_call = Common.generic_api_call(
                     "ec2",
                     "describe_subnets",
                     {"SubnetIds": self.subnet_field.text},
@@ -647,11 +642,11 @@ class EC2LaunchDialog(SessionAwareDialog):
                     subcategory="Subnet",
                     resource=self.subnet_field.text,
                 )
-                if not snr["Success"]:
+                if not subnet_call["Success"]:
                     return
-                sn = snr["Response"]
+                subnet = subnet_call["Response"]
 
-                if sg["VpcId"] == sn["VpcId"]:
+                if secgroup["VpcId"] == subnet["VpcId"]:
                     api_kwargs["SecurityGroupIds"] = [self.secgroup_field.text]
                 else:
                     Common.Session.set_message(

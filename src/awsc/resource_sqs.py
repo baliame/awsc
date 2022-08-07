@@ -3,12 +3,9 @@ from .base_control import (
     Describer,
     ListResourceDocumentCreator,
     ResourceLister,
-    SingleRelationLister,
-    SingleSelectorDialog,
 )
 from .common import Common
 from .termui.alignment import CenterAnchor, Dimension
-from .termui.dialog import DialogFieldCheckbox
 from .termui.ui import ControlCodes
 
 
@@ -173,11 +170,11 @@ class SQSLister(ResourceLister):
         except KeyError:
             return "<n/a>"
 
-    def determine_queue_arn(self, v):
-        return self.get_attrib_cache(v, "QueueArn")
+    def determine_queue_arn(self, result):
+        return self.get_attrib_cache(result, "QueueArn")
 
-    def determine_available_messages(self, v):
-        return self.get_attrib_cache(v, "ApproximateNumberOfMessages")
+    def determine_available_messages(self, result):
+        return self.get_attrib_cache(result, "ApproximateNumberOfMessages")
 
 
 class SQSDescriber(Describer):

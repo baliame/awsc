@@ -102,9 +102,9 @@ class EBApplicationDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
-        self.add_hotkey(ControlCodes.D, self.delete_application, "Delete application")
+        # self.add_hotkey(ControlCodes.D, self.delete_application, "Delete application")
 
 
 class EBApplicationVersionResourceLister(ResourceLister):
@@ -200,10 +200,7 @@ class EBApplicationVersionDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
-        )
-        self.add_hotkey(
-            ControlCodes.D, self.delete_application_version, "Delete app version"
+            **kwargs,
         )
 
 
@@ -325,9 +322,7 @@ class EBEnvironmentLister(ResourceLister):
             return
         SingleSelectorDialog(
             self.parent,
-            "Swap CNames of environment '{0}' with other environment".format(
-                self.selection["name"]
-            ),
+            f"Swap CNames of environment '{self.selection['name']}' with other environment",
             "environment",
             "swap",
             EBEnvironmentLister,
@@ -358,7 +353,7 @@ class EBEnvironmentLister(ResourceLister):
             "Elastic Beanstalk",
             subcategory="Environment",
             success_template="Swapping cnames for environments {0}",
-            resource="{0}, {1}".format(self.selection["name"], other_env),
+            resource=f"{self.selection['name']}, {other_env}",
         )
         self.refresh_data()
 
@@ -455,7 +450,7 @@ class EBEnvironmentDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -478,7 +473,7 @@ class EBEnvironmentHealthDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -605,7 +600,7 @@ class EBPlatformBranchDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -620,7 +615,7 @@ class EBPlatformVersionLister(ResourceLister):
 
     def title_info(self):
         if self.branch is not None:
-            return "Branch: {0}".format(self.branch["name"])
+            return f"Branch: {self.branch['name']}"
         return None
 
     def __init__(self, *args, branch=None, **kwargs):
@@ -694,7 +689,7 @@ class EBPlatformVersionDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -761,14 +756,12 @@ class EBInstanceHealthDescriber(Describer):
         *args,
         entry_key="instance id",
         caller=None,
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "elasticbeanstalk"
         self.describe_method = "describe_instances_health"
         self.describe_kwargs = {"EnvironmentName": caller.environment["name"]}
-        self.object_path = ".InstanceList[] | select(.InstanceId=={0})".format(
-            entry[entry_key]
-        )
+        self.object_path = f".InstanceList[] | select(.InstanceId=={entry[entry_key]})"
         super().__init__(
             parent,
             alignment,
@@ -776,5 +769,5 @@ class EBInstanceHealthDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

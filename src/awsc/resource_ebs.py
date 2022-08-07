@@ -41,12 +41,12 @@ class EBSResourceLister(ResourceLister):
         super().__init__(*args, **kwargs)
 
     def determine_size(self, entry):
-        return "{0} GiB".format(entry["Size"])
+        return f"{entry['Size']} GiB"
 
     def determine_attachment(self, entry):
-        for at in entry["Attachments"]:
-            if at["State"] in ("attaching", "attached", "busy"):
-                return at["InstanceId"]
+        for attachment in entry["Attachments"]:
+            if attachment["State"] in ("attaching", "attached", "busy"):
+                return attachment["InstanceId"]
         return ""
 
 
@@ -69,5 +69,5 @@ class EBSDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

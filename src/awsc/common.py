@@ -3,7 +3,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Set, Union
+from typing import Callable, Set
 
 import yaml
 from botocore import exceptions
@@ -41,7 +41,7 @@ class BaseChart(BarGraph):
             color=Common.color("generic"),
             **kwargs,
         )
-        ret.border = DefaultBorder(cls.prefix, cls.title, ret.title_info())
+        ret.border = default_border(cls.prefix, cls.title, ret.title_info())
         return [ret]
 
     def title_info(self):
@@ -84,7 +84,7 @@ class SessionAwareDialog(DialogControl):
 
 
 class Common:
-    Configuration: Union[Config, Dict[Any, Any]] = {}
+    Configuration: Config = Config()
     Session = None
     _logholder = None
     initialized = False
@@ -99,7 +99,6 @@ class Common:
 
     @classmethod
     def initialize(cls):
-        cls.Configuration = Config()
         cls.Session = Session(
             cls.Configuration,
             cls.color("info_display_title"),
@@ -119,11 +118,12 @@ class Common:
         aws_creds = Path.home() / ".aws" / "credentials"
         print("Loading ~/.aws/credentials", file=sys.stderr)
         try:
-            with aws_creds.open("r") as f:
-                creds = f.read()
-        except OSError as e:
+            with aws_creds.open("r", encoding="utf-8") as file:
+                creds = file.read()
+        except OSError as error:
             print(
-                "Failed to open ~/.aws/credentials: {0}".format(str(e)), file=sys.stderr
+                f"Failed to open ~/.aws/credentials: {str(error)}",
+                file=sys.stderr,
             )
             return
         parser = configparser.ConfigParser(default_section="__default")
@@ -131,17 +131,13 @@ class Common:
         for section in parser.sections():
             if "aws_access_key_id" not in parser[section]:
                 print(
-                    "aws_access_key_id missing for credential {0}, skipping".format(
-                        section
-                    ),
+                    f"aws_access_key_id missing for credential {section}, skipping",
                     file=sys.stderr,
                 )
                 continue
             if "aws_secret_access_key" not in parser[section]:
                 print(
-                    "aws_secret_access_key missing for credential {0}, skipping".format(
-                        section
-                    ),
+                    f"aws_secret_access_key missing for credential {section}, skipping",
                     file=sys.stderr,
                 )
                 continue
@@ -150,9 +146,9 @@ class Common:
             api_keypair = {"access": access, "secret": secret}
             try:
                 whoami = cls.Session.service_provider.whoami(keys=api_keypair)
-            except exceptions.ClientError as e:
+            except exceptions.ClientError as error:
                 cls.clienterror(
-                    e,
+                    error,
                     "Verify Credentials",
                     "Bootstrap",
                     subcategory="Credentials Import",
@@ -169,7 +165,7 @@ class Common:
                 section, whoami["Account"], access, secret
             )
             print(
-                "Added {0} context from aws credentials file".format(section),
+                f"Added {section} context from aws credentials file",
                 file=sys.stderr,
             )
 
@@ -179,7 +175,7 @@ class Common:
             raise ValueError("Configuration is not initialized.")
         if name not in Common.Configuration.scheme["colors"]:
             if fallback is None:
-                raise KeyError('Undefined color "{0}"'.format(name))
+                raise KeyError(f'Undefined color "{name}"')
             return Common.color(fallback)
         return Color(
             Palette8Bit(),
@@ -193,7 +189,7 @@ class Common:
             raise ValueError("Configuration is not initialized.")
         if name not in Common.Configuration.scheme["borders"]:
             if fallback is None:
-                raise KeyError('Undefined border "{0}"'.format(name))
+                raise KeyError(f'Undefined border "{name}"')
             return Common.border(fallback)
         border = Common.Configuration.scheme["borders"][name]
         return BorderStyle(
@@ -275,7 +271,7 @@ class Common:
         errmsg = error.response["Error"]["Message"]
         cls.log(
             errmsg,
-            "AWS: {0}".format(errtype),
+            f"AWS: {errtype}",
             category,
             "error",
             subcategory=subcategory,
@@ -347,7 +343,9 @@ class Common:
             )
             if success_template is not None:
                 cls.success(
-                    success_template.format(resource, resource=resource, **api_kwargs),
+                    success_template.format(
+                        resource, resource=resource, **api_kwargs, **kwargs
+                    ),
                     summary,
                     category,
                     subcategory=subcategory,
@@ -359,9 +357,9 @@ class Common:
                     **kwargs,
                 )
             return {"Success": True, "Response": response}
-        except exceptions.ClientError as e:
+        except exceptions.ClientError as error:
             cls.clienterror(
-                e,
+                error,
                 summary,
                 category,
                 subcategory=subcategory,
@@ -372,11 +370,10 @@ class Common:
                 api_args=api_kwargs,
                 **kwargs,
             )
-            return {"Success": False, "Response": e.response}
-        # pylint: disable=broad-except # Anything else that may occur is irrelevant and should just get logged and thrown back as an error.
-        except Exception as e:
+            return {"Success": False, "Response": error.response}
+        except Exception as error:
             cls.error(
-                str(e),
+                str(error),
                 summary,
                 category,
                 subcategory=subcategory,
@@ -391,21 +388,21 @@ class Common:
                 "Success": False,
                 "Response": {
                     "Error": {
-                        "Code": "Python.{0}".format(type(e).__name__),
-                        "Message": str(e),
+                        "Code": f"Python.{type(error).__name__}",
+                        "Message": str(error),
                     }
                 },
             }
 
 
-def DefaultBorder(prefix, title, title_info=None):
+def default_border(prefix, title, title_info=None):
     return Border(
         Common.border("resource_list", "default"),
-        Common.color("{0}_border".format(prefix), "generic_border"),
+        Common.color(f"{prefix}_border", "generic_border"),
         title,
-        Common.color("{0}_border_title".format(prefix), "border_title"),
+        Common.color(f"{prefix}_border_title", "border_title"),
         title_info,
-        Common.color("{0}_border_title_info".format(prefix), "border_title_info"),
+        Common.color(f"{prefix}_border_title_info", "border_title_info"),
     )
 
 
@@ -418,8 +415,8 @@ class LogHolder:
     def parse_log_messages(self):
         file = Common.confdir() / "log.yaml"
         if file.exists():
-            with file.open("r") as f:
-                self.raw_entries = yaml.safe_load(f.read())
+            with file.open("r") as file:
+                self.raw_entries = yaml.safe_load(file.read())
         else:
             self.raw_entries = []
         self.parse_raw_entries()
@@ -432,7 +429,7 @@ class LogHolder:
             self.control.sort()
 
     def write_raw_entries(self):
-        file = Common.confdir() / "log.yaml"
+        file_path = Common.confdir() / "log.yaml"
         limit = Common.Configuration["log_retention"]["max_lines"]
         if limit > 0:
             max_idx = limit
@@ -441,15 +438,15 @@ class LogHolder:
         age_limit = Common.Configuration["log_retention"]["max_age"]
         now = datetime.now(timezone.utc).timestamp()
         if age_limit > 0:
-            for idx in range(len(self.raw_entries)):
-                if now - self.raw_entries[idx]["timestamp"] > age_limit:
+            for idx, raw_entry in enumerate(self.raw_entries):
+                if now - raw_entry["timestamp"] > age_limit:
                     max_idx = idx
                     break
 
         self.raw_entries = self.raw_entries[:max_idx]
 
-        with file.open("w") as f:
-            f.write(yaml.dump(self.raw_entries))
+        with file_path.open("w") as file:
+            file.write(yaml.dump(self.raw_entries))
 
     def attach(self, control):
         self.control = control

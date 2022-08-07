@@ -19,19 +19,19 @@ class BorderStyle:
         return self.chars[1]
 
     @property
-    def TL(self):
+    def topleft(self):
         return self.chars[2]
 
     @property
-    def TR(self):
+    def topright(self):
         return self.chars[3]
 
     @property
-    def BL(self):
+    def bottomleft(self):
         return self.chars[4]
 
     @property
-    def BR(self):
+    def bottomright(self):
         return self.chars[5]
 
 
@@ -64,9 +64,9 @@ class Border:
             if i == corners[1][0]:
                 if self.title is None or self.title_color is None:
                     outer = (
-                        self.style.TL
+                        self.style.topleft
                         + self.style.horizontal * (dimensions[0] - 1)
-                        + self.style.TR
+                        + self.style.topright
                     )
                     Commons.UIInstance.print(
                         outer, xy=(corners[0][0], i), color=self.color
@@ -74,59 +74,59 @@ class Border:
                 else:
                     total_title = self.title
                     if self.title_info is not None:
-                        total_title = "{0} ({1})".format(self.title, self.title_info)
+                        total_title = f"{self.title} ({self.title_info})"
                     cpos = int((dimensions[0] + 1) / 2)
                     spos = cpos - int(len(total_title) / 2) - 1
                     slen = len(total_title) + 2
-                    outer = self.style.TL + self.style.horizontal * spos
-                    l = len(outer)
+                    outer = self.style.topleft + self.style.horizontal * spos
+                    length = len(outer)
                     Commons.UIInstance.print(
                         outer, xy=(corners[0][0], i), color=self.color
                     )
                     outer = " " + self.title + " "
                     Commons.UIInstance.print(
                         outer,
-                        xy=(corners[0][0] + l, i),
+                        xy=(corners[0][0] + length, i),
                         color=self.title_color,
                         bold=True,
                     )
-                    l += len(outer)
+                    length += len(outer)
                     if self.title_info is not None:
                         Commons.UIInstance.print(
                             "(",
-                            xy=(corners[0][0] + l, i),
+                            xy=(corners[0][0] + length, i),
                             color=self.title_color,
                             bold=True,
                         )
-                        l += 1
+                        length += 1
                         Commons.UIInstance.print(
                             self.title_info,
-                            xy=(corners[0][0] + l, i),
+                            xy=(corners[0][0] + length, i),
                             color=self.title_color
                             if self.title_info_color is None
                             else self.title_info_color,
                             bold=True,
                         )
-                        l += len(self.title_info)
+                        length += len(self.title_info)
                         Commons.UIInstance.print(
                             ") ",
-                            xy=(corners[0][0] + l, i),
+                            xy=(corners[0][0] + length, i),
                             color=self.title_color,
                             bold=True,
                         )
-                        l += 2
+                        length += 2
                     outer = (
                         self.style.horizontal * (dimensions[0] - 1 - spos - slen)
-                        + self.style.TR
+                        + self.style.topright
                     )
                     Commons.UIInstance.print(
-                        outer, xy=(corners[0][0] + l, i), color=self.color
+                        outer, xy=(corners[0][0] + length, i), color=self.color
                     )
             elif i == corners[1][1]:
                 outer = (
-                    self.style.BL
+                    self.style.bottomleft
                     + self.style.horizontal * (dimensions[0] - 1)
-                    + self.style.BR
+                    + self.style.bottomright
                 )
                 Commons.UIInstance.print(outer, xy=(corners[0][0], i), color=self.color)
             else:
@@ -151,7 +151,7 @@ class Control(Block):
         weight=0,
         tag="default",
         border=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             parent, alignment, dimensions, *args, weight=weight, tag=tag, **kwargs
@@ -171,16 +171,16 @@ class Control(Block):
 
     @property
     def inner(self):
-        c = self.corners()
-        x0 = c[0][0] + (0 if self.border is None else 1)
-        x1 = c[0][1] - (0 if self.border is None else 1)
-        y0 = c[1][0] + (0 if self.border is None else 1)
-        y1 = c[1][1] - (0 if self.border is None else 1)
+        corners = self.corners()
+        x0 = corners[0][0] + (0 if self.border is None else 1)
+        x1 = corners[0][1] - (0 if self.border is None else 1)
+        y0 = corners[1][0] + (0 if self.border is None else 1)
+        y1 = corners[1][1] - (0 if self.border is None else 1)
         return ((x0, x1), (y0, y1))
 
     @property
     def w_in(self):
-        return self.w if self.border is None else self.w - 2
+        return self.width if self.border is None else self.width - 2
 
     def paint(self):
         if self.border is not None:

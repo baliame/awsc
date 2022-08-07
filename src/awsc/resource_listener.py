@@ -7,14 +7,14 @@ class ListenerResourceLister(ResourceLister):
     title = "Listeners"
 
     def title_info(self):
-        return self.lb["name"]
+        return self.load_balancer["name"]
 
     def __init__(self, *args, **kwargs):
         self.resource_key = "elbv2"
         self.list_method = "describe_listeners"
         self.item_path = ".Listeners"
-        self.lb = kwargs["lb"]
-        self.list_kwargs = {"LoadBalancerArn": self.lb["arn"]}
+        self.load_balancer = kwargs["lb"]
+        self.list_kwargs = {"LoadBalancerArn": self.load_balancer["arn"]}
         self.column_paths = {
             "protocol": ".Protocol",
             "port": ".Port",
@@ -38,9 +38,9 @@ class ListenerResourceLister(ResourceLister):
         self.sort_column = "arn"
         super().__init__(*args, **kwargs)
 
-    def determine_ssl_policy(self, l, *args):
-        if l["Protocol"] == "HTTPS":
-            return l["SslPolicy"]
+    def determine_ssl_policy(self, result, *args):
+        if result["Protocol"] == "HTTPS":
+            return result["SslPolicy"]
         return ""
 
 
@@ -63,7 +63,7 @@ class ListenerDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -113,45 +113,45 @@ class ListenerActionResourceLister(ResourceLister):
             else:
                 return self.describe(*args)
 
-    def determine_condition(self, la, *args):
-        if len(la["Conditions"]) > 1:
+    def determine_condition(self, result, *args):
+        if len(result["Conditions"]) > 1:
             return "<multiple>"
-        elif len(la["Conditions"]) == 1:
-            cond = la["Conditions"][0]
+        elif len(result["Conditions"]) == 1:
+            cond = result["Conditions"][0]
             field = cond["Field"]
             if field == "host-header":
                 if "Values" in cond and len(cond["Values"]):
                     if isinstance(cond["Values"], str):
-                        return "Host: {0}".format(cond["Values"])
+                        return f"Host: {cond['Values']}"
                     else:
                         src = cond["Values"]
                 else:
                     src = cond["HostHeaderConfig"]["Values"]
-                return "Host: {0}".format("|".join(src))
+                return f"Host: {'|'.join(src)}"
             elif field == "path":
                 if "Values" in cond and len(cond["Values"]):
                     if isinstance(cond["Values"], str):
-                        return "Path: {0}".format(cond["Values"])
+                        return f"Path: {cond['Values']}"
                     else:
                         src = cond["Values"]
                 else:
                     src = cond["PathPatternConfig"]["Values"]
-                return "Path: {0}".format("|".join(src))
+                return f"Path: {'|'.join(src)}"
 
             return field
         else:
             return "<always>"
 
-    def determine_action_type(self, l, *args):
-        if len(l["Actions"]) > 0:
-            act = l["Actions"][-1]
+    def determine_action_type(self, result, *args):
+        if len(result["Actions"]) > 0:
+            act = result["Actions"][-1]
             return act["Type"]
         else:
             return "N/A"
 
-    def determine_target(self, l, *args):
-        if len(l["Actions"]) > 0:
-            act = l["Actions"][-1]
+    def determine_target(self, result, *args):
+        if len(result["Actions"]) > 0:
+            act = result["Actions"][-1]
             if act["Type"] == "forward":
                 return ",".join(
                     [
@@ -160,25 +160,24 @@ class ListenerActionResourceLister(ResourceLister):
                     ]
                 )
             elif act["Type"] == "redirect":
-                r = act["RedirectConfig"]
+                redirect = act["RedirectConfig"]
                 proto = (
                     "http(s)"
-                    if r["Protocol"] == "#{protocol}"
-                    else r["Protocol"].lower()
+                    if redirect["Protocol"] == "#{protocol}"
+                    else redirect["Protocol"].lower()
                 )
                 proto_ports = []
                 if proto in ["http", "http(s)"]:
                     proto_ports.append("80")
                 if proto in ["https", "http(s)"]:
                     proto_ports.append("443")
-                port = ":{0}".format(r["Port"]) if r["Port"] not in proto_ports else ""
-                return "{4} {0}://{1}{2}{3}".format(
-                    proto,
-                    r["Host"],
-                    port,
-                    r["Path"],
-                    "301" if r["StatusCode"] == "HTTP_301" else "302",
+                port = (
+                    f":{redirect['Port']}"
+                    if redirect["Port"] not in proto_ports
+                    else ""
                 )
+                code = ("301" if redirect["StatusCode"] == "HTTP_301" else "302",)
+                return f"{code} {proto}://{redirect['Host']}{port}{redirect['Path']}"
         return ""
 
 
@@ -193,7 +192,6 @@ class ListenerActionDescriber(Describer):
         self.describe_method = "describe_rules"
         self.describe_kwarg_name = "RuleArns"
         self.describe_kwarg_is_list = True
-        self.describe_kwargs = {"RuleArns": [self.rule_arn]}
         self.object_path = ".Rules[0]"
         super().__init__(
             parent,
@@ -202,5 +200,5 @@ class ListenerActionDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

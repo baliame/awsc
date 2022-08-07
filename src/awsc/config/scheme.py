@@ -250,14 +250,6 @@ class Scheme:
                     "foreground": 193,
                     "background": 0,
                 },
-                "syntax_highlight_token_literal": {
-                    "foreground": 193,
-                    "background": 0,
-                },
-                "syntax_highlight_token_literal": {
-                    "foreground": 193,
-                    "background": 0,
-                },
                 "syntax_highlight_token_literal_date": {
                     "foreground": 193,
                     "background": 0,
@@ -475,12 +467,12 @@ class Scheme:
             },
         }
 
-        with self.style_file.open("w") as f:
-            f.write(yaml.dump(self.style))
+        with self.style_file.open("w", encoding="utf-8") as file:
+            file.write(yaml.dump(self.style))
 
     def __getitem__(self, item):
         return self.style[item]
 
     def parse_config(self):
-        with self.style_file.open("r") as f:
-            self.style = yaml.safe_load(f.read())
+        with self.style_file.open("r", encoding="utf-8") as file:
+            self.style = yaml.safe_load(file.read())

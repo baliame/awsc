@@ -20,16 +20,16 @@ class InlinePolicyAttacher:
         self.parent = parent
         self.client = Common.Session.service_provider("iam")
 
-        self.get = getattr(self.client, "get_{0}_policy".format(datatype))
-        self.put_method = "put_{0}_policy".format(datatype)
-        self.arg = "{0}Name".format(datatype.capitalize())
+        self.get = getattr(self.client, f"get_{datatype}_policy")
+        self.put_method = f"put_{datatype}_policy"
+        self.arg = f"{datatype.capitalize()}Name"
 
     def attach_inline_policy(self, _):
         if self.parent.selection is None:
             return
         SingleNameDialog(
             self.parent.parent,
-            "Attach new or edit existing inline policy for {0}".format(self.datatype),
+            f"Attach new or edit existing inline policy for {self.datatype}",
             self.do_attach_inline,
             label="Policy name:",
             what="name",
@@ -64,18 +64,18 @@ class InlinePolicyAttacher:
                     ],
                 }
             }
-        except botoerror.ClientError as e:
+        except botoerror.ClientError as error:
             Common.clienterror(
-                e,
-                "Retrieve Inline {0} Policy".format(self.datatype.capitalize()),
+                error,
+                f"Retrieve Inline {self.datatype.capitalize()} Policy",
                 "IAM",
                 set_message=True,
             )
             return
-        except Exception as e:
+        except Exception as error:
             Common.error(
-                str(e),
-                "Retrieve Inline {0} Policy".format(self.datatype.capitalize()),
+                str(error),
+                f"Retrieve Inline {self.datatype.capitalize()} Policy",
                 "IAM",
                 set_message=True,
             )
@@ -100,9 +100,7 @@ class UserLister(ResourceLister):
     command_palette = ["user", "users"]
 
     def title_info(self):
-        return (
-            "Group: {0}".format(self.group["name"]) if self.group is not None else None
-        )
+        return f"Group: {self.group['name']}" if self.group is not None else None
 
     def create_user(self, _):
         creator = ListResourceDocumentCreator(
@@ -266,7 +264,7 @@ class UserLister(ResourceLister):
         else:
             SingleNameDialog(
                 self.parent,
-                "Create login profile for {0}".format(self.selection["name"]),
+                f"Create login profile for {self.selection['name']}",
                 self.do_create_login_profile,
                 label="Password:",
                 what="password",
@@ -376,7 +374,7 @@ class UserDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -385,7 +383,7 @@ class LoginProfileDescriber(Describer):
     title = "Login Profile"
 
     def title_info(self):
-        return "User: {0}".format(self.user["name"])
+        return f"User: {self.user['name']}"
 
     def __init__(
         self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
@@ -402,7 +400,7 @@ class LoginProfileDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
         self.add_hotkey(
             ControlCodes.D, self.delete_login_profile, "Delete Login Profile"
@@ -445,7 +443,7 @@ class GroupLister(ResourceLister):
     command_palette = ["group", "groups"]
 
     def title_info(self):
-        return "User: {0}".format(self.user["name"]) if self.user is not None else None
+        return f"User: {self.user['name']}" if self.user is not None else None
 
     def do_attach(self, policy_arn):
         if self.selection is None:
@@ -661,7 +659,7 @@ class GroupDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -672,16 +670,16 @@ class PolicyLister(ResourceLister):
 
     def title_info(self):
         if self.user is not None:
-            return "User: {0}".format(self.user["name"])
+            return f"User: {self.user['name']}"
         elif self.group is not None:
-            return "Group: {0}".format(self.group["name"])
+            return f"Group: {self.group['name']}"
         elif self.role is not None:
-            return "Role: {0}".format(self.role["name"])
+            return f"Role: {self.role['name']}"
         else:
             return None
 
     def get_scope_tooltip(self):
-        return "Change Scope ({0})".format(self.scope)
+        return f"Change Scope ({self.scope})"
 
     def change_scope(self, *args):
         idx = self.scopes.index(self.scope)
@@ -802,11 +800,11 @@ class PolicyLister(ResourceLister):
             "iam",
             method,
             {"PolicyArn": self.selection["arn"], arg_name: arg_value},
-            "Detach {0} Policy".format(resource.capitalize()),
+            f"Detach {resource.capitalize()} Policy",
             "IAM",
             subcategory="Policy",
             success_template="Detaching policy {PolicyArn} from {resource}",
-            resource="{0} {1}".format(resource, arg_value),
+            resource=f"{resource} {arg_value}",
         )
         self.refresh_data()
 
@@ -893,7 +891,7 @@ class PolicyDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -913,7 +911,7 @@ class PolicyVersionDescriber(Describer):
         *args,
         policy="",
         entry_key="arn",
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "iam"
         self.describe_method = "get_policy_version"
@@ -932,7 +930,7 @@ class InlinePolicyLister(ResourceLister):
     title = "Inline Policies"
 
     def title_info(self):
-        return "{0}: {1}".format(self.datatype.capitalize(), self.data["name"])
+        return f"{self.datatype.capitalize()}: {self.data['name']}"
 
     def delete_policy(self, _):
         if self.selection is None:
@@ -951,20 +949,21 @@ class InlinePolicyLister(ResourceLister):
         )
 
     def do_delete(self, **kwargs):
-        if self.selection is not None:
-            try:
-                self.delete(
-                    PolicyName=self.selection["name"],
-                    UserName=self.user["name"],
-                )
-                Common.Session.set_message(
-                    "Deleting policy {0} from {2} {1}".format(
-                        self.selection["name"], self.user["name"], self.datatype
-                    ),
-                    Common.color("message_success"),
-                )
-            except Exception as e:
-                Common.Session.set_message(str(e), Common.color("message_error"))
+        if self.selection is None:
+            return
+        template = "Deleting inline {resource_type} policy {PolicyName} from {resource_type} {data_name}"
+        Common.generic_api_call(
+            "iam",
+            self.delete_method,
+            {"PolicyName": self.selection["name"], self.arg: self.data["name"]},
+            "Delete inline policy",
+            "IAM",
+            subcategory="Policy",
+            success_template=template,
+            resource=self.selection["name"],
+            resource_type=self.datatype,
+            data_name=self.data["name"],
+        )
         self.refresh_data()
 
     def edit_policy(self, _):
@@ -976,12 +975,10 @@ class InlinePolicyLister(ResourceLister):
         self.data = data
         self.datatype = datatype
         self.attacher = InlinePolicyAttacher(self, datatype)
-        self.arg = "{0}Name".format(datatype.capitalize())
+        self.arg = f"{datatype.capitalize()}Name"
         self.resource_key = "iam"
-        self.delete = getattr(
-            Common.Session.service_provider("iam"), "delete_{0}_policy".format(datatype)
-        )
-        self.list_method = "list_{0}_policies".format(datatype)
+        self.delete_method = f"delete_{datatype}_policy"
+        self.list_method = f"list_{datatype}_policies"
         self.item_path = ".PolicyNames"
         self.list_kwargs = {self.arg: self.data["name"]}
         self.column_paths = {
@@ -1015,11 +1012,11 @@ class InlinePolicyDescriber(Describer):
         caller=None,
         datatype="",
         data=None,
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "iam"
-        self.describe_method = "get_{0}_policy".format(datatype)
-        self.arg = "{0}Name".format(datatype.capitalize())
+        self.describe_method = f"get_{datatype}_policy"
+        self.arg = f"{datatype.capitalize()}Name"
         self.describe_kwarg_name = "PolicyName"
         self.describe_kwargs = {self.arg: data["name"]}
         self.object_path = "."
@@ -1031,7 +1028,7 @@ class InlinePolicyDescriber(Describer):
             entry=entry,
             entry_key=entry_key,
             caller=caller,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -1044,7 +1041,7 @@ class RoleLister(ResourceLister):
         return (
             None
             if self.instanceprofile is None
-            else "InstanceProfile: {0}".format(self.instanceprofile.name)
+            else f"InstanceProfile: {self.instanceprofile['name']}"
         )
 
     def create_role(self, _):
@@ -1284,7 +1281,7 @@ class RoleDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -1294,7 +1291,7 @@ class InstanceProfileLister(ResourceLister):
     command_palette = ["instanceprofile", "instanceprofiles"]
 
     def title_info(self):
-        return None if self.role is None else "Role: {0}".format(self.role["name"])
+        return None if self.role is None else f"Role: {self.role['name']}"
 
     def determine_role_count(self, instanceprofile):
         return str(len(instanceprofile["Roles"])) if "Roles" in instanceprofile else 0
@@ -1449,12 +1446,6 @@ class InstanceProfileDescriber(Describer):
     prefix = "instance_profile_browser"
     title = "Instance Profile"
 
-    def populate_entry(self, *args, entry, entry_key, **kwargs):
-        import sys
-
-        print("{0} {1}".format(entry, entry_key), file=sys.stderr)
-        super().populate_entry(*args, entry=entry, entry_key=entry_key, **kwargs)
-
     def __init__(
         self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
     ):
@@ -1475,5 +1466,5 @@ class InstanceProfileDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

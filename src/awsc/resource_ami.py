@@ -16,7 +16,7 @@ class AMIResourceLister(ResourceLister):
         self.list_kwargs = {"Owners": ["self"]}
         if "ec2" in kwargs:
             self.list_kwargs["ImageIds"] = [kwargs["ec2"]["image"]]
-            self.title_info_data = "Instance: {0}".format(kwargs["ec2"]["instance id"])
+            self.title_info_data = f"Instance: {kwargs['ec2']['instance id']}"
         self.item_path = ".Images"
         self.column_paths = {
             "id": ".ImageId",
@@ -73,5 +73,5 @@ class AMIDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

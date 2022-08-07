@@ -5,7 +5,7 @@ import yaml
 from .scheme import Scheme
 from .storage import Keystore
 
-last_config_version = 12
+LAST_CONFIG_VERSION = 12
 
 
 class Config:
@@ -88,7 +88,7 @@ class Config:
         }
 
     # TODO: Weigh whether it's worth implementing fshook (may be potentially dangerous)
-    def update_X(self):
+    def update_x(self):
         self.config["editor_use_fshook"] = False
 
     def update_version(self):
@@ -96,8 +96,8 @@ class Config:
             version = 0
         else:
             version = self.config["version"]
-        while version < last_config_version:
-            print("Performing config update to version {0}".format(version + 1))
+        while version < LAST_CONFIG_VERSION:
+            print(f"Performing config update to version {version + 1}")
             self.version_updaters[version + 1]()
             version += 1
         self.config["version"] = version
@@ -106,7 +106,7 @@ class Config:
     def create_default_config(self):
         print("Creating first time configuration...")
         self.config = {
-            "version": last_config_version,
+            "version": LAST_CONFIG_VERSION,
             "contexts": {},
             "default_context": "",
             "default_region": "us-east-1",
@@ -128,8 +128,8 @@ class Config:
         self.write_config()
 
     def write_config(self):
-        with self.config_path.open("w") as f:
-            f.write(yaml.dump(self.config))
+        with self.config_path.open("w", encoding="utf-8") as file:
+            file.write(yaml.dump(self.config))
 
     def __getitem__(self, item):
         return self.config[item]
@@ -138,8 +138,8 @@ class Config:
         self.config[item] = value
 
     def parse_config(self):
-        with self.config_path.open("r") as f:
-            self.config = yaml.safe_load(f.read())
+        with self.config_path.open("r", encoding="utf-8") as file:
+            self.config = yaml.safe_load(file.read())
 
     def add_or_edit_context(self, name, acctid, access, secret):
         self.config["contexts"][name] = {

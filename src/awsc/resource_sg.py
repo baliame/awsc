@@ -42,11 +42,11 @@ class SGResourceLister(ResourceLister):
         self.add_hotkey("i", self.ingress, "View ingress rules")
         self.add_hotkey("e", self.egress, "View egress rules")
 
-    def determine_ingress_rules(self, sg):
-        return len(sg["IpPermissions"])
+    def determine_ingress_rules(self, result):
+        return len(result["IpPermissions"])
 
-    def determine_egress_rules(self, sg):
-        return len(sg["IpPermissionsEgress"])
+    def determine_egress_rules(self, result):
+        return len(result["IpPermissionsEgress"])
 
     def ingress(self, *args):
         if self.selection is not None:
@@ -83,19 +83,18 @@ class SGRuleLister(ResourceLister):
     }
 
     def title_info(self):
-        return "{0}: {1}".format(
-            "Egress" if self.egress else "Ingress", self.sg_entry["group id"]
-        )
+        gress = "Egress" if self.egress else "Ingress"
+        return f"{gress}: {self.sg_entry['group id']}"
 
     def __init__(
         self,
         parent,
         alignment,
         dimensions,
+        *args,
         sg_entry=None,
         egress=False,
-        *args,
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "ec2"
         self.list_method = "describe_security_groups"
@@ -104,9 +103,8 @@ class SGRuleLister(ResourceLister):
         self.sg_entry = sg_entry
         self.egress = egress
         self.list_kwargs = {"GroupIds": [self.sg_entry["group id"]]}
-        self.item_path = ".SecurityGroups[0].IpPermissions{0}".format(
-            "Egress" if egress else ""
-        )
+        gress = "Egress" if egress else ""
+        self.item_path = f".SecurityGroups[0].IpPermissions{gress}"
         self.column_paths = {
             "protocol": self.determine_protocol,
             "name": self.determine_name,
@@ -159,7 +157,7 @@ class SGRuleLister(ResourceLister):
         if rule["IpProtocol"] == "-1":
             return "0-65535"
         if rule["FromPort"] != rule["ToPort"]:
-            return "{0}-{1}".format(rule["FromPort"], rule["ToPort"])
+            return f"{rule['FromPort']}-{rule['ToPort']}"
         return str(rule["FromPort"])
 
 
@@ -175,7 +173,7 @@ class SGDescriber(Describer):
         entry,
         *args,
         entry_key="group id",
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "ec2"
         self.describe_method = "describe_security_groups"
@@ -189,7 +187,7 @@ class SGDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 

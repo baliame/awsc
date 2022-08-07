@@ -27,25 +27,25 @@ class Filterer(Control):
         self.accepted_input = Commons.TextfieldInputs
         self.text = ""
 
-    def input(self, inkey):
-        if self.paused and not (inkey.is_sequence and inkey.name == "KEY_ESCAPE"):
+    def input(self, key):
+        if self.paused and not (key.is_sequence and key.name == "KEY_ESCAPE"):
             return False
-        if inkey.is_sequence:
-            if inkey.name == "KEY_ENTER":
+        if key.is_sequence:
+            if key.name == "KEY_ENTER":
                 self.pause()
-            elif inkey.name == "KEY_ESCAPE":
+            elif key.name == "KEY_ESCAPE":
                 self.session.resource_main.filter = None
                 self.close()
-            elif inkey.name == "KEY_BACKSPACE":
+            elif key.name == "KEY_BACKSPACE":
                 if len(self.text) > 0:
                     self.text = self.text[:-1]
                 self.session.resource_main.filter = self.text
-            elif inkey.name == "KEY_DELETE":
+            elif key.name == "KEY_DELETE":
                 self.text = ""
                 self.session.resource_main.filter = self.text
             Commons.UIInstance.dirty = True
-        elif str(inkey) in self.accepted_input:
-            self.text += inkey
+        elif str(key) in self.accepted_input:
+            self.text += key
             self.session.resource_main.filter = self.text
             Commons.UIInstance.dirty = True
         return True
@@ -63,12 +63,12 @@ class Filterer(Control):
 
     def paint(self):
         super().paint()
-        (x0, x1), (y0, y1) = self.inner
+        (x0, x1), (y0, _) = self.inner
         Commons.UIInstance.print("/", xy=(x0 + 1, y0), color=self.symbol_color)
         space = (x1 - 1) - (x0 + 2) + 1
-        t = self.text if len(self.text) <= space else self.text[:space]
+        text = self.text if len(self.text) <= space else self.text[:space]
         Commons.UIInstance.print(
-            t,
+            text,
             xy=(x0 + 2, y0),
             color=self.color if not self.paused else self.inactive_color,
         )
@@ -107,7 +107,7 @@ class Commander(Control):
         opt_keys = self.options.keys()
         candidates = [cand for cand in opt_keys if cand.startswith(self.text.lower())]
         if len(candidates) > 0:
-            candidates.sort(key=lambda x: len(x))
+            candidates.sort(key=len)
             return candidates[0]
         return None
 
@@ -116,30 +116,30 @@ class Commander(Control):
         if acp is not None:
             self.text = acp
 
-    def input(self, inkey):
-        if inkey.is_sequence:
-            if inkey.name == "KEY_ENTER":
+    def input(self, key):
+        if key.is_sequence:
+            if key.name == "KEY_ENTER":
                 self.accept_and_close()
-            elif inkey.name == "KEY_ESCAPE":
+            elif key.name == "KEY_ESCAPE":
                 self.close()
-            elif inkey.name == "KEY_BACKSPACE":
+            elif key.name == "KEY_BACKSPACE":
                 if len(self.text) > 0:
                     self.text = self.text[:-1]
-            elif inkey.name == "KEY_DELETE":
+            elif key.name == "KEY_DELETE":
                 self.text = ""
-            elif inkey.name == "KEY_TAB":
+            elif key.name == "KEY_TAB":
                 self.accept_autocomplete()
             Commons.UIInstance.dirty = True
-        elif str(inkey) in self.accepted_input:
-            self.text += inkey
+        elif str(key) in self.accepted_input:
+            self.text += key
             Commons.UIInstance.dirty = True
         return True
 
     def accept_and_close(self):
-        l = self.text.lower()
+        text = self.text.lower()
         option = None
-        if l in self.options:
-            option = self.options[l]
+        if text in self.options:
+            option = self.options[text]
         else:
             acp = self.autocomplete()
             if acp is not None:
@@ -154,17 +154,17 @@ class Commander(Control):
 
     def paint(self):
         super().paint()
-        (x0, x1), (y0, y1) = self.inner
+        (x0, x1), (y0, _) = self.inner
         Commons.UIInstance.print(":", xy=(x0 + 1, y0), color=self.symbol_color)
         space = (x1 - 1) - (x0 + 2) + 1
-        t = self.text if len(self.text) <= space else self.text[:space]
+        text = self.text if len(self.text) <= space else self.text[:space]
         acp = self.autocomplete()
         color = self.color
         if self.text.lower() in self.options:
             color = self.ok_color
         elif acp is None:
             color = self.error_color
-        Commons.UIInstance.print(t, xy=(x0 + 2, y0), color=color)
+        Commons.UIInstance.print(text, xy=(x0 + 2, y0), color=color)
         if acp is not None:
             acp = acp[len(self.text) :]
             if len(acp) > 0:

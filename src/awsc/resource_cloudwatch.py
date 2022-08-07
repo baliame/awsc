@@ -10,7 +10,7 @@ class MetricLister(ResourceLister):
 
     def title_info(self):
         if self.dimension is not None:
-            return "{0}={1}".format(self.dimensions[0], self.dimension[1])
+            return f"{self.dimension[0]}={self.dimension[1]}"
         return None
 
     def __init__(
@@ -48,7 +48,7 @@ class MetricLister(ResourceLister):
 
     def add_dimension(self, entry):
         if self.dimension is not None:
-            return "{0}={1}".format(self.dimension[0], self.dimension[1])
+            return f"{self.dimension[0]}={self.dimension[1]}"
         return ""
 
 
@@ -57,16 +57,16 @@ class MetricViewer(BaseChart):
     title = "Metrics"
 
     def title_info(self):
-        return "{0} {1}".format(self.metric_dimension["Value"], self.metric_name)
+        return f"{self.metric_dimension['Value']} {self.metric_name}"
 
     def __init__(self, *args, metric=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.metric_name = metric["name"]
         self.metric_namespace = metric["namespace"]
-        d = metric["dimension"].split("=")
+        dim_parts = metric["dimension"].split("=")
         self.metric_dimension = {
-            "Name": d[0],
-            "Value": "=".join(d[1:]),
+            "Name": dim_parts[0],
+            "Value": "=".join(dim_parts[1:]),
         }
         self.load_data()
 
@@ -98,11 +98,11 @@ class MetricViewer(BaseChart):
             "Retrieve metrics",
             "Cloudwatch",
             subcategory="Metrics",
-            resource="{0}/{1}".format(self.metric_namespace, self.metric_name),
+            resource=f"{self.metric_namespace}/{self.metric_name}",
         )
         if call["Success"]:
             data = call["Response"]
             for idx in range(len(data["MetricDataResults"][0]["Timestamps"])):
-                ts = data["MetricDataResults"][0]["Timestamps"][idx]
-                val = data["MetricDataResults"][0]["Values"][idx]
-                self.add_datapoint(ts, val)
+                timestamp = data["MetricDataResults"][0]["Timestamps"][idx]
+                value = data["MetricDataResults"][0]["Values"][idx]
+                self.add_datapoint(timestamp, value)

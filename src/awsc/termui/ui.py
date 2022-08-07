@@ -16,7 +16,7 @@ from .common import Commons
 from .control import Control
 from .screen import Screen
 
-FrameRate = 0.02
+FRAMERATE = 0.02
 
 
 class ControlCodes:
@@ -52,14 +52,14 @@ class KeyDisplay(Control):
 
     def input(self, key):
         if key.is_sequence:
-            self.text = "{0}".format((str(key), key.name, key.code))
+            self.text = f"{(str(key), key.name, key.code)}"
         else:
             self.text = key
 
     def paint(self):
         super().paint()
-        tl = self.topleft()
-        Commons.UIInstance.print(self.text, xy=tl)
+        topleft = self.topleft()
+        Commons.UIInstance.print(self.text, xy=topleft)
 
 
 class UI:
@@ -86,24 +86,24 @@ class UI:
         self.dirty = False
         self.restore = None
 
-    def filecache(self, obj, cb, *args, **kwargs):
+    def filecache(self, obj, callback, *args, **kwargs):
         if self.cache_dir is None:
             self.cache_dir = tempfile.mkdtemp(prefix="awsc")
         objpath = Path(self.cache_dir) / obj
         if not objpath.exists():
-            data = cb(str(objpath.resolve()), *args, **kwargs)
+            data = callback(str(objpath.resolve()), *args, **kwargs)
             return data
         try:
-            with objpath.open("r") as f:
-                return f.read()
+            with objpath.open("r", encoding="utf-8") as file:
+                return file.read()
         except UnicodeDecodeError:
-            with objpath.open("rb") as f:
-                return f.read()
+            with objpath.open("rb") as file:
+                return file.read()
 
     def print(self, out, xy=None, color=None, wrap=False, bounds=None, bold=False):
         self.dirty = True
         if bounds is None:
-            bounds = ((0, self.w), (0, self.h))
+            bounds = ((0, self.width), (0, self.height))
         if xy is None:
             xy = (bounds[0][0], bounds[1][0])
         end = False
@@ -119,17 +119,17 @@ class UI:
                 part = out
                 out = ""
                 end = True
-            p = 0
+            position = 0
             for i in range(xy[0], xy[0] + space):
                 try:
                     char = self.buf[xy[1]][i]
-                    char.value = part[p]
+                    char.value = part[position]
                     char.color = color
                     char.bold = bold
                     char.dirty = True
                 except IndexError:
                     break
-                p += 1
+                position += 1
             xy = (bounds[0][0], xy[1] + 1)
             if not wrap or xy[1] >= bounds[1][1]:
                 end = True
@@ -141,12 +141,12 @@ class UI:
             self._h = self.term.height
 
     @property
-    def w(self):
+    def width(self):
         self.refresh_size()
         return self._w
 
     @property
-    def h(self):
+    def height(self):
         self.refresh_size()
         return self._h
 
@@ -162,9 +162,10 @@ class UI:
         self.top_block.before_paint()
 
     def progress_bar_paint(self, perc):
-        width = int(self.w * perc)
-        with self.term.location(0, self.h - 1):
-            perc_t = "{0:.2f}% ".format(perc * 100)
+        width = int(self.width * perc)
+        with self.term.location(0, self.height - 1):
+            percentage = perc * 100
+            perc_t = f"{percentage:.2f}% "
             print(
                 "\033[38;5;220m" + perc_t + ((width - len(perc_t)) * "░") + "\033[0m",
                 end="",
@@ -214,7 +215,7 @@ class UI:
                 finally:
                     self.mutex.release()
 
-    def process_input_buffer(self, st):
+    def process_input_buffer(self, start_time):
         self.mutex.acquire()
         try:
             if len(self.input_buffer) > 0:
@@ -223,8 +224,8 @@ class UI:
                 if key == "\x03":
                     raise KeyboardInterrupt
                 self.top_block.input(key)
-                ct = time.time()
-                if ct - st > FrameRate - 0.02:
+                curr_time = time.time()
+                if curr_time - start_time > FRAMERATE - 0.02:
                     return
         finally:
             self.mutex.release()
@@ -236,21 +237,21 @@ class UI:
             with self.term.fullscreen():
                 with self.term.hidden_cursor():
                     with self.term.raw():
-                        t = threading.Thread(target=self.buffer_input, daemon=True)
-                        t.start()
+                        thread = threading.Thread(target=self.buffer_input, daemon=True)
+                        thread.start()
                         while not self.exit:
                             # print(self.term.clear())
-                            st = time.time()
-                            self.process_input_buffer(st)
+                            start_time = time.time()
+                            self.process_input_buffer(start_time)
                             for func in self.tickers:
                                 func()
                             self.before_paint()
                             if self.dirty or time.time() - self.last_paint > 3:
                                 self.paint()
-                            t2 = time.time()
-                            d = FrameRate - (t2 - st)
-                            if d > 0:
-                                time.sleep(d)
+                            curr_time = time.time()
+                            delay = FRAMERATE - (curr_time - start_time)
+                            if delay > 0:
+                                time.sleep(delay)
         except KeyboardInterrupt:
             pass
         finally:

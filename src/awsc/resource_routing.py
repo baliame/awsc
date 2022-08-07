@@ -53,13 +53,13 @@ class RouteTableResourceLister(ResourceLister):
         self.primary_key = "id"
         super().__init__(*args, **kwargs)
 
-    def determine_subnet_association(self, rt, *args):
-        if "Associations" not in rt or len(rt["Associations"]) == 0:
+    def determine_subnet_association(self, result, *args):
+        if "Associations" not in result or len(result["Associations"]) == 0:
             return "<none>"
-        if len(rt["Associations"]) > 1:
+        if len(result["Associations"]) > 1:
             return "<multiple>"
-        if "SubnetId" in rt["Associations"][0]:
-            return rt["Associations"][0]["SubnetId"]
+        if "SubnetId" in result["Associations"][0]:
+            return result["Associations"][0]["SubnetId"]
         else:
             return "<VPC default>"
 
@@ -83,7 +83,7 @@ class RouteTableDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -144,9 +144,7 @@ class RouteResourceLister(ResourceLister):
             Common.Session.push_frame(
                 GenericDescriber.opener(
                     **{
-                        "describing": "Route in route table {0}".format(
-                            self.selection["route table"]
-                        ),
+                        "describing": f"Route in route table {self.selection['route table']}",
                         "content": json.dumps(
                             self.selection.controller_data, sort_keys=True, indent=2
                         ),

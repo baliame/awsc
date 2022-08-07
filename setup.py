@@ -5,10 +5,10 @@ https://github.com/pypa/sampleproject
 """
 
 # Always prefer setuptools over distutils
-from src.awsc.version import version
 from setuptools import setup, find_packages
+from src.awsc.version import VERSION as version
 
-with open("README.md", "r") as readme:
+with open("README.md", "r", encoding="utf-8") as readme:
     ld = readme.read()
 
 setup(

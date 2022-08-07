@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from .common import Common, DefaultAnchor, DefaultBorder, DefaultDimension
+from .common import Common, DefaultAnchor, DefaultDimension, default_border
 from .info import HotkeyDisplay
 from .termui.alignment import CenterAnchor, Dimension, TopRightAnchor
 from .termui.control import Border
@@ -12,22 +12,22 @@ from .termui.list_control import ListControl, ListEntry
 class SSHList(ListControl):
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
             **kwargs,
         )
-        l.border = DefaultBorder("ssh", "SSH Keys", None)
-        return [l, l.hotkey_display]
+        instance.border = default_border("ssh", "SSH Keys", None)
+        return [instance, instance.hotkey_display]
 
     @classmethod
-    def selector(cls, cb, **kwargs):
-        return cls.opener(**{"selector_cb": cb, **kwargs})
+    def selector(cls, callback, **kwargs):
+        return cls.opener(**{"selector_cb": callback, **kwargs})
 
     def __init__(
-        self, parent, alignment, dimensions, selector_cb=None, *args, **kwargs
+        self, parent, alignment, dimensions, *args, selector_cb=None, **kwargs
     ):
         super().__init__(
             parent,
@@ -68,12 +68,12 @@ class SSHList(ListControl):
         for ssh_key in sorted(self.list_ssh_keys()):
             if ssh_key == Common.Configuration["default_ssh_key"]:
                 defa = idx
-                d = "✓"
+                is_default = "✓"
             else:
-                d = " "
-            pubkey = Path.home() / ".ssh" / "{0}.pub".format(ssh_key)
+                is_default = " "
+            pubkey = Path.home() / ".ssh" / f"{ssh_key}.pub"
             has_pubkey = "✓" if pubkey.exists() else " "
-            du = (
+            default_username = (
                 Common.Configuration["default_ssh_usernames"][ssh_key]
                 if ssh_key in Common.Configuration["default_ssh_usernames"]
                 else ""
@@ -84,8 +84,8 @@ class SSHList(ListControl):
                     **{
                         "usage frequency": 0,
                         "has public key": has_pubkey,
-                        "default username": du,
-                        "default": d,
+                        "default username": default_username,
+                        "default": is_default,
                     },
                 )
             )
@@ -97,9 +97,9 @@ class SSHList(ListControl):
         ssh_dir = Path.home() / ".ssh"
         ret = []
         for child in ssh_dir.iterdir():
-            fn = child.name
-            if re.match(r"^((id_[^.]+?)|(.*?\.pem))$", fn) is not None:
-                ret.append(fn)
+            filename = child.name
+            if re.match(r"^((id_[^.]+?)|(.*?\.pem))$", filename) is not None:
+                ret.append(filename)
         return ret
 
     def set_default_ssh_key(self, _):
@@ -134,7 +134,7 @@ class SSHList(ListControl):
 
 class SSHDefaultUsernameDialog(DialogControl):
     def __init__(
-        self, parent, alignment, dimensions, key_name="", caller=None, *args, **kwargs
+        self, parent, alignment, dimensions, *args, key_name="", caller=None, **kwargs
     ):
         self.key_name = key_name
         kwargs["ok_action"] = self.accept_and_close
@@ -174,11 +174,11 @@ class SSHDefaultUsernameDialog(DialogControl):
         self.highlighted = 1 if def_text != "" else 0
         self.caller = caller
 
-    def input(self, inkey):
-        if inkey.is_sequence and inkey.name == "KEY_ESCAPE":
+    def input(self, key):
+        if key.is_sequence and key.name == "KEY_ESCAPE":
             self.close()
             return True
-        return super().input(inkey)
+        return super().input(key)
 
     def accept_and_close(self):
         Common.Configuration["default_ssh_usernames"][

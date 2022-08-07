@@ -1,4 +1,4 @@
-from botocore import exceptions
+from botocore import exceptions as botoerror
 
 from .common import Common, SessionAwareDialog
 from .info import HotkeyDisplay
@@ -10,7 +10,7 @@ from .termui.list_control import ListControl, ListEntry
 
 class DeleteContextDialog(SessionAwareDialog):
     def __init__(
-        self, parent, alignment, dimensions, name="", caller=None, *args, **kwargs
+        self, parent, alignment, dimensions, *args, name="", caller=None, **kwargs
     ):
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
@@ -34,11 +34,11 @@ class DeleteContextDialog(SessionAwareDialog):
         self.highlighted = 1
         self.caller = caller
 
-    def input(self, inkey):
-        if inkey.is_sequence and inkey.name == "KEY_ESCAPE":
+    def input(self, key):
+        if key.is_sequence and key.name == "KEY_ESCAPE":
             self.close()
             return True
-        return super().input(inkey)
+        return super().input(key)
 
     def accept_and_close(self):
         Common.Configuration.delete_context(self.name)
@@ -51,7 +51,7 @@ class DeleteContextDialog(SessionAwareDialog):
 
 
 class ImportContextDialog(SessionAwareDialog):
-    def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
+    def __init__(self, parent, alignment, dimensions, *args, caller=None, **kwargs):
         self.accepts_inputs = True
         kwargs["border"] = Border(
             Common.border("default"),
@@ -111,13 +111,13 @@ class ImportContextDialog(SessionAwareDialog):
         )
         self.add_field(self.secret_key_field)
 
-    def input(self, inkey):
+    def input(self, key):
         if not self.accepts_inputs:
             return True
-        if inkey.is_sequence and inkey.name == "KEY_ESCAPE":
+        if key.is_sequence and key.name == "KEY_ESCAPE":
             self.close()
             return True
-        return super().input(inkey)
+        return super().input(key)
 
     def accept_and_close(self):
         if self.name_field.text == "":
@@ -127,8 +127,18 @@ class ImportContextDialog(SessionAwareDialog):
             sts = Common.Session.service_provider.whoami(
                 keys={"access": self.access_key, "secret": self.secret_key}
             )
-        except exceptions.ClientError as e:
+        except botoerror.ClientError as error:
             self.error_label.text = "Key verification failed"
+            Common.clienterror(
+                error,
+                "Key verification failed",
+                "Core",
+                subcategory="STS",
+                resource=self.access_key,
+                set_message=False,
+                access_key=self.access_key,
+                secret_key="<PRESENT>",
+            )
             return
 
         self.accepts_inputs = False
@@ -145,7 +155,7 @@ class ImportContextDialog(SessionAwareDialog):
 
 
 class AddContextDialog(SessionAwareDialog):
-    def __init__(self, parent, alignment, dimensions, caller=None, *args, **kwargs):
+    def __init__(self, parent, alignment, dimensions, *args, caller=None, **kwargs):
         self.accepts_inputs = True
         kwargs["border"] = Border(
             Common.border("default"),
@@ -213,13 +223,13 @@ class AddContextDialog(SessionAwareDialog):
         self.add_field(self.secret_key_field)
         self.caller = caller
 
-    def input(self, inkey):
+    def input(self, key):
         if not self.accepts_inputs:
             return True
-        if inkey.is_sequence and inkey.name == "KEY_ESCAPE":
+        if key.is_sequence and key.name == "KEY_ESCAPE":
             self.close()
             return True
-        return super().input(inkey)
+        return super().input(key)
 
     def accept_and_close(self):
         if self.name_field.text == "":
@@ -238,8 +248,18 @@ class AddContextDialog(SessionAwareDialog):
                     "secret": self.secret_key_field.text,
                 }
             )
-        except exceptions.ClientError as e:
+        except botoerror.ClientError as error:
             self.error_label.text = "Key verification failed"
+            Common.clienterror(
+                error,
+                "Key verification failed",
+                "Core",
+                subcategory="STS",
+                resource=self.access_key_field.text,
+                set_message=False,
+                access_key=self.access_key_field.text,
+                secret_key="<PRESENT>",
+            )
             return
 
         self.accepts_inputs = False
@@ -288,7 +308,6 @@ class ContextList(ListControl):
         self.new_context_dialog = None
         self.add_column("account id", 12)
         self.add_column("default", 7)
-        idx = 0
 
         self.reload_contexts()
 
@@ -300,11 +319,13 @@ class ContextList(ListControl):
         for context, data in Common.Configuration["contexts"].items():
             if context == Common.Configuration["default_context"]:
                 defa = idx
-                d = "✓"
+                is_default = "✓"
             else:
-                d = " "
+                is_default = " "
             self.add_entry(
-                ListEntry(context, **{"account id": data["account_id"], "default": d})
+                ListEntry(
+                    context, **{"account id": data["account_id"], "default": is_default}
+                )
             )
 
             idx += 1

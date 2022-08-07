@@ -17,10 +17,10 @@ class Character:
     def output(self):
         if self.dirty:
             self.dirty = False
-            o = self.value
+            out = self.value
             if self.color is not None:
-                o = self.color(o, bold=self.bold)
-            self.out = o
+                out = self.color(out, bold=self.bold)
+            self.out = out
         return self.out
 
 
@@ -38,8 +38,8 @@ class Screen:
 
         def clear(self):
             if len(self.buf) == self.screen.ui.w:
-                for c in self.buf:
-                    c.clear()
+                for character in self.buf:
+                    character.clear()
             else:
                 self.buf = [Character() for i in range(self.screen.ui.w)]
 
@@ -51,8 +51,8 @@ class Screen:
 
     def clear(self):
         if len(self.buf) == self.ui.h:
-            for c in self.buf:
-                c.clear()
+            for character in self.buf:
+                character.clear()
         else:
             self.buf = [Screen.Row(self) for i in range(self.ui.h)]
 

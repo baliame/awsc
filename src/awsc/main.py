@@ -1,14 +1,13 @@
-import datetime
 import os
 import sys
 
+# pylint: disable=unused-import # We use this import to enumerate all resource listers.
 from . import resources
 from .aws import AWS
 from .commander import Commander, Filterer
-from .common import BaseChart, Common, DefaultAnchor, DefaultBorder, DefaultDimension
+from .common import Common, DefaultAnchor, DefaultDimension, default_border
 from .context import ContextList
-from .info import InfoDisplay
-from .log import LogLister, LogViewer
+from .log import LogLister
 from .meta import CommanderOptionsLister
 from .region import RegionList
 from .ssh import SSHList
@@ -25,7 +24,7 @@ def open_context_lister():
         Common.Session.ui.top_block,
         DefaultAnchor,
         DefaultDimension,
-        border=DefaultBorder("context_list", "Contexts"),
+        border=default_border("context_list", "Contexts"),
         weight=0,
     )
     return [ctxl, ctxl.hotkey_display]
@@ -36,7 +35,7 @@ def open_region_lister():
         Common.Session.ui.top_block,
         DefaultAnchor,
         DefaultDimension,
-        border=DefaultBorder("region_list", "Regions"),
+        border=default_border("region_list", "Regions"),
         weight=0,
     )
     return [regl, regl.hotkey_display]
@@ -91,10 +90,10 @@ def main(*args, **kwargs):
     old_stderr = None
     try:
         if os.fstat(0) == os.fstat(1):
-            tg = open("error.log", "w", buffering=1)
+            log_file_handle = open("error.log", "w", buffering=1, encoding="utf-8")
 
             old_stderr = sys.stderr
-            sys.stderr = tg
+            sys.stderr = log_file_handle
 
         Common.initialize()
         Common.Session.service_provider = AWS()

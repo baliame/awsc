@@ -1,4 +1,4 @@
-from .common import Common, DefaultAnchor, DefaultBorder, DefaultDimension
+from .common import Common, DefaultAnchor, DefaultDimension, default_border
 from .info import HotkeyDisplay
 from .termui.alignment import Dimension, TopRightAnchor
 from .termui.list_control import ListControl, ListEntry
@@ -9,15 +9,15 @@ class CommanderOptionsLister(ListControl):
 
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
             **kwargs,
         )
-        l.border = DefaultBorder("help", "Commands", None)
-        return [l, l.hotkey_display]
+        instance.border = default_border("help", "Commands", None)
+        return [instance, instance.hotkey_display]
 
     def __init__(self, parent, alignment, dimensions, *args, **kwargs):
         super().__init__(
@@ -58,13 +58,13 @@ class CommanderOptionsLister(ListControl):
         for cmd in Common.Session.commander_options:
             opt = Common.Session.commander_options[cmd]
             if hasattr(opt, "__self__"):
-                le = ListEntry(cmd, command=cmd, resource=opt.__self__.title)
+                list_entry = ListEntry(cmd, command=cmd, resource=opt.__self__.title)
             elif cmd in self.phony:
-                le = ListEntry(cmd, command=cmd, resource=self.phony[cmd])
+                list_entry = ListEntry(cmd, command=cmd, resource=self.phony[cmd])
             else:
-                le = ListEntry(cmd, command=cmd, resource="")
-            le.controller_data["fn"] = opt
-            self.entries.append(le)
+                list_entry = ListEntry(cmd, command=cmd, resource="")
+            list_entry.controller_data["fn"] = opt
+            self.entries.append(list_entry)
         self.entries.sort(key=lambda x: x["command"])
 
     def select_and_close(self, _):

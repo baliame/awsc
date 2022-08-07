@@ -23,27 +23,30 @@ class Block:
         return self.alignment.topleft(self.dimensions, self.parent)
 
     def bottomright(self):
-        tl = self.alignment.topleft(self.dimensions, self.parent)
-        return (tl[0] + self.dimensions[0], tl[1] + self.dimensions[1])
+        topleft = self.alignment.topleft(self.dimensions, self.parent)
+        return (topleft[0] + self.dimensions[0], topleft[1] + self.dimensions[1])
 
     @property
-    def w(self):
-        c = self.corners()
-        return c[0][1] - c[0][0] + 1
+    def width(self):
+        corners = self.corners()
+        return corners[0][1] - corners[0][0] + 1
 
     @property
-    def h(self):
-        c = self.corners()
-        return c[1][1] - c[1][0] + 1
+    def height(self):
+        corners = self.corners()
+        return corners[1][1] - corners[1][0] + 1
 
     @property
     def w_in(self):
-        return self.w
+        return self.width
 
     def corners(self):
-        tl = self.topleft()
-        br = (tl[0] + self.dimensions[0] - 1, tl[1] + self.dimensions[1] - 1)
-        return ((tl[0], br[0]), (tl[1], br[1]))
+        topleft = self.topleft()
+        botright = (
+            topleft[0] + self.dimensions[0] - 1,
+            topleft[1] + self.dimensions[1] - 1,
+        )
+        return ((topleft[0], botright[0]), (topleft[1], botright[1]))
 
     def before_paint(self):
         for block in reversed(self.blocks):
@@ -55,15 +58,13 @@ class Block:
 
     def add_block(self, block):
         Commons.UIInstance.dirty = True
-        idx = 0
-        for i in range(len(self.blocks)):
-            blk = self.blocks[i]
-            if blk.weight > block.weight:
-                idx = i
+        add_idx = 0
+        for idx, existing_block in enumerate(self.blocks):
+            if existing_block.weight > block.weight:
+                add_idx = idx
                 break
-            i += 1
         block.parent = self
-        self.blocks.insert(idx, block)
+        self.blocks.insert(add_idx, block)
 
     def clear_blocks(self, tag=None):
         self.blocks = [

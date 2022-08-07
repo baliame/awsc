@@ -1,10 +1,8 @@
 import datetime
 import json
 
-import yaml
-
 from .base_control import GenericDescriber, datetime_hack
-from .common import Common, DefaultAnchor, DefaultBorder, DefaultDimension
+from .common import Common, DefaultAnchor, DefaultDimension, default_border
 from .info import HotkeyDisplay
 from .termui.alignment import Dimension, TopRightAnchor
 from .termui.list_control import ListControl, ListEntry
@@ -13,19 +11,19 @@ from .termui.list_control import ListControl, ListEntry
 class LogLister(ListControl):
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
             **kwargs,
         )
-        l.border = DefaultBorder("log", "Logs", None)
-        return [l, l.hotkey_display]
+        instance.border = default_border("log", "Logs", None)
+        return [instance, instance.hotkey_display]
 
     @classmethod
-    def selector(cls, cb, **kwargs):
-        return cls.opener(**{"selector_cb": cb, **kwargs})
+    def selector(cls, callback, **kwargs):
+        return cls.opener(**{"selector_cb": callback, **kwargs})
 
     def __init__(
         self, parent, alignment, dimensions, *args, selector_cb=None, **kwargs

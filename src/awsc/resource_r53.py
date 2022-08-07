@@ -1,13 +1,75 @@
-import botocore
+import json
+from datetime import datetime
 
-from .base_control import Describer, ResourceLister
+from .base_control import (
+    DeleteResourceDialog,
+    Describer,
+    ListResourceDocumentCreator,
+    ListResourceFieldsEditor,
+    ResourceLister,
+)
 from .common import Common
+from .termui.alignment import CenterAnchor, Dimension
+from .termui.ui import ControlCodes
 
 
 class R53ResourceLister(ResourceLister):
     prefix = "r53_list"
     title = "Route53 Hosted Zones"
     command_palette = ["r53", "route53"]
+
+    def delete_hosted_zone(self, _):
+        if self.selection is None:
+            return
+        DeleteResourceDialog(
+            self.parent,
+            CenterAnchor(0, 0),
+            Dimension("80%|40", "10"),
+            caller=self,
+            resource_type="route53 hosted zone",
+            resource_identifier=self.selection["id"],
+            callback=self.do_delete,
+            action_name="Delete",
+            can_force=True,
+        )
+
+    def do_delete(self, **kwargs):
+        if self.selection is None:
+            return
+        api_kwargs = {
+            "Id": self.selection["id"],
+        }
+        Common.generic_api_call(
+            "route53",
+            "delete_hosted_zone",
+            api_kwargs,
+            "Delete hosted zone",
+            "Route53",
+            subcategory="Hosted Zone",
+            success_template="Deleting hosted zone {0}",
+            resource=self.selection["id"],
+        )
+        self.refresh_data()
+
+    def create(self, _):
+        ListResourceDocumentCreator(
+            "route53",
+            "created_hosted_zone",
+            None,
+            initial_document={
+                "Name": "",
+                "VPC": {
+                    "VPCRegion": "",
+                    "VPCId": "",
+                },
+                "CallerReference": datetime.now().isoformat(),
+                "HostedZoneConfig": {
+                    "Comment": "",
+                    "PrivateZone": False,
+                },
+                "DelegationSetId": "",
+            },
+        ).edit()
 
     def __init__(self, *args, **kwargs):
         self.resource_key = "route53"
@@ -31,6 +93,37 @@ class R53ResourceLister(ResourceLister):
         self.imported_column_order = ["id", "name", "records"]
         self.sort_column = "name"
         super().__init__(*args, **kwargs)
+        self.add_hotkey(ControlCodes.D, self.delete_hosted_zone, "Delete hosted zone")
+        self.add_hotkey("n", self.create, "Create hosted zone")
+
+
+class R53RecordCreator(ListResourceDocumentCreator):
+    def __init__(self, hosted_zone_id, *args, **kwargs):
+        self.hosted_zone_id = hosted_zone_id
+        super().__init__(
+            "route53",
+            "change_resource_record_sets",
+            None,
+            initial_document={
+                "Name": "",
+                "Type": "A",
+                "ResourceRecords": [
+                    {
+                        "Value": "",
+                    }
+                ],
+                "TTL": 30,
+            },
+        )
+
+    def generate_kwargs(self, selection, newcontent):
+        update_data = json.loads(newcontent)
+        return {
+            "HostedZoneId": self.hosted_zone_id,
+            "ChangeBatch": {
+                "Changes": [{"Action": "CREATE", "ResourceRecordSet": update_data}],
+            },
+        }
 
 
 class R53RecordLister(ResourceLister):
@@ -68,13 +161,66 @@ class R53RecordLister(ResourceLister):
         self.primary_key = None
         super().__init__(*args, **kwargs)
         self.add_hotkey("e", self.edit, "Edit")
+        self.add_hotkey("n", self.create, "Add new record")
+        self.add_hotkey(ControlCodes.D, self.delete_record, "Delete record")
 
-    def determine_hosted_zone_id(self, s):
+    def determine_hosted_zone_id(self, _):
         return self.r53_entry["id"]
 
-    def determine_name(self, s):
-        return s["Name"].replace("\\052", "*")
+    def determine_name(self, result):
+        return result["Name"].replace("\\052", "*")
 
+    def delete_record(self, _):
+        if self.selection is None:
+            return
+        DeleteResourceDialog(
+            self.parent,
+            CenterAnchor(0, 0),
+            Dimension("80%|40", "10"),
+            caller=self,
+            resource_type="route53 DNS entry",
+            resource_identifier=f"{self.selection['entry']} {self.selection['name']}",
+            callback=self.do_delete,
+            action_name="Delete",
+            can_force=True,
+        )
+
+    def do_delete(self, **kwargs):
+        if self.selection is None:
+            return
+        Common.generic_api_call(
+            "route53",
+            "change_resource_record_sets",
+            {
+                "HostedZoneId": self.selection["hosted_zone_id"],
+                "ChangeBatch": {
+                    "Changes": [
+                        {
+                            "Action": "DELETE",
+                            "ResourceRecordSet": {
+                                "Name": self.selection["name"],
+                                "Type": self.selection["entry"],
+                                "ResourceRecords": self.selection.controller_data[
+                                    "ResourceRecords"
+                                ],
+                            },
+                        }
+                    ]
+                },
+            },
+            "Edit DNS record",
+            "Route53",
+            subcategory="Hosted Zone",
+            success_template="Modified DNS entry for zone {0}",
+            resource=self.selection["hosted_zone_id"],
+        )
+        self.refresh_data()
+
+    def create(self, _):
+        R53RecordCreator(self.r53_entry["id"]).edit()
+        self.refresh_data()
+
+    # TODO: Use new editor class if possible.
     def edit(self, _):
         if self.selection is not None:
             raw = self.selection.controller_data
@@ -123,13 +269,13 @@ class R53RecordLister(ResourceLister):
                     "Cannot edit aliased records", Common.color("message_info")
                 )
 
-    def is_alias(self, s):
-        return "AliasTarget" in s and s["AliasTarget"]["DNSName"] != ""
+    def is_alias(self, result):
+        return "AliasTarget" in result and result["AliasTarget"]["DNSName"] != ""
 
-    def determine_records(self, s):
-        if self.is_alias(s):
-            return s["AliasTarget"]["DNSName"]
-        return ",".join([record["Value"] for record in s["ResourceRecords"]])
+    def determine_records(self, result):
+        if self.is_alias(result):
+            return result["AliasTarget"]["DNSName"]
+        return ",".join([record["Value"] for record in result["ResourceRecords"]])
 
 
 class R53Describer(Describer):
@@ -150,7 +296,7 @@ class R53Describer(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -176,7 +322,7 @@ class R53RecordDescriber(Describer):
         entry,
         *args,
         entry_key="hosted_zone_id",
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "route53"
         self.describe_method = "list_resource_record_sets"
@@ -189,8 +335,192 @@ class R53RecordDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
     def title_info(self):
-        return "{0} {1}".format(self.record_type, self.record_name)
+        return f"{self.record_type} {self.record_name}"
+
+
+class R53HealthCheckLister(ResourceLister):
+    prefix = "r53_health_check_list"
+    title = "Route53 Health Checks"
+    # TODO: healthcheck may conflict with other services
+    # if it does, remove and only allow more explicit commands
+    command_palette = ["r53healthcheck", "route53healthcheck", "healthcheck"]
+
+    def create_health_check(self, _):
+        ListResourceDocumentCreator(
+            "route53",
+            "create_health_check",
+            "HealthCheckConfig",
+            initial_document={
+                "IPAddress": "string",
+                "Port": 80,
+                "Type": "HTTP",
+                "ResourcePath": "/",
+                "FullyQualifiedDomainName": "string",
+                "SearchString": "string",
+                "RequestInterval": 30,
+                "FailureThreshold": 3,
+                "MeasureLatency": False,
+                "Inverted": False,
+                "Disabled": False,
+                "HealthThreshold": 0,
+                "ChildHealthChecks": [
+                    "string",
+                ],
+                "EnableSNI": True,
+                "Regions": [
+                    "us-east-1",
+                ],
+                "AlarmIdentifier": {"Region": "us-east-1", "Name": "string"},
+                "InsufficientDataHealthStatus": "Unhealthy",
+                "RoutingControlArn": "string",
+            },
+            as_json=True,
+            static_fields={},
+            message="Create successful",
+        ).edit()
+
+    def edit_health_check(self, _):
+        if self.selection is None:
+            return
+        ListResourceFieldsEditor(
+            "route53",
+            "get_health_check",
+            ".HealthCheck.HealthCheckConfig",
+            "update_health_check",
+            "HealthCheckId",
+            {
+                "IPAddress": ".IPAddress",
+                "Port": ".Port",
+                "ResourcePath": ".ResourcePath",
+                "FullyQualifiedDomainName": ".FullyQualifiedDomainName",
+                "SearchString": ".SearchString",
+                "FailureThreshold": ".FailureThreshold",
+                "Inverted": ".Inverted",
+                "Disabled": ".Disabled",
+                "HealthThreshold": ".HealthThreshold",
+                "ChildHealthChecks": ".ChildHealthChecks",
+                "EnableSNI": ".EnableSNI",
+                "Regions": ".Regions",
+                "AlarmIdentifier": ".AlarmIdentifier",
+                "InsufficientDataHealthStatus": ".InsufficientDataHealthStatus",
+                "ResetElements": "[]",
+            },
+            entry_key="id",
+            as_json=[
+                "ChildHealthChecks",
+                "Regions",
+                "AlarmIdentifier",
+                "ResetElements",
+            ],
+        ).edit(self.selection)
+
+    def delete_health_check(self, _):
+        if self.selection is None:
+            return
+        DeleteResourceDialog(
+            self.parent,
+            CenterAnchor(0, 0),
+            Dimension("80%|40", "10"),
+            caller=self,
+            resource_type="route53 health check",
+            resource_identifier=self.selection["id"],
+            callback=self.do_delete,
+            action_name="Delete",
+            can_force=True,
+        )
+
+    def do_delete(self, **kwargs):
+        if self.selection is None:
+            return
+        api_kwargs = {
+            "HealthCheckId": self.selection["id"],
+        }
+        Common.generic_api_call(
+            "route53",
+            "delete_health_check",
+            api_kwargs,
+            "Delete health check",
+            "Route53",
+            subcategory="Health check",
+            success_template="Deleting health check {0}",
+            resource=self.selection["id"],
+        )
+        self.refresh_data()
+
+    def __init__(self, *args, **kwargs):
+        self.resource_key = "route53"
+        self.list_method = "list_health_checks"
+        self.item_path = ".HealthChecks"
+        self.column_paths = {
+            "id": ".Id",
+            "uri": self.determine_healthcheck_uri,
+            "inverted": ".HealthCheckConfig.Inverted",
+            "disabled": ".HealthCheckConfig.Disabled",
+            "status": self.determine_healthcheck_status,
+        }
+        self.imported_column_sizes = {
+            "id": 30,
+            "records": 5,
+        }
+        self.hidden_columns = {"name": ".Id"}
+        self.describe_command = R53Describer.opener
+        self.open_command = R53RecordLister.opener
+        self.open_selection_arg = "r53_entry"
+        self.primary_key = "id"
+
+        self.imported_column_order = ["id", "name", "records"]
+        self.sort_column = "name"
+        super().__init__(*args, **kwargs)
+
+    def determine_healthcheck_uri(self, result):
+        hcc = result["HealthCheckConfig"]
+        if hcc["Type"] == "CLOUDWATCH_METRIC":
+            cwac = result["CloudwatchAlarmConfiguration"]
+            if cwac["ComparisonOperator"] == "GreaterThanOrEqualToThreshold":
+                op = ">="
+            elif cwac["ComparisonOperator"] == "GreaterThanThreshold":
+                op = ">"
+            elif cwac["ComparisonOperator"] == "LessThanOrEqualToThreshold":
+                op = "<="
+            elif cwac["ComparisonOperator"] == "LessThanThreshold":
+                op = "<"
+            else:
+                op = "?"
+            return f"<cloudwatch>: {cwac['MetricName']} {op} {cwac['Threshold']}"
+
+        elif hcc["Type"] == "CALCULATED":
+            return "<calculated>"
+        elif hcc["Type"] == "RECOVERY_CONTROL":
+            return "<recovery control>"
+        if ["IPAddress"] in hcc and hcc["IPAddress"] != "":
+            host = hcc["IPAddress"]
+        else:
+            host = hcc["FullyQualifiedDomainName"]
+        if hcc["Type"] in ["HTTP", "HTTP_STR_MATCH"]:
+            protocol = "http"
+        elif hcc["Type"] in ["HTTPS", "HTTPS_STR_MATCH"]:
+            protocol = "https"
+        elif hcc["Type"] == "TCP":
+            protocol = "tcp"
+        else:
+            protocol = f"unknown({hcc['Type']})"
+        return f"{protocol}://{host}:{hcc['Port']}{hcc['ResourcePath']}"
+
+    def determine_healthcheck_status(self, result):
+        resp = Common.generic_api_call(
+            "route53",
+            "get_health_check_status",
+            {"HealthCheckId": result["Id"]},
+            "Get Health Check Status",
+            "Route53",
+            subcategory="Health Check",
+            resource=result["Id"],
+        )
+        if resp["Success"]:
+            return resp["Response"]["HealthCheckObservations"]["StatusReport"]["Status"]
+        else:
+            return "<n/a>"

@@ -1,6 +1,6 @@
 class ARN:
-    def __init__(self, s):
-        parts = s.split(":")
+    def __init__(self, string):
+        parts = string.split(":")
         if len(parts) < 6:
             raise ValueError(
                 "ARN does not contain enough components for full identification"
@@ -26,7 +26,7 @@ class ARN:
     @property
     def resource(self):
         if self.resource_type != "":
-            return "{0}/{1}".format(self.resource_type, self.resource_id)
+            return f"{self.resource_type}/{self.resource_id}"
         return self.resource_id
 
     @property
@@ -34,6 +34,4 @@ class ARN:
         return self.resource_id.split("/")[0]
 
     def __str__(self):
-        return "arn:{0}:{1}:{2}:{3}:{4}".format(
-            self.partition, self.service, self.region, self.account_id, self.resource
-        )
+        return f"arn:{self.partition}:{self.service}:{self.region}:{self.account_id}:{self.resource}"

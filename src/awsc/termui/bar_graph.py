@@ -18,7 +18,7 @@ class BarGraph(Control):
         *args,
         color=ColorGold,
         highlight_color=ColorDarkGreen,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
         self.subdivisions = {
@@ -69,7 +69,7 @@ class BarGraph(Control):
             inkey = key.name
         else:
             inkey = inkey.lower()
-        if inkey in self.hotkeys.keys():
+        if inkey in self.hotkeys:
             self.hotkeys[inkey](self)
             Commons.UIInstance.dirty = True
             return True
@@ -114,16 +114,16 @@ class BarGraph(Control):
         self._data_points_behaviour = value
         if value == BarGraph.DPB_ZeroOrLessToMax:
             self.min_point = 0
-            for dp in self.datapoints:
-                if dp[1] < self.min_point:
-                    self.min_point = dp[1]
+            for datapoint in self.datapoints:
+                if datapoint[1] < self.min_point:
+                    self.min_point = datapoint[1]
         elif value == BarGraph.DPB_ZeroToMax:
             self.min_point = 0
         elif value == BarGraph.DPB_MinToMax:
             self.min_point = self.max_point
-            for dp in self.datapoints:
-                if dp[1] < self.min_point:
-                    self.min_point = dp[1]
+            for datapoint in self.datapoints:
+                if datapoint[1] < self.min_point:
+                    self.min_point = datapoint[1]
         else:
             raise ValueError
 
@@ -145,10 +145,10 @@ class BarGraph(Control):
                     self.min_point = 0
                 elif self._data_points_behaviour == BarGraph.DPB_MinToMax:
                     self.min_point = min(self.min_point, datapoint)
-            for i in range(len(self.datapoints)):
-                ts = self.datapoints[i][0]
-                if ts > timestamp:
-                    self.datapoints.insert(i, (timestamp, datapoint))
+            for idx, existing_datapoint in enumerate(self.datapoints):
+                existing_timestamp = existing_datapoint[0]
+                if existing_timestamp > timestamp:
+                    self.datapoints.insert(idx, (timestamp, datapoint))
                     return
             self.datapoints.append((timestamp, datapoint))
         finally:
@@ -166,23 +166,23 @@ class BarGraph(Control):
 
     @property
     def colspace(self):
-        c = self.corners()
-        wspace = c[0][1] - c[0][0] + 1 - (0 if self.border is None else 2)
-        max_label = "{0:.2f}".format(float(self.max_point))
-        min_label = "{0:.2f}".format(float(self.min_point))
+        corners = self.corners()
+        wspace = corners[0][1] - corners[0][0] + 1 - (0 if self.border is None else 2)
+        max_label = f"{float(self.max_point):.2f}"
+        min_label = f"{float(self.min_point):.2f}"
         x_label_space = max(len(max_label), len(min_label)) + 1
         return wspace - x_label_space
 
     def paint(self):
         super().paint()
-        c = self.corners()
-        wspace = c[0][1] - c[0][0] + 1 - (0 if self.border is None else 2)
-        hspace = c[1][1] - c[1][0] + 1 - (0 if self.border is None else 2)
-        x0 = c[0][0] + (0 if self.border is None else 1)
-        y0 = c[1][0] + (0 if self.border is None else 1)
+        corners = self.corners()
+        wspace = corners[0][1] - corners[0][0] + 1 - (0 if self.border is None else 2)
+        hspace = corners[1][1] - corners[1][0] + 1 - (0 if self.border is None else 2)
+        x0 = corners[0][0] + (0 if self.border is None else 1)
+        y0 = corners[1][0] + (0 if self.border is None else 1)
 
-        max_label = "{0:.2f}".format(float(self.max_point))
-        min_label = "{0:.2f}".format(float(self.min_point))
+        max_label = f"{float(self.max_point):.2f}"
+        min_label = f"{float(self.min_point):.2f}"
 
         x_label_space = max(len(max_label), len(min_label)) + 1
         colspace = wspace - x_label_space
@@ -216,57 +216,58 @@ class BarGraph(Control):
             color=self.color,
         )
         Commons.UIInstance.print(
-            "Value at {0}: {1:.2f}".format(
-                self.datapoints[self.highlight][0].isoformat(),
-                self.datapoints[self.highlight][1],
-            ),
+            f"Value at {self.datapoints[self.highlight][0].isoformat()}: {self.datapoints[self.highlight][1]:.2f}",
             (xb0, y0 + rowspace + 1),
             color=self.highlight_color,
         )
 
-        v = self.max_point
+        value = self.max_point
         for y in range(y0, y0 + rowspace):
-            row_bounds = (v - point_step, v)
-            v -= point_step
+            row_bounds = (value - point_step, value)
+            value -= point_step
             row = ["", "", ""]
-            ri = 0
+            rowindex = 0
             rolling = 0
             for col in range(first_col, last_col + 1):
                 datapoint = self.datapoints[col][1]
                 colw = col_width
                 if col == self.highlight:
-                    ri = 1
+                    rowindex = 1
                 if rolling > 1:
                     colw += 1
                     rolling -= 1
                 if datapoint < row_bounds[0]:
                     if row_bounds[0] > 0:
-                        row[ri] += self.subdivisions[0] * colw
+                        row[rowindex] += self.subdivisions[0] * colw
                     else:
-                        row[ri] += self.subdivisions[-8] * colw
+                        row[rowindex] += self.subdivisions[-8] * colw
                 elif datapoint > row_bounds[1]:
                     if row_bounds[1] > 0:
-                        row[ri] += self.subdivisions[8] * colw
+                        row[rowindex] += self.subdivisions[8] * colw
                     else:
-                        row[ri] += self.subdivisions[0] * colw
+                        row[rowindex] += self.subdivisions[0] * colw
                 else:
                     if row_bounds[0] < 0 and row_bounds[1] > 0:
-                        row[ri] += self.subdivisions[8] * colw
+                        row[rowindex] += self.subdivisions[8] * colw
                     elif datapoint > 0:
                         if point_step != 0:
-                            t = int((float(datapoint - row_bounds[0]) / point_step) * 8)
+                            subdivision = int(
+                                (float(datapoint - row_bounds[0]) / point_step) * 8
+                            )
                         else:
-                            t = "?"
-                        row[ri] += self.subdivisions[t] * colw
+                            subdivision = "?"
+                        row[rowindex] += self.subdivisions[subdivision] * colw
                     else:
                         if point_step != 0:
-                            t = int((float(datapoint - row_bounds[1]) / point_step) * 8)
+                            subdivision = int(
+                                (float(datapoint - row_bounds[1]) / point_step) * 8
+                            )
                         else:
-                            t = "?"
-                        row[ri] += self.subdivisions[t] * colw
+                            subdivision = "?"
+                        row[rowindex] += self.subdivisions[subdivision] * colw
                 rolling += roll
                 if col == self.highlight:
-                    ri = 2
+                    rowindex = 2
             Commons.UIInstance.print(row[0], (xb0, y), color=self.color)
             if len(row[1]) > 0:
                 Commons.UIInstance.print(

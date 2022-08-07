@@ -18,33 +18,34 @@ class NullHighlighter:
 class JsonHighlighter:
     def _get_scheme_color(self, browser, color_name):
         try:
-            c = browser.scheme["colors"][color_name]
+            color = browser.scheme["colors"][color_name]
         except KeyError:
             return browser.color
-        return Color(Palette8Bit(), c["foreground"], background=c["background"])
+        return Color(Palette8Bit(), color["foreground"], background=color["background"])
 
     def __call__(self, browser, lines):
-        import sys
-
         joined = "\n".join(lines)
         lexer = JsonLexer(tabsize=2, stripnl=False, stripall=False)
         tokens = lexer.get_tokens(joined)
         current_line = []
         result_lines = []
         for token in tokens:
-            print("Token: {0}".format(token), file=sys.stderr)
+            token_color_name = (
+                f"syntax_highlight_{str(token[0].lower().replace('.', '_'))}"
+            )
+            token_color = (
+                self._get_scheme_color(
+                    browser,
+                    token_color_name,
+                ),
+            )
             if token[0] in Token.Text:
                 brk = token[1].split("\n")
                 while len(brk) > 1:
                     current_line.append(
                         (
                             brk[0],
-                            self._get_scheme_color(
-                                browser,
-                                "syntax_highlight_{0}".format(
-                                    str(token[0]).lower().replace(".", "_")
-                                ),
-                            ),
+                            token_color,
                         )
                     )
                     result_lines.append(current_line)
@@ -55,9 +56,7 @@ class JsonHighlighter:
                         brk[0],
                         self._get_scheme_color(
                             browser,
-                            "syntax_highlight_{0}".format(
-                                str(token[0]).lower().replace(".", "_")
-                            ),
+                            token_color,
                         ),
                     )
                 )
@@ -67,9 +66,7 @@ class JsonHighlighter:
                         token[1],
                         self._get_scheme_color(
                             browser,
-                            "syntax_highlight_{0}".format(
-                                str(token[0]).lower().replace(".", "_")
-                            ),
+                            token_color,
                         ),
                     )
                 )
@@ -88,7 +85,7 @@ class TextBrowser(Control):
         filtered_color=ColorBlackOnGold,
         scheme=None,
         syntax_highlighting=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
         self.entries = []
@@ -176,14 +173,14 @@ class TextBrowser(Control):
         if refilter:
             for i in range(len(self.lines)):
                 rawline = self.raw(i)
-                ml = rawline.split(self._filter)
+                processed_line = rawline.split(self._filter)
                 pos = 0
-                for j in range(1, len(ml)):
-                    pos += len(ml[j - 1])
+                for j in range(1, len(processed_line)):
+                    pos += len(processed_line[j - 1])
                     if i not in self.filter_positions:
                         self.filter_positions[i] = []
                     self.filter_positions[i].append(pos)
-                if len(ml) > 1:
+                if len(processed_line) > 1:
                     self._current_filter_match.append(i)
 
         for elem in self._current_filter_match:
@@ -207,7 +204,7 @@ class TextBrowser(Control):
             inkey = key.name
         else:
             inkey = inkey.lower()
-        if inkey in self.hotkeys.keys():
+        if inkey in self.hotkeys:
             self.hotkeys[inkey](self)
             Commons.UIInstance.dirty = True
             return True
@@ -238,47 +235,41 @@ class TextBrowser(Control):
             self.left -= 1
 
     def end(self, *args):
-        c = self.corners()
-        y0 = c[1][0] + (0 if self.border is None else 1)
-        y1 = c[1][1] - (0 if self.border is None else 1)
-        h = y1 - y0 + 1
-        limit = len(self.lines) - h if not self.wrap else len(self.lines) - 1
+        corners = self.corners()
+        y0 = corners[1][0] + (0 if self.border is None else 1)
+        y1 = corners[1][1] - (0 if self.border is None else 1)
+        height = y1 - y0 + 1
+        limit = len(self.lines) - height if not self.wrap else len(self.lines) - 1
         self.top = max(limit, 0)
 
     def home(self, *args):
         self.top = 0
 
     def pgup(self, *args):
-        c = self.corners()
-        y0 = c[1][0] + (0 if self.border is None else 1)
-        y1 = c[1][1] - (0 if self.border is None else 1)
-        h = y1 - y0 + 1
-        self.top = max(self.top - h, 0)
+        corners = self.corners()
+        y0 = corners[1][0] + (0 if self.border is None else 1)
+        y1 = corners[1][1] - (0 if self.border is None else 1)
+        height = y1 - y0 + 1
+        self.top = max(self.top - height, 0)
 
     def pgdown(self, *args):
-        c = self.corners()
-        y0 = c[1][0] + (0 if self.border is None else 1)
-        y1 = c[1][1] - (0 if self.border is None else 1)
-        h = y1 - y0 + 1
-        limit = len(self.lines) - h if not self.wrap else len(self.lines) - 1
-        self.top = max(min(limit, self.top + h), 0)
+        corners = self.corners()
+        y0 = corners[1][0] + (0 if self.border is None else 1)
+        y1 = corners[1][1] - (0 if self.border is None else 1)
+        height = y1 - y0 + 1
+        limit = len(self.lines) - height if not self.wrap else len(self.lines) - 1
+        self.top = max(min(limit, self.top + height), 0)
 
     def copy_contents(self, *args):
         pyperclip.copy(self.raw())
 
     def paint(self):
-        import sys
-
         super().paint()
-        print(
-            "Lines ({0}): {1}".format(len(self.display_lines), self.display_lines),
-            file=sys.stderr,
-        )
-        c = self.corners()
-        y = c[1][0] + (0 if self.border is None else 1)
-        y1 = c[1][1] - (0 if self.border is None else 1)
-        x0 = c[0][0] + (0 if self.border is None else 1)
-        x1 = c[0][1] - (0 if self.border is None else 1)
+        corners = self.corners()
+        y = corners[1][0] + (0 if self.border is None else 1)
+        y1 = corners[1][1] - (0 if self.border is None else 1)
+        x0 = corners[0][0] + (0 if self.border is None else 1)
+        x1 = corners[0][1] - (0 if self.border is None else 1)
         for i in range(self.top, len(self.display_lines)):
             line = self.display_lines[i]
             skip_chars = self.left
@@ -289,14 +280,14 @@ class TextBrowser(Control):
             next_filter_last_pos = -1
             nfp_idx = 0
             if i in self.filter_positions:
-                for p in self.filter_positions[i]:
-                    if p >= pos:
-                        next_filter_pos = p
-                        next_filter_last_pos = p + len(self._filter) - 1
+                for filter_position in self.filter_positions[i]:
+                    if filter_position >= pos:
+                        next_filter_pos = filter_position
+                        next_filter_last_pos = filter_position + len(self._filter) - 1
                         break
-                    elif p + len(self._filter) - 1 >= pos:
-                        next_filter_pos = p
-                        next_filter_last_pos = p + len(self._filter) - 1
+                    elif filter_position + len(self._filter) - 1 >= pos:
+                        next_filter_pos = filter_position
+                        next_filter_last_pos = filter_position + len(self._filter) - 1
                     else:
                         nfp_idx += 1
             for elem in line:

@@ -14,7 +14,7 @@ class InstanceClassResourceLister(ResourceLister):
         self.column_paths = {
             "name": ".InstanceType",
             "cpus": ".VCpuInfo.DefaultVCpus",
-            "memory": lambda x: "{0} MiB".format(x["MemoryInfo"]["SizeInMiB"]),
+            "memory": lambda x: f"{x['MemoryInfo']['SizeInMiB']} MiB",
             "ebs optimization": ".EbsInfo.EbsOptimizedSupport",
             "network": ".NetworkInfo.NetworkPerformance",
         }
@@ -59,5 +59,5 @@ class InstanceClassDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

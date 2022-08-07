@@ -15,8 +15,8 @@ class ASGResourceLister(ResourceLister):
         return self.title_info_data
 
     def matches(self, list_entry, *args):
-        if self.lc is not None:
-            if list_entry["launch config"] != self.lc["name"]:
+        if self.launch_config is not None:
+            if list_entry["launch config"] != self.launch_config["name"]:
                 return False
         return super().matches(list_entry, *args)
 
@@ -26,11 +26,11 @@ class ASGResourceLister(ResourceLister):
         self.resource_key = "autoscaling"
         self.list_method = "describe_auto_scaling_groups"
         self.title_info_data = None
-        self.lc = None
+        self.launch_config = None
         if "lc" in kwargs:
-            lc = kwargs["lc"]
-            self.title_info_data = "LaunchConfiguration: {0}".format(lc["name"])
-            self.lc = lc
+            launch_config = kwargs["lc"]
+            self.title_info_data = f"LaunchConfiguration: {launch_config['name']}"
+            self.launch_config = launch_config
 
         self.item_path = ".AutoScalingGroups"
         self.column_paths = {
@@ -79,10 +79,9 @@ class ASGResourceLister(ResourceLister):
             return ""
 
     def determine_instance_count(self, asg):
-        return "{0}/{1}".format(
-            len([h for h in asg["Instances"] if h["HealthStatus"] == "Healthy"]),
-            len(asg["Instances"]),
-        )
+        healthy = len([h for h in asg["Instances"] if h["HealthStatus"] == "Healthy"])
+        total = len(asg["Instances"])
+        return f"{healthy}/{total}"
 
     def scale_group(self, _):
         if self.selection is not None:
@@ -145,11 +144,7 @@ class ASGScaleDialog(SessionAwareDialog):
         if (
             des < asg["MinSize"] or des > asg["MaxSize"]
         ) and not self.adjust_limits_field.checked:
-            self.error_label.text = (
-                "Desired capacity is out of min-max range of {0}-{1}".format(
-                    asg["MinSize"], asg["MaxSize"]
-                )
-            )
+            self.error_label.text = f"Desired capacity is out of min-max range of {asg['MinSize']}-{asg['MaxSize']}"
             return
 
         nmin = min(des, asg["MinSize"])
@@ -188,5 +183,5 @@ class ASGDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

@@ -76,7 +76,7 @@ class RDSDescriber(Describer):
         entry,
         *args,
         entry_key="instance id",
-        **kwargs
+        **kwargs,
     ):
         self.resource_key = "rds"
         self.describe_method = "describe_db_instances"
@@ -89,7 +89,7 @@ class RDSDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -99,10 +99,10 @@ class RDSClientDialog(SessionAwareDialog):
         parent,
         alignment,
         dimensions,
+        *args,
         instance_entry=None,
         caller=None,
-        *args,
-        **kwargs
+        **kwargs,
     ):
         kwargs["border"] = Border(
             Common.border("rds_client_modal", "default"),
@@ -117,7 +117,7 @@ class RDSClientDialog(SessionAwareDialog):
                 "modal_dialog_border_title_info",
             ),
         )
-        super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
+        super().__init__(parent, alignment, dimensions, *args, caller=caller, **kwargs)
         self.instance_id = instance_entry["instance id"]
         self.db_name = instance_entry["db_name"]
         self.ip = instance_entry["host"]
@@ -174,36 +174,26 @@ class RDSClientDialog(SessionAwareDialog):
         self.add_field(self.username_textfield)
         self.add_field(self.password_textfield)
         self.add_field(self.database_textfield)
-        self.highlighted = 1 if def_text != "" else 0
+        # self.highlighted = 1 if def_text != "" else 0
         self.caller = caller
 
     def accept_and_close(self):
         if self.engine in ["aurora", "aurora-mysql", "mariadb", "mysql"]:
             dollar_zero = "mysql"
-            cmd = "mysql -h {0} -D {1} -u {2} --password={3}".format(
-                self.ip,
-                self.database_textfield.text,
-                self.username_textfield.text,
-                self.password_textfield.text,
-            )
+            cmd = f"mysql -h {self.ip} -D {self.database_textfield.text} -u {self.username_textfield.text} --password={self.password_textfield.text}"
         elif self.engine in ["aurora-postgresql", "postgres"]:
             dollar_zero = "psql"
-            cmd = "psql postgres://{2}:{3}@{0}/{1}".format(
-                self.ip,
-                self.database_textfield.text,
-                self.username_textfield.text,
-                self.password_textfield.text,
-            )
+            cmd = f"psql postgres://{self.username_textfield}:{self.password_textfield}@{self.ip}/{self.database_textfield}"
         else:
             Common.Session.set_message(
-                "Unsupported engine: {0}".format(self.engine),
+                f"Unsupported engine: {self.engine}",
                 Common.color("message_info"),
             )
             self.close()
             return
-        ex = Common.Session.ui.unraw(subprocess.run, ["bash", "-c", cmd])
+        exit_code = Common.Session.ui.unraw(subprocess.run, ["bash", "-c", cmd])
         Common.Session.set_message(
-            "{1} exited with code {0}".format(ex.returncode, dollar_zero),
+            f"{dollar_zero} exited with code {exit_code.returncode}",
             Common.color("message_info"),
         )
         super().accept_and_close()

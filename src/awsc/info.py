@@ -42,37 +42,37 @@ class InfoDisplay(Control):
             return True
         return False
 
-    def __getitem__(self, k):
-        return self.info[k] if k in self.info else None
+    def __getitem__(self, key):
+        return self.info[key] if key in self.info else None
 
-    def __setitem__(self, k, v):
-        if k not in self.order:
-            self.order.append(k)
-        self.info[k] = v
+    def __setitem__(self, key, value):
+        if key not in self.order:
+            self.order.append(key)
+        self.info[key] = value
 
     def paint(self):
         super().paint()
         (x0, x1), (y0, y1) = self.inner
-        w = x1 - x0 + 1
-        colw = int(w / self.cols)
+        width = x1 - x0 + 1
+        colw = int(width / self.cols)
         x = x0
         y = y0
         longest = []
-        v = 0
+        length = 0
 
         for name in self.order:
             if name not in self.info:
                 continue
             display = name + ": "
-            if len(display) > v:
-                v = len(display)
+            if len(display) > length:
+                length = len(display)
             y += 1
             if y > y1:
                 y = y0
-                longest.append(v)
-                v = 0
-        if v > 0:
-            longest.append(v)
+                longest.append(length)
+                length = 0
+        if length > 0:
+            longest.append(length)
         y = y0
         col = 0
         for name in self.order:
@@ -87,11 +87,11 @@ class InfoDisplay(Control):
             Commons.UIInstance.print(
                 display, xy=(x, y), color=self.highlight_color, bold=True
             )
-            t = value
-            if len(t) > colw - longest[col]:
-                t = t[: colw - longest[col]]
+            text = value
+            if len(text) > colw - longest[col]:
+                text = text[: colw - longest[col]]
             Commons.UIInstance.print(
-                t,
+                text,
                 xy=(x + longest[col], y),
                 color=self.generic_color
                 if name not in self.special_colors
@@ -173,17 +173,17 @@ class HotkeyDisplay(Control):
 
     def paint(self):
         super().paint()
-        c = self.corners()
-        x0 = c[0][0] + (0 if self.border is None else 1)
-        x1 = c[0][1] - (0 if self.border is None else 1)
-        y0 = c[1][0] + (0 if self.border is None else 1)
-        y1 = c[1][1] - (0 if self.border is None else 1)
-        w = x1 - x0 + 1
-        colw = int(w / self.cols)
+        corners = self.corners()
+        x0 = corners[0][0] + (0 if self.border is None else 1)
+        x1 = corners[0][1] - (0 if self.border is None else 1)
+        y0 = corners[1][0] + (0 if self.border is None else 1)
+        y1 = corners[1][1] - (0 if self.border is None else 1)
+        width = x1 - x0 + 1
+        colw = int(width / self.cols)
         x = x0
         y = y0
         longest = []
-        v = 0
+        length = 0
         tooltips = {**self.holder.tooltips, **self.session.global_hotkey_tooltips}
         for hotkey, tooltip in tooltips.items():
             display = (
@@ -195,15 +195,15 @@ class HotkeyDisplay(Control):
                 )
                 + "> "
             )
-            if len(display) > v:
-                v = len(display)
+            if len(display) > length:
+                length = len(display)
             y += 1
             if y > y1:
                 y = y0
-                longest.append(v)
-                v = 0
-        if v > 0:
-            longest.append(v)
+                longest.append(length)
+                length = 0
+        if length > 0:
+            longest.append(length)
         y = y0
         col = 0
         for hotkey, tooltip in tooltips.items():
@@ -221,11 +221,11 @@ class HotkeyDisplay(Control):
             Commons.UIInstance.print(
                 display, xy=(x, y), color=self.highlight_color, bold=True
             )
-            t = tooltip if not callable(tooltip) else tooltip()
-            if len(t) > colw - longest[col]:
-                t = t[: colw - longest[col]]
+            text = tooltip if not callable(tooltip) else tooltip()
+            if len(text) > colw - longest[col]:
+                text = text[: colw - longest[col]]
             Commons.UIInstance.print(
-                t, xy=(x + longest[col], y), color=self.generic_color
+                text, xy=(x + longest[col], y), color=self.generic_color
             )
             y += 1
             if y > y1:

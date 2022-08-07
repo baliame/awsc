@@ -15,6 +15,8 @@ class ListControl(Control):
         color=ColorGold,
         selection_color=ColorBlackOnGold,
         title_color=ColorBlackOnOrange,
+        update_color=ColorGold,
+        update_selection_color=ColorBlackOnGold,
         **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
@@ -41,6 +43,8 @@ class ListControl(Control):
         self.thread_share["new_entries"] = []
         self.thread_share["finalize"] = False
         self.top = 0
+        self.update_color = update_color
+        self.update_selection_color = update_selection_color
 
     @property
     def filter(self):
@@ -72,7 +76,7 @@ class ListControl(Control):
             inkey = key.name
         else:
             inkey = inkey.lower()
-        if inkey in self.hotkeys.keys():
+        if inkey in self.hotkeys:
             self.hotkeys[inkey](self)
             Commons.UIInstance.dirty = True
             return True
@@ -138,10 +142,10 @@ class ListControl(Control):
 
     @property
     def rows(self):
-        c = self.corners()
-        y = c[1][0] + (0 if self.border is None else 1)
-        y1 = c[1][1] - (0 if self.border is None else 1)
-        return y1 - y
+        corners = self.corners()
+        y0 = corners[1][0] + (0 if self.border is None else 1)
+        y1 = corners[1][1] - (0 if self.border is None else 1)
+        return y1 - y0
 
     def add_column(self, column, min_size=0, index=None):
         if index is None:
@@ -193,11 +197,12 @@ class ListControl(Control):
         win = self.w_in
         if win != self.calculated:
             vals = 0
-            for k, v in self.column_titles.items():
-                vals += v
+            for _, value in self.column_titles.items():
+                vals += value
             if vals > win:
                 ratio = float(vals) / float(win)
                 tot = 0
+                # pylint: disable=consider-iterating-dictionary # Operation modifies dictionary
                 for k in self.column_titles.keys():
                     self.column_titles[k] = int(float(self.column_titles[k]) / ratio)
                     tot += self.column_titles[k]
@@ -210,6 +215,7 @@ class ListControl(Control):
                 diff = win - vals
                 part = int(diff / len(self.column_titles))
                 rem = diff - (part * len(self.column_titles))
+                # pylint: disable=consider-iterating-dictionary # Operation modifies dictionary
                 for k in self.column_titles.keys():
                     self.column_titles[k] += part
                 if "name" in self.column_titles:
@@ -219,60 +225,64 @@ class ListControl(Control):
             self.calculated = win
 
         super().paint()
-        c = self.corners()
-        y = c[1][0] + (0 if self.border is None else 1)
-        x = c[0][0] + (0 if self.border is None else 1)
+        corners = self.corners()
+        y = corners[1][0] + (0 if self.border is None else 1)
+        x = corners[0][0] + (0 if self.border is None else 1)
         now = datetime.datetime.now()
         rows = self.rows
         for col in self.column_order:
             text = col
-            m = self.column_titles[col]
-            if len(col) > m:
-                text = col[:m]
-            elif len(col) < m:
-                text = col + (int(m - len(col)) * " ")
+            maximum = self.column_titles[col]
+            if len(col) > maximum:
+                text = col[:maximum]
+            elif len(col) < maximum:
+                text = col + (int(maximum - len(col)) * " ")
             Commons.UIInstance.print(text.upper(), xy=(x, y), color=self.title_color)
-            x += m
+            x += maximum
         y += 1
         for i in range(self.top, min(len(self.filtered), self.top + rows)):
             item = self.filtered[i]
-            x = c[0][0] + (0 if self.border is None else 1)
+            x = corners[0][0] + (0 if self.border is None else 1)
             for col in self.column_order:
                 text = item.columns[col]
-                m = self.column_titles[col]
-                if len(text) > m:
-                    text = text[:m]
-                elif len(text) < m:
-                    text = text + ((m - len(text)) * " ")
+                maximum = self.column_titles[col]
+                if len(text) > maximum:
+                    text = text[:maximum]
+                elif len(text) < maximum:
+                    text = text + ((maximum - len(text)) * " ")
                 if i == self.selected:
-                    if hasattr(
-                        self, "update_selection_color"
-                    ) and now - item.updated < datetime.timedelta(seconds=3):
+                    if now - item.updated < datetime.timedelta(seconds=3):
                         color = self.update_selection_color
                     else:
                         color = self.selection_color
                 else:
-                    if hasattr(
-                        self, "update_color"
-                    ) and now - item.updated < datetime.timedelta(seconds=3):
+                    if now - item.updated < datetime.timedelta(seconds=3):
                         color = self.update_color
                     else:
                         color = self.color
                 Commons.UIInstance.print(text, xy=(x, y), color=color)
-                x += m
+                x += maximum
             y += 1
 
 
 class ListEntry:
     def __init__(self, name, controller_data=None, **kwargs):
+        self.columns = {}
         self.name = name
-        self.columns = {"name": name}
         self.columns.update({k: str(v) for (k, v) in kwargs.items()})
         if controller_data is None:
             self.controller_data = {}
         else:
             self.controller_data = controller_data
         self.updated = datetime.datetime.now()
+
+    @property
+    def name(self):
+        return self.columns["name"]
+
+    @name.setter
+    def set_name(self, name):
+        self.columns["name"] = name
 
     def dict(self):
         return self.columns.copy()
@@ -290,25 +300,25 @@ class ListEntry:
     def __contains__(self, item):
         return item in self.columns
 
-    def matches_filter(self, filter):
-        if filter is None:
+    def matches_filter(self, filt):
+        if filt is None:
             return True
-        f = filter.lower()
-        for k, column in self.columns.items():
-            if f in column.lower():
+        filt = filt.lower()
+        for _, column in self.columns.items():
+            if filt in column.lower():
                 return True
         return False
 
     def mutate(self, other):
-        up = False
+        updated = False
         if self.name != other.name or len(self.columns) != len(other.columns):
-            up = True
+            updated = True
         else:
             for col in self.columns:
                 if col not in other.columns or self.columns[col] != other.columns[col]:
-                    up = True
+                    updated = True
                     break
-        if not up:
+        if not updated:
             return
         self.updated = datetime.datetime.now()
         self.name = other.name

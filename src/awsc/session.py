@@ -12,7 +12,7 @@ from .info import InfoDisplay, NeutralDialog
 from .termui.alignment import BottomLeftAnchor, Dimension, TopLeftAnchor
 from .termui.dialog import DialogFieldLabel
 from .termui.ui import UI, ControlCodes
-from .version import version as current_version
+from .version import VERSION as current_version
 
 
 class Session:
@@ -58,9 +58,9 @@ class Session:
             weight=-10,
         )
         self._message_label = DialogFieldLabel("")
-        self._message_label_l2 = DialogFieldLabel("")
+        self._message_label_line2 = DialogFieldLabel("")
         self.message_display.add_field(self._message_label)
-        self.message_display.add_field(self._message_label_l2)
+        self.message_display.add_field(self._message_label_line2)
         self._context = None
         self.context = config["default_context"]
         self.region = config["default_region"]
@@ -98,17 +98,10 @@ class Session:
                     latest_stable = release_tag
             if latest_tag != current_tag:
                 if latest_stable != current_tag:
-                    version_str = "{current} ({update_character}{stable}, {update_character}?{development}".format(
-                        current=str(current_tag),
-                        stable=str(latest_stable),
-                        development=str(latest_tag),
-                        update_character=update_character,
-                    )
+                    version_str = f"{str(current_tag)} ({update_character}{str(latest_stable)}, {update_character}?{str(latest_tag)}"
                 else:
-                    version_str = "{current} ({update_character}?{development}".format(
-                        current=str(current_tag),
-                        development=str(latest_tag),
-                        update_character=update_character,
+                    version_str = (
+                        f"{str(current_tag)} ({update_character}?{str(latest_tag)}"
                     )
             else:
                 version_str = str(current_tag)
@@ -116,15 +109,15 @@ class Session:
         self.info_display["AWSC Version"] = version_str
 
     def set_message(self, text, color):
-        l1 = text
-        l2 = ""
-        if len(text) > self.ui.w:
-            l1 = text[: self.ui.w]
-            l2 = text[self.ui.w :]
-            if len(l2) > self.ui.w:
-                l2 = l2[: self.ui.w]
-        self._message_label.texts = [(l1, color)]
-        self._message_label_l2.texts = [(l2, color)]
+        line1 = text
+        line2 = ""
+        if len(text) > self.ui.width:
+            line1 = text[: self.ui.width]
+            line2 = text[self.ui.width :]
+            if len(line2) > self.ui.width:
+                line2 = line2[: self.ui.width]
+        self._message_label.texts = [(line1, color)]
+        self._message_label_line2.texts = [(line2, color)]
         self.message_time = min(len(text) / 10.0, 5.0)
         self.last_tick = time.time()
         self.ui.dirty = True
@@ -167,7 +160,7 @@ class Session:
             control.on_close()
         try:
             self.stack_frame.remove(control)
-        except ValueError as e:
+        except ValueError:
             for elem in reversed(self.stack):
                 if control in elem:
                     elem.remove(control)
@@ -181,7 +174,7 @@ class Session:
             self.message_time -= delta
             if self.message_time <= 0:
                 self._message_label.texts = []
-                self._message_label_l2.texts = []
+                self._message_label_line2.texts = []
         if hasattr(self.resource_main, "auto_refresh"):
             self.resource_main.auto_refresh()
 
@@ -233,12 +226,13 @@ class Session:
     def textedit(self, value):
         editor = self.config["editor_command"]
         temp = tempfile.NamedTemporaryFile("w", delete=False)
-        tf = temp.name
+        temp_file = temp.name
         try:
             temp.write(value)
             temp.close()
-            self.ui.unraw(subprocess.run, ["bash", "-c", editor.format(tf)])
-            with open(tf, "r") as temp:
+            self.ui.unraw(subprocess.run, ["bash", "-c", editor.format(temp_file)])
+            # TODO: Implement libmagic
+            with open(temp_file, "r", encoding="utf-8") as temp:
                 return temp.read()
         finally:
             os.unlink(temp.name)

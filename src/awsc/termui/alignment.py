@@ -12,29 +12,29 @@ class Dimension:
         val = self()
         return val[0] if key in (0, "x", "w") else val[1]
 
-    def _v(self, v, h):
-        if isinstance(v, str):
-            test = v.split("|")
+    def _v(self, value, height):
+        if isinstance(value, str):
+            test = value.split("|")
             if len(test) > 1:
-                return max([self._v(t, h) for t in test])
-            test = v.split("-")
+                return max([self._v(test_value, height) for test_value in test])
+            test = value.split("-")
             if len(test) > 1:
-                val = self._v(test[0], h)
+                val = self._v(test[0], height)
                 for i in range(1, len(test)):
-                    val -= self._v(test[i], h)
+                    val -= self._v(test[i], height)
                 return val
-            if v[-1] == "%":
-                return int(h * float(v[:-1]) / 100) - 1
+            if value[-1] == "%":
+                return int(height * float(value[:-1]) / 100) - 1
             else:
-                return int(v)
+                return int(value)
         else:
-            return int(v)
+            return int(value)
 
     def __call__(self):
         dim = Commons.UIInstance.dim
-        w = self._v(self.width, dim[0])
-        h = self._v(self.height, dim[1])
-        return (w, h)
+        width = self._v(self.width, dim[0])
+        height = self._v(self.height, dim[1])
+        return (width, height)
 
 
 class TopLeftAnchor:
@@ -67,8 +67,8 @@ class BottomLeftAnchor:
             return (tlp[0] + self.left, brp[1] - self.bottom)
 
     def topleft(self, dim, parent):
-        a = self.anchor(parent)
-        return (a[0], a[1] - dim[1] + 1)
+        anchor = self.anchor(parent)
+        return (anchor[0], anchor[1] - dim[1] + 1)
 
 
 class TopRightAnchor:
@@ -85,8 +85,8 @@ class TopRightAnchor:
             return (brp[0] - self.right, tlp[1] + self.top)
 
     def topleft(self, dim, parent):
-        a = self.anchor(parent)
-        return (a[0] - dim[0] + 1, a[1])
+        anchor = self.anchor(parent)
+        return (anchor[0] - dim[0] + 1, anchor[1])
 
 
 class CenterAnchor:

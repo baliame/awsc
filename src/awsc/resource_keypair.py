@@ -83,9 +83,7 @@ class KeyPairCreateDialog(SessionAwareDialog):
         self.add_field(self.name_field)
         self.dotssh = Path.home() / ".ssh"
         self.add_field(
-            DialogFieldLabel(
-                "Key file will be saved in {0}".format(str(self.dotssh.resolve()))
-            )
+            DialogFieldLabel(f"Key file will be saved in {str(self.dotssh.resolve())}")
         )
         self.save_as_field = DialogFieldText(
             "Filename:",
@@ -121,8 +119,8 @@ class KeyPairCreateDialog(SessionAwareDialog):
         if resps["Success"]:
             resp = resps["Response"]
             data = resp["KeyMaterial"]
-            with (self.dotssh / self.save_as_field.text).open("w") as f:
-                f.write(data)
+            with (self.dotssh / self.save_as_field.text).open("w") as file:
+                file.write(data)
             Common.Session.set_keypair_association(
                 resp["KeyPairId"], self.save_as_field.text
             )
@@ -154,5 +152,5 @@ class KeyPairDescriber(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )

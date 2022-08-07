@@ -43,13 +43,13 @@ class DialogFieldLabel(DialogField):
         x = x0
         if self.centered:
             textlen = 0
-            for t in self.texts:
-                textlen += len(t[0])
-            w = x1 - x0 + 1
-            x = int(w / 2) - int(textlen / 2) + x0 + 1
-        for t in self.texts:
-            Commons.UIInstance.print(t[0], xy=(x, y), color=t[1])
-            x += len(t[0])
+            for text in self.texts:
+                textlen += len(text[0])
+            width = x1 - x0 + 1
+            x = int(width / 2) - int(textlen / 2) + x0 + 1
+        for text in self.texts:
+            Commons.UIInstance.print(text[0], xy=(x, y), color=text[1])
+            x += len(text[0])
 
 
 class DialogFieldButton(DialogField):
@@ -72,10 +72,10 @@ class DialogFieldButton(DialogField):
         x = x0
         if self.centered:
             textlen = len(self.text) + 4
-            w = x1 - x0 + 1
-            x = int(w / 2) - int(textlen / 2) + x0
+            width = x1 - x0 + 1
+            x = int(width / 2) - int(textlen / 2) + x0
         Commons.UIInstance.print(
-            "< {0} >".format(self.text),
+            f"< {self.text} >",
             xy=(x, y),
             color=self.selected_color if selected else self.color,
         )
@@ -102,13 +102,12 @@ class DialogFieldCheckbox(DialogField):
 
     def paint(self, x0, x1, y, selected=False):
         x = x0
-        text = "{0} {1}".format(
-            self.char_checked if self.checked else self.char_unchecked, self.label
-        )
+        checkbox_character = self.char_checked if self.checked else self.char_unchecked
+        text = f"{checkbox_character} {self.label}"
         if self.centered:
             textlen = len(text)
-            w = x1 - x0 + 1
-            x = int(w / 2) - int(textlen / 2) + x0
+            width = x1 - x0 + 1
+            x = int(width / 2) - int(textlen / 2) + x0
         Commons.UIInstance.print(
             text, xy=(x, y), color=self.selected_color if selected else self.color
         )
@@ -218,7 +217,7 @@ class DialogControl(Control):
         cancel_text="Cancel",
         color=ColorGold,
         selected_color=ColorBlackOnGold,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
         self.highlighted = 0
@@ -246,13 +245,12 @@ class DialogControl(Control):
             )
 
     def nop(self):
-        Commons.UIInstance.log("WARN: DialogControl NOP action executed.")
+        pass
 
     def add_field(self, field):
         self.fields.insert(self.bookmark, field)
         self.bookmark += 1
-        for i in range(len(self.fields)):
-            elem = self.fields[i]
+        for i, elem in enumerate(self.fields):
             if elem.highlightable:
                 self.highlighted = i
                 break
@@ -286,19 +284,19 @@ class DialogControl(Control):
         return True  # Modals should prevent input from being piped to others.
 
     def paint(self):
-        c = self.corners()
+        corners = self.corners()
         if self.background_color is not None:
-            w = c[0][1] - c[0][0] + 1
-            for row in range(c[1][0], c[1][1] + 1):
+            width = corners[0][1] - corners[0][0] + 1
+            for row in range(corners[1][0], corners[1][1] + 1):
                 Commons.UIInstance.print(
-                    " " * w, xy=(c[0][0], row), color=self.background_color
+                    " " * width, xy=(corners[0][0], row), color=self.background_color
                 )
         super().paint()
         buttons = []
         indices = {}
-        y = c[1][0] + (1 if self.border is None else 2)
-        x0 = c[0][0] + (1 if self.border is None else 2)
-        x1 = c[0][1] - (1 if self.border is None else 2)
+        y = corners[1][0] + (1 if self.border is None else 2)
+        x0 = corners[0][0] + (1 if self.border is None else 2)
+        x1 = corners[0][1] - (1 if self.border is None else 2)
         # Commons.UIInstance.log('Paint dialog: x0={0}, x1={1}'.format(x0, x1))
         idx = 0
         for item in self.fields:
@@ -309,15 +307,15 @@ class DialogControl(Control):
                 item.paint(x0, x1, y, idx == self.highlighted)
                 y += 1
             idx += 1
-        y = c[1][1] - (1 if self.border is None else 2)
+        y = corners[1][1] - (1 if self.border is None else 2)
         if len(buttons) > 0:
             subdiv = float((x1 - x0 + 1) / len(buttons))
-            w = int(subdiv)
-            rem = subdiv - w
+            width = int(subdiv)
+            rem = subdiv - width
             remacc = 0
             for button in buttons:
                 remacc += rem
-                x1 = x0 + w
+                x1 = x0 + width
                 if remacc > 0.5:
                     x1 += 1
                     remacc -= 1

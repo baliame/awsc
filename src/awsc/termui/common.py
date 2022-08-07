@@ -7,4 +7,4 @@ class Commons:
 
     @classmethod
     def alphanum_with_symbols(cls, symbols):
-        return "{0}{1}".format(cls.TextfieldInputsAlphaNum, symbols)
+        return f"{cls.TextfieldInputsAlphaNum}{symbols}"

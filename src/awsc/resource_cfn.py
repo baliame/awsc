@@ -109,6 +109,7 @@ class CFNRelated(MultiLister):
         return self.compare_value
 
     def __init__(self, *args, **kwargs):
+        self.stack_res_list = {}
         kwargs["compare_key"] = "arn"
         self.resource_descriptors = [
             {
@@ -333,24 +334,23 @@ class CFNRelated(MultiLister):
         return fn
 
     def async_inner(self, *args, fn, clear=False, **kwargs):
-        stop = False
-        rl = None
+        resource_list = {}
         self.stack_res_list = {}
-        while not stop:
+        while True:
             rargs = {"StackName": self.orig_compare_value["name"]}
-            if rl is not None and "NextToken" in rl and rl["NextToken"] is not None:
-                rargs["NextToken"] = rl["NextToken"]
-            rl = Common.Session.service_provider("cloudformation").list_stack_resources(
-                **rargs
-            )
-            if "NextToken" not in rl or rl["NextToken"] is None:
-                stop = True
-            for item in rl["StackResourceSummaries"]:
+            if "NextToken" in resource_list and resource_list["NextToken"] is not None:
+                rargs["NextToken"] = resource_list["NextToken"]
+            resource_list = Common.Session.service_provider(
+                "cloudformation"
+            ).list_stack_resources(**rargs)
+            for item in resource_list["StackResourceSummaries"]:
                 if item["ResourceType"] not in self.stack_res_list:
                     self.stack_res_list[item["ResourceType"]] = []
                 self.stack_res_list[item["ResourceType"]].append(
                     item["PhysicalResourceId"]
                 )
+            if "NextToken" not in resource_list or resource_list["NextToken"] is None:
+                break
         return super().async_inner(*args, fn=fn, clear=clear, **kwargs)
 
 

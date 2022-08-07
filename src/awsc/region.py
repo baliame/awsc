@@ -34,10 +34,12 @@ class RegionList(ListControl):
         for region in sorted(Common.Session.service_provider.list_regions()):
             if region == Common.Configuration["default_region"]:
                 defa = idx
-                d = "✓"
+                is_default = "✓"
             else:
-                d = " "
-            self.add_entry(ListEntry(region, **{"usage frequency": 0, "default": d}))
+                is_default = " "
+            self.add_entry(
+                ListEntry(region, **{"usage frequency": 0, "default": is_default})
+            )
             idx += 1
         self.selected = defa
 

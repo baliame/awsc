@@ -36,8 +36,8 @@ class LBResourceLister(ResourceLister):
         self.primary_key = "name"
         super().__init__(*args, **kwargs)
 
-    def determine_scheme(self, lb, *args):
-        if lb["Scheme"] == "internet-facing":
+    def determine_scheme(self, result, *args):
+        if result["Scheme"] == "internet-facing":
             return "public"
         return "private"
 

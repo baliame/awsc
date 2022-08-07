@@ -10,9 +10,9 @@ from botocore import exceptions as botoerror
 from .common import (
     Common,
     DefaultAnchor,
-    DefaultBorder,
     DefaultDimension,
     SessionAwareDialog,
+    default_border,
 )
 from .info import HotkeyDisplay
 from .termui.alignment import CenterAnchor, Dimension, TopRightAnchor
@@ -61,16 +61,16 @@ class ResourceListerBase(ListControl):
 
     def asynch(self, fn, *args, clear=False, **kwargs):
         try:
-            t = threading.Thread(
+            thread = threading.Thread(
                 target=self.async_inner,
                 args=args,
                 kwargs={**kwargs, "fn": fn, "clear": clear},
                 daemon=True,
             )
-            t.start()
-        except Exception as e:  # pylint: disable=broad-except # Purpose of this function is extremely generic
+            thread.start()
+        except Exception as error:
             Common.Session.set_message(
-                "Failed to start AWS query thread: {0}".format(str(e)),
+                f"Failed to start AWS query thread: {str(error)}",
                 Common.color("message_error"),
             )
 
@@ -102,16 +102,12 @@ class ResourceListerBase(ListControl):
 
         except StopLoadingData:
             pass
-        except Exception as e:  # pylint: disable=broad-except # Purpose of this function is extremely generic, needs a catch-all
+        except Exception as error:  # pylint: disable=broad-except # Purpose of this function is extremely generic, needs a catch-all
             self.thread_share[
                 "thread_error"
-            ] = "Refresh thread execution failed: {0}: {1}".format(
-                e.__class__.__name__, str(e)
-            )
+            ] = f"Refresh thread execution failed: {type(error).__name__}: {str(error)}"
             Common.error(
-                "Refresh thread execution failed: {0}: {1}\n{2}".format(
-                    e.__class__.__name__, str(e), traceback.format_exc()
-                ),
+                f"Refresh thread execution failed: {type(error).__name__}: {str(error)}\n{traceback.format_exc()}",
                 "Refresh Thread Error",
                 "Core",
                 set_message=False,
@@ -128,11 +124,11 @@ class ResourceListerBase(ListControl):
 
     def handle_finalization_critical(self):
         if hasattr(self, "primary_key") and self.primary_key is not None:
-            ne = []
+            new_entries = []
             for entry in self.entries:
                 if entry[self.primary_key] in self.thread_share["acquired"]:
-                    ne.append(entry)
-            self.entries = ne[:]
+                    new_entries.append(entry)
+            self.entries = new_entries[:]
             self.sort()
 
     def handle_new_entries_critical(self, entries):
@@ -160,7 +156,7 @@ class ResourceListerBase(ListControl):
         hidden_columns,
         next_marker_name,
         next_marker_arg,
-        *args
+        *args,
     ):
         try:
             provider = Common.Session.service_provider(resource_key)
@@ -170,7 +166,7 @@ class ResourceListerBase(ListControl):
                 "Invalid provider",
                 "Core",
                 subcategory="ResourceListerBase",
-                api_provider=self.resource_key,
+                api_provider=resource_key,
                 classname=type(self).__name__,
             )
             return
@@ -186,9 +182,9 @@ class ResourceListerBase(ListControl):
                 it_list_kwargs[next_marker_arg] = next_marker
             try:
                 response = getattr(provider, list_method)(**it_list_kwargs)
-            except botoerror.ClientError as e:
+            except botoerror.ClientError as error:
                 Common.clienterror(
-                    e,
+                    error,
                     "List Resources",
                     "Core",
                     subcategory="ResourceListerBase",
@@ -199,12 +195,12 @@ class ResourceListerBase(ListControl):
                 # pylint: disable=raise-missing-from # StopLoadingData is a special exception to stop this generator from being used.
                 raise StopLoadingData
 
-            it = (
+            items = (
                 Common.Session.jq(item_path)
                 .input(text=json.dumps(response, default=datetime_hack))
                 .first()
             )
-            if it is None:
+            if items is None:
                 Common.error(
                     "get_data_generic returned None",
                     "Get Data Generic returned None",
@@ -218,7 +214,7 @@ class ResourceListerBase(ListControl):
                 )
                 return []
 
-            for item in it:
+            for item in items:
                 if self.closed:
                     raise StopLoadingData
                 init = {}
@@ -230,10 +226,10 @@ class ResourceListerBase(ListControl):
                             init[column] = Common.Session.jq(path).input(item).first()
                         except StopIteration:
                             init[column] = ""
-                le = ListEntry(**init)
-                le.controller_data = item
-                if self.matches(le, *args):
-                    ret.append(le)
+                list_entry = ListEntry(**init)
+                list_entry.controller_data = item
+                if self.matches(list_entry, *args):
+                    ret.append(list_entry)
             if self.closed:
                 raise StopLoadingData
             yield ret
@@ -246,13 +242,13 @@ class ResourceListerBase(ListControl):
             else:
                 next_marker = ""
 
-    def matches(self, list_entry, *args):
+    def matches(self, list_entry, elem, *args):
         return True
 
     def tag_finder_generator(self, tagname, default="", taglist_key="Tags"):
-        def fn(e, *args):
-            if taglist_key in e:
-                for tag in e[taglist_key]:
+        def fn(entry, *args):
+            if taglist_key in entry:
+                for tag in entry[taglist_key]:
                     if tag["Key"] == tagname:
                         return tag["Value"]
             return default
@@ -313,11 +309,13 @@ class DialogFieldResourceListSelector(DialogField):
         Common.Session.ui.print(self.label, xy=(x, y), color=self.label_color)
         x += max(len(self.label) + 1, self.label_min)
         space = x1 - x + 1
-        t = self.text + " ↲"
-        if self.left >= len(t):
+        text = self.text + " ↲"
+        if self.left >= len(text):
             self.left = 0
-        text = t[
-            self.left : (self.left + space if len(t) > self.left + space else len(t))
+        text = text[
+            self.left : (
+                self.left + space if len(text) > self.left + space else len(text)
+            )
         ]
         Common.Session.ui.print(
             text, xy=(x, y), color=self.selected_color if selected else self.color
@@ -337,7 +335,7 @@ class SingleNameDialog(SessionAwareDialog):
         default="",
         caller=None,
         accepted_inputs=None,
-        **kwargs
+        **kwargs,
     ):
         kwargs["border"] = Border(
             Common.border("default"),
@@ -354,13 +352,8 @@ class SingleNameDialog(SessionAwareDialog):
             **kwargs,
         )
         self.what = what
-        self.add_field(
-            DialogFieldLabel(
-                "Enter {0}{1}".format(
-                    what, " for {0}".format(subject) if subject != "" else ""
-                )
-            )
-        )
+        for_part = f" for {subject}" if subject != "" else ""
+        self.add_field(DialogFieldLabel(f"Enter {what}{for_part}"))
         self.error_label = DialogFieldLabel(
             "", default_color=Common.color("modal_dialog_error")
         )
@@ -380,7 +373,7 @@ class SingleNameDialog(SessionAwareDialog):
 
     def accept_and_close(self):
         if self.name_field.text == "":
-            self.error_label.text = "You must enter a {0}.".format(self.what)
+            self.error_label.text = f"You must enter a {self.what}."
             return
         self.callback(self.name_field.text)
         super().accept_and_close()
@@ -402,7 +395,7 @@ class SingleSelectorDialog(SessionAwareDialog):
         callback,
         *args,
         caller=None,
-        **kwargs
+        **kwargs,
     ):
         kwargs["border"] = Border(
             Common.border("default"),
@@ -419,9 +412,7 @@ class SingleSelectorDialog(SessionAwareDialog):
             **kwargs,
         )
         self.add_field(
-            DialogFieldLabel(
-                "Select {0} for {1} action".format(resource_type, action_name)
-            )
+            DialogFieldLabel(f"Select {resource_type} for {action_name} action")
         )
         self.error_label = DialogFieldLabel(
             "", default_color=Common.color("modal_dialog_error")
@@ -430,7 +421,7 @@ class SingleSelectorDialog(SessionAwareDialog):
         self.add_field(DialogFieldLabel(""))
         self.resource_selector = DialogFieldResourceListSelector(
             selector_class,
-            "{0}: ".format(resource_type),
+            f"{resource_type}: ",
             "",
             label_min=16,
             color=Common.color("modal_dialog_textfield"),
@@ -468,28 +459,26 @@ class ResourceLister(ResourceListerBase):
 
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
-            color=Common.color("{0}_generic".format(cls.prefix), "generic"),
-            selection_color=Common.color(
-                "{0}_selection".format(cls.prefix), "selection"
-            ),
-            title_color=Common.color("{0}_heading".format(cls.prefix), "column_title"),
-            update_color=Common.color("{0}_updated".format(cls.prefix), "highlight"),
+            color=Common.color(f"{cls.prefix}_generic", "generic"),
+            selection_color=Common.color(f"{cls.prefix}_selection", "selection"),
+            title_color=Common.color(f"{cls.prefix}_heading", "column_title"),
+            update_color=Common.color(f"{cls.prefix}_updated", "highlight"),
             update_selection_color=Common.color(
-                "{0}_updated".format(cls.prefix), "highlight_selection"
+                f"{cls.prefix}_updated", "highlight_selection"
             ),
             **kwargs,
         )
-        l.border = DefaultBorder(cls.prefix, cls.title, l.title_info())
-        return [l, l.hotkey_display]
+        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
+        return [instance, instance.hotkey_display]
 
     @classmethod
-    def selector(cls, cb, **kwargs):
-        return cls.opener(**{"selector_cb": cb, **kwargs})
+    def selector(cls, callback, **kwargs):
+        return cls.opener(**{"selector_cb": callback, **kwargs})
 
     def title_info(self):
         return None
@@ -498,9 +487,13 @@ class ResourceLister(ResourceListerBase):
         self, parent, alignment, dimensions, *args, selector_cb=None, **kwargs
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
+        if not hasattr(self, "additional_commands"):
+            self.additional_commands = {}
         if not hasattr(self, "resource_key"):
+            self.resource_key = ""
             raise AttributeError("resource_key is undefined")
         if not hasattr(self, "list_method"):
+            self.list_method = ""
             raise AttributeError("list_method is undefined")
         if not hasattr(self, "list_kwargs"):
             if "list_kwargs" in kwargs:
@@ -514,6 +507,7 @@ class ResourceLister(ResourceListerBase):
         else:
             if not hasattr(self, "describe_selection_arg"):
                 self.describe_selection_arg = "entry"
+        # pylint: disable=access-member-before-definition # Expect subclass to set open_command. Has a goddamn hasattr check.
         if not hasattr(self, "open_command") or self.open_command is None:
             self.open_command = None
         else:
@@ -530,10 +524,12 @@ class ResourceLister(ResourceListerBase):
                     "open_command refers to a key that is not in additional_commands"
                 )
         if not hasattr(self, "item_path"):
+            self.item_path = ""
             raise AttributeError("item_path is undefined")
         if not hasattr(self, "hidden_columns"):
             self.hidden_columns = {}
         if not hasattr(self, "column_paths"):
+            self.column_paths = {}
             raise AttributeError("column_paths is undefined")
 
         if "name" not in self.column_paths and "name" not in self.hidden_columns:
@@ -541,10 +537,12 @@ class ResourceLister(ResourceListerBase):
                 "name entry is required in column_paths or hidden_columns"
             )
         if not hasattr(self, "imported_column_sizes"):
+            # pylint: disable=consider-iterating-dictionary # Makes no sense.
             self.imported_column_sizes = {
                 k: len(k) for k in self.column_paths.keys() if k != "name"
             }
         if not hasattr(self, "imported_column_order"):
+            # pylint: disable=consider-iterating-dictionary # Makes no sense.
             self.imported_column_order = sorted(
                 [k for k in self.column_paths.keys() if k != "name"]
             )
@@ -554,15 +552,6 @@ class ResourceLister(ResourceListerBase):
             self.primary_key = "name"
         if "primary_key" in kwargs:
             self.primary_key = kwargs["primary_key"]
-        if "update_color" in kwargs:
-            self.update_color = kwargs["update_color"]
-        else:
-            self.update_color = self.color
-        if "update_selection_color" in kwargs:
-            self.update_selection_color = kwargs["update_selection_color"]
-        else:
-            self.update_selection_color = self.selection_color
-
         self.selector_cb = selector_cb
 
         if self.open_command is not None:
@@ -630,11 +619,6 @@ class ResourceLister(ResourceListerBase):
             )
 
     def select_and_close(self, *args):
-        import sys
-
-        print("self.selection is {0}".format(self.selection), file=sys.stderr)
-        print("self.selector_cb is {0}".format(self.selector_cb), file=sys.stderr)
-        print("self.primary_key is {0}".format(self.primary_key), file=sys.stderr)
         if (
             self.selection is not None
             and self.selector_cb is not None
@@ -643,22 +627,20 @@ class ResourceLister(ResourceListerBase):
             self.selector_cb(self.selection[self.primary_key])
             Common.Session.pop_frame()
 
-    def command(self, cmd, kw={}):
+    def command(self, cmd, **kwargs):
         if self.selection is not None:
-            frame = cmd(**kw)
+            frame = cmd(**kwargs)
             if frame is not None:
                 Common.Session.push_frame(frame)
 
     def command_wrapper(self, cmd, selection_arg, **kwargs):
         def fn(*args):
+            kwargs[selection_arg] = self.selection
             self.command(
                 cmd,
-                {
-                    selection_arg: self.selection,
-                    "pushed": True,
-                    "caller": self,
-                    **kwargs,
-                },
+                pushed=True,
+                caller=self,
+                **kwargs,
             )
 
         return fn
@@ -721,22 +703,23 @@ class SingleRelationLister(ResourceListerBase):
     prefix = "CHANGEME"
     title = "CHANGEME"
 
+    def title_info(self):
+        return None
+
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
-            color=Common.color("{0}_generic".format(cls.prefix), "generic"),
-            selection_color=Common.color(
-                "{0}_selection".format(cls.prefix), "selection"
-            ),
-            title_color=Common.color("{0}_heading".format(cls.prefix), "column_title"),
+            color=Common.color(f"{cls.prefix}_generic", "generic"),
+            selection_color=Common.color(f"{cls.prefix}_selection", "selection"),
+            title_color=Common.color(f"{cls.prefix}_heading", "column_title"),
             **kwargs,
         )
-        l.border = DefaultBorder(cls.prefix, cls.title, l.title_info())
-        return [l, l.hotkey_display]
+        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
+        return [instance, instance.hotkey_display]
 
     def __init__(self, parent, alignment, dimensions, *args, **kwargs):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
@@ -745,16 +728,21 @@ class SingleRelationLister(ResourceListerBase):
         self.add_column("type", 30, 0)
         self.add_column("id", 120, 1)
         if not hasattr(self, "resource_key"):
+            self.resource_key = ""
             raise AttributeError("resource_key is undefined")
         if not hasattr(self, "describe_method"):
+            self.describe_method = ""
             raise AttributeError("describe_method is undefined")
         if not hasattr(self, "describe_kwargs"):
+            self.describe_kwargs = {}
             raise AttributeError("describe_kwargs is undefined")
         if not hasattr(self, "object_path"):
+            self.object_path = ""
             raise AttributeError("object_path is undefined")
         if not hasattr(self, "sort_column"):
             self.sort_column = "type"
         if not hasattr(self, "resource_descriptors"):
+            self.resource_descriptors = {}
             raise AttributeError("resource_descriptors is undefined")
         self.descriptor = None
         self.descriptor_raw = None
@@ -800,9 +788,9 @@ class SingleRelationLister(ResourceListerBase):
                 return
             try:
                 resp = getattr(provider, self.describe_method)(**self.describe_kwargs)
-            except botoerror.ClientError as e:
+            except botoerror.ClientError as error:
                 Common.clienterror(
-                    e,
+                    error,
                     "List Resources",
                     "Core",
                     subcategory="SingleRelationLister",
@@ -845,22 +833,23 @@ class MultiLister(ResourceListerBase):
     prefix = "CHANGEME"
     title = "CHANGEME"
 
+    def title_info(self):
+        return None
+
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
-            color=Common.color("{0}_generic".format(cls.prefix), "generic"),
-            selection_color=Common.color(
-                "{0}_selection".format(cls.prefix), "selection"
-            ),
-            title_color=Common.color("{0}_heading".format(cls.prefix), "column_title"),
+            color=Common.color(f"{cls.prefix}_generic", "generic"),
+            selection_color=Common.color(f"{cls.prefix}_selection", "selection"),
+            title_color=Common.color(f"{cls.prefix}_heading", "column_title"),
             **kwargs,
         )
-        l.border = DefaultBorder(cls.prefix, cls.title, l.title_info())
-        return [l, l.hotkey_display]
+        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
+        return [instance, instance.hotkey_display]
 
     def __init__(
         self,
@@ -870,12 +859,13 @@ class MultiLister(ResourceListerBase):
         compare_value,
         *args,
         compare_key="id",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
         self.add_column("type", 30, 0)
         self.add_column("id", 30, 1)
         if not hasattr(self, "resource_descriptors"):
+            self.resource_descriptors = {}
             raise AttributeError("resource_descriptors is undefined")
         if isinstance(compare_value, ListEntry):
             self.compare_value = compare_value[compare_key]
@@ -939,9 +929,9 @@ class MultiLister(ResourceListerBase):
                     val = (
                         Common.Session.jq(elem["compare_path"]).input(raw_item).first()
                     )
-                except ValueError as e:
+                except ValueError:
                     return False
-                except StopIteration as e:
+                except StopIteration:
                     return False
             return val == self.compare_value
         else:
@@ -954,7 +944,7 @@ class MultiLister(ResourceListerBase):
                     ):
                         if val == self.compare_value:
                             return True
-                except StopIteration as e:
+                except StopIteration:
                     return False
         return False
 
@@ -972,17 +962,17 @@ class GenericDescriber(TextBrowser):
 
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
-            color=Common.color("{0}_generic".format(cls.prefix), "generic"),
-            filtered_color=Common.color("{0}_filtered".format(cls.prefix), "selection"),
+            color=Common.color(f"{cls.prefix}_generic", "generic"),
+            filtered_color=Common.color(f"{cls.prefix}_filtered", "selection"),
             **kwargs,
         )
-        l.border = DefaultBorder(cls.prefix, cls.title, l.title_info())
-        return [l, l.hotkey_display]
+        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
+        return [instance, instance.hotkey_display]
 
     def title_info(self):
         return self.describing
@@ -1006,7 +996,7 @@ class GenericDescriber(TextBrowser):
     def toggle_wrap(self, *args, **kwargs):
         super().toggle_wrap(*args, **kwargs)
         Common.Session.set_message(
-            "Text wrap {0}".format("ON" if self.wrap else "OFF"),
+            f"Text wrap {'ON' if self.wrap else 'OFF'}",
             Common.color("message_info"),
         )
 
@@ -1017,19 +1007,19 @@ class Describer(TextBrowser):
 
     @classmethod
     def opener(cls, **kwargs):
-        l = cls(
+        instance = cls(
             Common.Session.ui.top_block,
             DefaultAnchor,
             DefaultDimension,
             weight=0,
-            color=Common.color("{0}_generic".format(cls.prefix), "generic"),
-            filtered_color=Common.color("{0}_filtered".format(cls.prefix), "selection"),
+            color=Common.color(f"{cls.prefix}_generic", "generic"),
+            filtered_color=Common.color(f"{cls.prefix}_filtered", "selection"),
             syntax_highlighting=True,
             scheme=Common.Configuration.scheme,
             **kwargs,
         )
-        l.border = DefaultBorder(cls.prefix, cls.title, l.title_info())
-        return [l, l.hotkey_display]
+        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
+        return [instance, instance.hotkey_display]
 
     def title_info(self):
         return self.entry_id
@@ -1053,12 +1043,15 @@ class Describer(TextBrowser):
         self.populate_entry(entry=entry, entry_key=entry_key)
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
         if not hasattr(self, "resource_key"):
+            self.resource_key = ""
             raise AttributeError("resource_key is undefined")
         if not hasattr(self, "describe_method"):
+            self.describe_method = ""
             raise AttributeError("describe_method is undefined")
         if not hasattr(self, "describe_kwarg_name") and not hasattr(
             self, "describe_kwargs"
         ):
+            self.describe_kwarg_name = ""
             raise AttributeError(
                 "describe_kwarg_name is undefined and describe_kwargs not set manually"
             )
@@ -1067,6 +1060,7 @@ class Describer(TextBrowser):
         if not hasattr(self, "describe_kwargs"):
             self.describe_kwargs = {}
         if not hasattr(self, "object_path"):
+            self.object_path = ""
             raise AttributeError("object_path is undefined")
         if hasattr(self, "describe_kwarg_name"):
             self.populate_describe_kwargs()
@@ -1098,21 +1092,19 @@ class Describer(TextBrowser):
 
         self.refresh_data()
 
-    def command(self, cmd, kw={}):
-        frame = cmd(**kw)
+    def command(self, cmd, **kwargs):
+        frame = cmd(**kwargs)
         if frame is not None:
             Common.Session.push_frame(frame)
 
     def command_wrapper(self, cmd, data_arg, **kwargs):
         def fn(*args):
+            kwargs[data_arg] = "\n".join(self.lines)
             self.command(
                 cmd,
-                {
-                    data_arg: "\n".join(self.lines),
-                    "pushed": True,
-                    "caller": self,
-                    **kwargs,
-                },
+                pushed=True,
+                caller=self,
+                **kwargs,
             )
 
         return fn
@@ -1120,7 +1112,7 @@ class Describer(TextBrowser):
     def toggle_wrap(self, *args, **kwargs):
         super().toggle_wrap(*args, **kwargs)
         Common.Session.set_message(
-            "Text wrap {0}".format("ON" if self.wrap else "OFF"),
+            f"Text wrap {'ON' if self.wrap else 'OFF'}",
             Common.color("message_info"),
         )
 
@@ -1139,9 +1131,9 @@ class Describer(TextBrowser):
             return
         try:
             response = getattr(provider, self.describe_method)(**self.describe_kwargs)
-        except botoerror.ClientError as e:
+        except botoerror.ClientError as error:
             Common.clienterror(
-                e,
+                error,
                 "List Resources",
                 "Core",
                 subcategory="Describer",
@@ -1177,20 +1169,20 @@ class DeleteResourceDialog(SessionAwareDialog):
         from_what_name=None,
         undoable=False,
         can_force=False,
-        extra_fields={},
-        **kwargs
+        extra_fields=None,
+        **kwargs,
     ):
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
         kwargs["border"] = Border(
             Common.border("default"),
             Common.color("modal_dialog_border"),
-            "{1} {0}".format(resource_type, action_name),
+            f"{resource_type} {action_name}",
             Common.color("modal_dialog_border_title"),
         )
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
         label = [
-            ("{0} ".format(action_name), Common.color("modal_dialog_label")),
+            (f"{action_name} ", Common.color("modal_dialog_label")),
             (resource_type, Common.color("modal_dialog_label_highlight")),
             (' resource "', Common.color("modal_dialog_label")),
             (resource_identifier, Common.color("modal_dialog_label_highlight")),
@@ -1198,9 +1190,7 @@ class DeleteResourceDialog(SessionAwareDialog):
         ]
 
         if from_what is not None:
-            label.append(
-                (" from {0}".format(from_what), Common.color("modal_dialog_label"))
-            )
+            label.append((f" from {from_what}", Common.color("modal_dialog_label")))
             if from_what_name is not None:
                 label.append((' "', Common.color("modal_dialog_label")))
                 label.append(
@@ -1228,17 +1218,18 @@ class DeleteResourceDialog(SessionAwareDialog):
             )
             self.add_field(self.force_checkbox)
         self.extra_fields = {}
-        for field in extra_fields.keys():
-            self.highlighted += 1
-            self.add_field(extra_fields[field])
-            self.extra_fields[field] = extra_fields
+        if extra_fields is not None:
+            for field in extra_fields.keys():
+                self.highlighted += 1
+                self.add_field(extra_fields[field])
+                self.extra_fields[field] = extra_fields
         self.callback = callback
 
-    def input(self, inkey):
-        if inkey.is_sequence and inkey.name == "KEY_ESCAPE":
+    def input(self, key):
+        if key.is_sequence and key.name == "KEY_ESCAPE":
             self.close()
             return True
-        return super().input(inkey)
+        return super().input(key)
 
     def accept_and_close(self):
         force = self.can_force and self.force_checkbox.checked
@@ -1251,23 +1242,23 @@ def format_timedelta(delta):
     minutes = int(delta.seconds / 60) - hours * 60
     seconds = delta.seconds - hours * 3600 - minutes * 60
     if delta.days > 0:
-        return "{0}d{1}h ago".format(delta.days, hours)
+        return f"{delta.days}d{hours}h ago"
     elif hours > 0:
-        return "{0}h{1}m ago".format(hours, minutes)
+        return f"{hours}h{minutes}m ago"
     elif minutes > 0:
-        return "{0}m{1}s ago".format(minutes, seconds)
+        return f"{minutes}m{seconds}s ago"
     elif seconds > 0:
-        return "{0}s ago".format(seconds)
+        return f"{seconds}s ago"
     else:
         return "<1s ago"
 
 
-def isdumpable(v):
+def isdumpable(obj):
     return not (
-        isinstance(v, int)
-        or isinstance(v, float)
-        or isinstance(v, str)
-        or isinstance(v, bool)
+        isinstance(obj, int)
+        or isinstance(obj, float)
+        or isinstance(obj, str)
+        or isinstance(obj, bool)
     )
 
 
@@ -1316,12 +1307,13 @@ class ListResourceDocumentEditor:
             if entry_name_arg_update is not None
             else entry_name_arg
         )
+        self.entry_key = entry_key
         self.as_json = as_json
         self.update_method = update_method
         self.message = message
 
     def retrieve_content(self, selection):
-        r_kwargs = {self.retrieve_entry_name_arg: self.selection[self.entry_key]}
+        r_kwargs = {self.retrieve_entry_name_arg: selection[self.entry_key]}
         response = self.retrieve(**r_kwargs)
         return self.display_content(response)
 
@@ -1337,7 +1329,7 @@ class ListResourceDocumentEditor:
     def update_content(self, selection, newcontent):
         try:
             u_kwargs = {
-                self.update_entry_name_arg: self.selection[self.entry_key],
+                self.update_entry_name_arg: selection[self.entry_key],
                 self.update_document_arg: json.loads(newcontent)
                 if self.as_json
                 else newcontent,
@@ -1351,25 +1343,25 @@ class ListResourceDocumentEditor:
                 api_provider=self.provider_name,
                 api_method=self.update_method,
             )
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError as error:
             Common.error(
-                "JSON decode error: {0}".format(str(e)),
+                f"JSON decode error: {error}",
                 self.update_method,
                 self.provider_name.capitalize(),
                 raw=newcontent,
             )
-        except botoerror.ClientError as e:
+        except botoerror.ClientError as error:
             Common.clienterror(
-                e,
+                error,
                 self.update_method,
                 self.provider.capitalize(),
                 api_kwargs=u_kwargs,
                 api_provider=self.provider_name,
                 api_method=self.update_method,
             )
-        except botoerror.ParamValidationError as e:
+        except botoerror.ParamValidationError as error:
             Common.error(
-                "Parameter validation error: {0}".format(str(e)),
+                f"Parameter validation error: {str(error)}",
                 self.update_method,
                 self.provider.capitalize(),
                 api_kwargs=u_kwargs,
@@ -1393,7 +1385,7 @@ class ListResourceDocumentCreator(ListResourceDocumentEditor):
         create_document_arg,
         initial_document=None,
         as_json=True,
-        static_fields={},
+        static_fields=None,
         message="Create successful",
     ):
         """
@@ -1417,30 +1409,21 @@ class ListResourceDocumentCreator(ListResourceDocumentEditor):
             entry_key=None,
             entry_name_arg_update=None,
             as_json=as_json,
+            message=message,
         )
         self.initial_document = initial_document
         self.golden = self.display_content(self.initial_document)
-        self.static_fields = static_fields
+        self.static_fields = static_fields if static_fields is not None else {}
         self.create_method = create_method
         self.provider_name = provider
-        self.message = message
 
     def retrieve_content(self, selection):
         from copy import deepcopy
 
         return self.display_content(deepcopy(self.initial_document))
 
-    def update_content(self, selection, newcontent):
-        if newcontent == self.golden:
-            Common.Session.set_message("Cancelled", Common.color("message_info"))
-            return
-        try:
-            update_data = json.loads(newcontent)
-        except json.JSONDecodeError as e:
-            Common.Session.set_message(
-                "JSON parse error: {0}".format(e), Common.color("message_error")
-            )
-            return
+    def generate_kwargs(self, selection, newcontent):
+        update_data = json.loads(newcontent)
         if self.update_document_arg is not None:
             u_kwargs = {
                 self.update_document_arg: update_data if self.as_json else newcontent
@@ -1460,6 +1443,19 @@ class ListResourceDocumentCreator(ListResourceDocumentEditor):
                     )
         for field in self.static_fields.keys():
             u_kwargs[field] = self.static_fields[field]
+        return u_kwargs
+
+    def update_content(self, selection, newcontent):
+        if newcontent == self.golden:
+            Common.Session.set_message("Cancelled", Common.color("message_info"))
+            return
+        try:
+            u_kwargs = self.generate_kwargs(selection, newcontent)
+        except json.JSONDecodeError as error:
+            Common.Session.set_message(
+                f"JSON parse error: {error}", Common.color("message_error")
+            )
+            return
         try:
             self.update(**u_kwargs)
             Common.success(
@@ -1470,18 +1466,18 @@ class ListResourceDocumentCreator(ListResourceDocumentEditor):
                 api_provider=self.provider_name,
                 api_method=self.create_method,
             )
-        except botoerror.ClientError as e:
+        except botoerror.ClientError as error:
             Common.clienterror(
-                e,
+                error,
                 self.create_method,
                 self.provider_name.capitalize(),
                 api_kwargs=u_kwargs,
                 api_provider=self.provider_name,
                 api_method=self.create_method,
             )
-        except botoerror.ParamValidationError as e:
+        except botoerror.ParamValidationError as error:
             Common.error(
-                "Parameter validation error: {0}".format(str(e)),
+                f"Parameter validation error: {str(error)}",
                 self.create_method,
                 self.provider_name.capitalize(),
                 api_kwargs=u_kwargs,
@@ -1505,6 +1501,7 @@ class ListResourceFieldsEditor(ListResourceDocumentEditor):
         entry_key="name",
         entry_name_arg_update=None,
         as_json=True,
+        message="Update successful",
     ):
         super().__init__(
             provider,
@@ -1516,21 +1513,26 @@ class ListResourceFieldsEditor(ListResourceDocumentEditor):
             entry_key="name",
             entry_name_arg_update=entry_name_arg_update,
             as_json=as_json,
+            message=message,
         )
 
         self.fields = fields
+        self.orig = {}
 
     def display_content(self, response):
         content = json.dumps(response, default=datetime_hack)
         ret = {}
         for field, path in self.fields.items():
             ret[field] = Common.Session.jq(path).input(text=content).first()
+            self.orig[field] = ret[field]
         return json.dumps(ret, sort_keys=True, indent=2)
 
     def update_content(self, selection, newcontent):
         update_data = json.loads(newcontent)
-        u_kwargs = {self.update_entry_name_arg: self.selection[self.entry_key]}
+        u_kwargs = {self.update_entry_name_arg: selection[self.entry_key]}
         for field in self.fields.keys():
+            if self.orig[field] == update_data[field]:
+                continue
             if (
                 not isdumpable(update_data[field])
                 or self.as_json is True
@@ -1544,11 +1546,21 @@ class ListResourceFieldsEditor(ListResourceDocumentEditor):
             Common.Session.set_message(
                 "Update successful", Common.color("message_success")
             )
-        except botoerror.ClientError as e:
-            Common.Session.set_message(
-                "AWS API call error: {0}".format(str(e)), Common.color("message_error")
+        except botoerror.ClientError as error:
+            Common.clienterror(
+                error,
+                self.update_method,
+                self.provider_name.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.update_method,
             )
-        except botoerror.ParamValidationError as e:
-            Common.Session.set_message(
-                "Validation error: {0}".format(str(e)), Common.color("message_error")
+        except botoerror.ParamValidationError as error:
+            Common.error(
+                f"Parameter validation error: {str(error)}",
+                self.update_method,
+                self.provider_name.capitalize(),
+                api_kwargs=u_kwargs,
+                api_provider=self.provider_name,
+                api_method=self.update_method,
             )

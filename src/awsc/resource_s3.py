@@ -66,11 +66,8 @@ class S3Describer(Describer):
             *args,
             entry=entry,
             entry_key=entry_key,
-            **kwargs
+            **kwargs,
         )
-
-    def title_info(self):
-        return self.bucket
 
 
 class CancelDownload(Exception):
@@ -85,7 +82,7 @@ class S3ObjectLister(ResourceLister):
         if self.path is None:
             return self.bucket
         else:
-            return "{0}/{1}".format(self.bucket, self.path)
+            return f"{self.bucket}/{self.path}"
 
     def __init__(self, *args, bucket, path=None, **kwargs):
         self.icons = {
@@ -154,9 +151,8 @@ class S3ObjectLister(ResourceLister):
         self.add_hotkey(ControlCodes.D, self.empty, "Cancel download")
 
     def determine_bucket_prefixed_path(self, entry, *args):
-        return "{0}/{1}".format(
-            self.bucket, entry["Key"] if "Key" in entry else entry["Prefix"]
-        )
+        path = entry["Key"] if "Key" in entry else entry["Prefix"]
+        return f"{self.bucket}/{path}"
 
     def determine_name(self, entry, *args):
         if "Prefix" in entry:
@@ -171,19 +167,19 @@ class S3ObjectLister(ResourceLister):
             return ""
         b_prefix = ["", "Ki", "Mi", "Gi", "Ti", "Ei"]
         b_idx = 0
-        s = float(entry["Size"])
-        while s >= 1024:
+        size = float(entry["Size"])
+        while size >= 1024:
             b_idx += 1
-            s /= 1024
+            size /= 1024
             if b_idx == len(b_prefix) - 1:
                 break
-        return "{0:.2f} {1}B".format(s, b_prefix[b_idx])
+        return f"{size:.2f} {b_prefix[b_idx]}B"
 
     def determine_icon(self, entry, *args):
         if "Prefix" in entry:
             return self.icons["folder"]
         ext = entry["Key"].split("/")[-1].split(".")[-1]
-        ext_key = "ext.{0}".format(ext)
+        ext_key = f"ext.{ext}"
         if ext_key in self.icons:
             return self.icons[ext_key]
         return self.icons["default"]
@@ -197,7 +193,7 @@ class S3ObjectLister(ResourceLister):
             subpath = self.get_selection_path()
             self.command(
                 self.open_command,
-                {
+                **{
                     self.open_selection_arg: subpath,
                     "bucket": self.bucket,
                     "pushed": True,
@@ -207,21 +203,17 @@ class S3ObjectLister(ResourceLister):
     def get_selection_path(self):
         if self.selection is not None:
             if self.path is None:
-                return "{0}{1}".format(self.selection["name"], self.selection["is_dir"])
+                return f"{self.selection['name']}{self.selection['is_dir']}"
             else:
-                return "{0}{1}{2}".format(
-                    self.path, self.selection["name"], self.selection["is_dir"]
-                )
+                return f"{self.path}{self.selection['name']}{self.selection['is_dir']}"
         return None
 
     def get_cache_name(self):
-        return "{0}/{1}".format(self.bucket, self.get_selection_path()).replace(
-            "/", "--"
-        )
+        return f"{self.bucket}/{self.get_selection_path}".replace("/", "--")
 
     def cache_fetch(self, obj, *args, **kwargs):
         if self.selection is not None:
-            sp = self.get_selection_path()
+            selection_path = self.get_selection_path()
             obj_size = float(self.selection["size_in_bytes"])
             downloaded = 0
 
@@ -239,22 +231,25 @@ class S3ObjectLister(ResourceLister):
             Common.generic_api_call(
                 "s3",
                 "download_file",
-                {"Bucket": self.bucket, "Key": sp, "Filename": obj, "Callback": fn},
+                {
+                    "Bucket": self.bucket,
+                    "Key": selection_path,
+                    "Filename": obj,
+                    "Callback": fn,
+                },
                 "Download File",
                 "S3",
                 subcategory="Object",
-                resource="{0}/{1}".format(self.bucket, sp),
+                resource=f"{self.bucket}/{selection_path}",
             )
 
-            # Common.Session.service_provider("s3").download_file(
-            #    Bucket=self.bucket, Key=sp, Filename=obj, Callback=fn
-            # )
             try:
-                with open(obj, "r") as f:
-                    return f.read()
+                # TODO: Implement use of libmagic
+                with open(obj, "r", encoding="utf-8") as file:
+                    return file.read()
             except UnicodeDecodeError:
-                with open(obj, "rb") as f:
-                    return f.read()
+                with open(obj, "rb") as file:
+                    return file.read()
 
     def download_selection(self, *args, **kwargs):
         if self.selection is not None:
@@ -275,13 +270,16 @@ class S3ObjectLister(ResourceLister):
                 )
                 return None
             fpath = path / self.selection["name"]
+            # TODO: Implement libmagic
             mode = "w"
+            encoding = "utf-8"
             if isinstance(data, bytes):
                 mode = "wb"
-            with fpath.open(mode) as f:
-                f.write(data)
+                encoding = None
+            with fpath.open(mode, encoding=encoding) as file:
+                file.write(data)
             Common.Session.set_message(
-                "Downloaded file to {0}".format(str(fpath.resolve())),
+                f"Downloaded file to {fpath.resolve()}",
                 Common.color("message_success"),
             )
         return None
@@ -307,7 +305,7 @@ class S3ObjectLister(ResourceLister):
                 data = "<binary>"
             return GenericDescriber.opener(
                 **{
-                    "describing": "File: {0}".format(self.get_selection_path()),
+                    "describing": f"File: {self.get_selection_path()}",
                     "content": data,
                     "pushed": True,
                 }
