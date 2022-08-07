@@ -281,7 +281,7 @@ class ListEntry:
         return self.columns["name"]
 
     @name.setter
-    def set_name(self, name):
+    def name(self, name):
         self.columns["name"] = name
 
     def dict(self):

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+import datetime
 
 from .base_control import (
     DeleteResourceDialog,
