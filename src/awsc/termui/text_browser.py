@@ -7,7 +7,7 @@ from pygments.token import Token
 
 from .color import Color, ColorBlackOnGold, ColorGold, Palette8Bit
 from .common import Commons
-from .control import Control
+from .control import HotkeyControl
 
 
 class NullHighlighter:
@@ -74,12 +74,9 @@ class JsonHighlighter:
         return result_lines
 
 
-class TextBrowser(Control):
+class TextBrowser(HotkeyControl):
     def __init__(
         self,
-        parent,
-        alignment,
-        dimensions,
         *args,
         color=ColorGold,
         filtered_color=ColorBlackOnGold,
@@ -87,21 +84,19 @@ class TextBrowser(Control):
         syntax_highlighting=False,
         **kwargs,
     ):
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.entries = []
-        self.hotkeys = {
-            "KEY_DOWN": self.scroll_down,
-            "KEY_UP": self.scroll_up,
-            "KEY_LEFT": self.scroll_left,
-            "KEY_RIGHT": self.scroll_right,
-            "c": self.copy_contents,
-            "w": self.toggle_wrap,
-            "KEY_END": self.end,
-            "KEY_HOME": self.home,
-            "KEY_PGUP": self.pgup,
-            "KEY_PGDOWN": self.pgdown,
-        }
-        self.tooltips = {"c": "Copy", "w": "Toggle Wrap"}
+
+        self.add_hotkey("KEY_DOWN", self.scroll_down)
+        self.add_hotkey("KEY_UP", self.scroll_up)
+        self.add_hotkey("KEY_LEFT", self.scroll_left)
+        self.add_hotkey("KEY_RIGHT", self.scroll_right)
+        self.add_hotkey("KEY_END", self.end)
+        self.add_hotkey("KEY_HOME", self.home)
+        self.add_hotkey("KEY_PGUP", self.pgup)
+        self.add_hotkey("KEY_PGDOWN", self.pgdown)
+        self.add_hotkey("c", self.copy_contents, "Copy")
+        self.add_hotkey("w", self.toggle_wrap, "Toggle Wrap")
         self.scheme = scheme
         self.color = color
         self.filtered_color = filtered_color
@@ -130,10 +125,9 @@ class TextBrowser(Control):
     def raw(self, line=None):
         if line is None:
             return "\n".join(self.rawlines())
-        else:
-            return "".join(
-                [self._raw(self.lines[line][i]) for i in range(len(self.lines[line]))]
-            )
+        return "".join(
+            [self._raw(self.lines[line][i]) for i in range(len(self.lines[line]))]
+        )
 
     def add_text(self, text):
         add = text.split("\n")
@@ -192,24 +186,6 @@ class TextBrowser(Control):
             self.top = self._current_filter_match[0]
             self._filter_line = self.top
 
-    def add_hotkey(self, hotkey, action, tooltip=None):
-        self.hotkeys[hotkey] = action
-        if tooltip is not None:
-            self.tooltips[hotkey] = tooltip
-        Commons.UIInstance.dirty = True
-
-    def input(self, key):
-        inkey = str(key)
-        if key.is_sequence:
-            inkey = key.name
-        else:
-            inkey = inkey.lower()
-        if inkey in self.hotkeys:
-            self.hotkeys[inkey](self)
-            Commons.UIInstance.dirty = True
-            return True
-        return False
-
     def toggle_wrap(self, *args):
         self.wrap = not self.wrap
         if self.wrap:
@@ -235,7 +211,7 @@ class TextBrowser(Control):
             self.left -= 1
 
     def end(self, *args):
-        corners = self.corners()
+        corners = self.corners
         y0 = corners[1][0] + (0 if self.border is None else 1)
         y1 = corners[1][1] - (0 if self.border is None else 1)
         height = y1 - y0 + 1
@@ -246,14 +222,14 @@ class TextBrowser(Control):
         self.top = 0
 
     def pgup(self, *args):
-        corners = self.corners()
+        corners = self.corners
         y0 = corners[1][0] + (0 if self.border is None else 1)
         y1 = corners[1][1] - (0 if self.border is None else 1)
         height = y1 - y0 + 1
         self.top = max(self.top - height, 0)
 
     def pgdown(self, *args):
-        corners = self.corners()
+        corners = self.corners
         y0 = corners[1][0] + (0 if self.border is None else 1)
         y1 = corners[1][1] - (0 if self.border is None else 1)
         height = y1 - y0 + 1
@@ -265,11 +241,7 @@ class TextBrowser(Control):
 
     def paint(self):
         super().paint()
-        corners = self.corners()
-        y = corners[1][0] + (0 if self.border is None else 1)
-        y1 = corners[1][1] - (0 if self.border is None else 1)
-        x0 = corners[0][0] + (0 if self.border is None else 1)
-        x1 = corners[0][1] - (0 if self.border is None else 1)
+        ((x0, x1), (y, y1)) = self.inner
         for i in range(self.top, len(self.display_lines)):
             line = self.display_lines[i]
             skip_chars = self.left
@@ -285,7 +257,7 @@ class TextBrowser(Control):
                         next_filter_pos = filter_position
                         next_filter_last_pos = filter_position + len(self._filter) - 1
                         break
-                    elif filter_position + len(self._filter) - 1 >= pos:
+                    if filter_position + len(self._filter) - 1 >= pos:
                         next_filter_pos = filter_position
                         next_filter_last_pos = filter_position + len(self._filter) - 1
                     else:
@@ -295,7 +267,7 @@ class TextBrowser(Control):
                 if skip_chars > len(buf):
                     skip_chars -= len(buf)
                     continue
-                elif skip_chars > 0:
+                if skip_chars > 0:
                     buf = buf[skip_chars:]
                     skip_chars = 0
                 color = self.color if not isinstance(elem, tuple) else elem[1]
@@ -305,11 +277,7 @@ class TextBrowser(Control):
                     text = buf[:space]
                     buf = buf[space:]
                     while len(text) > 0:
-                        if (
-                            next_filter_last_pos >= 0
-                            and pos >= next_filter_pos
-                            and pos <= next_filter_last_pos
-                        ):
+                        if next_filter_pos <= pos <= next_filter_last_pos >= 0:
                             filt = next_filter_last_pos - pos + 1
                             if filt >= len(text):
                                 Commons.UIInstance.print(
@@ -334,7 +302,7 @@ class TextBrowser(Control):
                                 else:
                                     next_filter_pos = -1
                                     next_filter_last_pos = -1
-                        elif next_filter_pos >= 0 and pos + len(text) > next_filter_pos:
+                        elif 0 <= next_filter_pos < pos + len(text):
                             unfilt = next_filter_pos - pos
                             if unfilt > 0:
                                 Commons.UIInstance.print(

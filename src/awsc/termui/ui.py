@@ -209,15 +209,11 @@ class UI:
         while True:
             key = self.term.inkey(None, 0.01)
             if key is not None and key != "":
-                self.mutex.acquire()
-                try:
+                with self.mutex:
                     self.input_buffer.append(key)
-                finally:
-                    self.mutex.release()
 
     def process_input_buffer(self, start_time):
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             if len(self.input_buffer) > 0:
                 key = self.input_buffer[0]
                 self.input_buffer = self.input_buffer[1:]
@@ -227,8 +223,6 @@ class UI:
                 curr_time = time.time()
                 if curr_time - start_time > FRAMERATE - 0.02:
                     return
-        finally:
-            self.mutex.release()
 
     def main(self):
         # pylint: disable=protected-access

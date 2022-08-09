@@ -16,7 +16,7 @@ class Dimension:
         if isinstance(value, str):
             test = value.split("|")
             if len(test) > 1:
-                return max([self._v(test_value, height) for test_value in test])
+                return max(self._v(test_value, height) for test_value in test)
             test = value.split("-")
             if len(test) > 1:
                 val = self._v(test[0], height)
@@ -25,10 +25,7 @@ class Dimension:
                 return val
             if value[-1] == "%":
                 return int(height * float(value[:-1]) / 100) - 1
-            else:
-                return int(value)
-        else:
-            return int(value)
+        return int(value)
 
     def __call__(self):
         dim = Commons.UIInstance.dim
@@ -45,9 +42,8 @@ class TopLeftAnchor:
     def anchor(self, parent):
         if parent is None:
             return (self.left, self.top)
-        else:
-            tlp = parent.topleft()
-            return (tlp[0] + self.left, tlp[1] + self.top)
+        tlp = parent.topleft()
+        return (tlp[0] + self.left, tlp[1] + self.top)
 
     def topleft(self, dim, parent):
         return self.anchor(parent)
@@ -61,10 +57,9 @@ class BottomLeftAnchor:
     def anchor(self, parent):
         if parent is None:
             return (self.left, self.bottom)
-        else:
-            tlp = parent.topleft()
-            brp = parent.bottomright()
-            return (tlp[0] + self.left, brp[1] - self.bottom)
+        tlp = parent.topleft()
+        brp = parent.bottomright()
+        return (tlp[0] + self.left, brp[1] - self.bottom)
 
     def topleft(self, dim, parent):
         anchor = self.anchor(parent)
@@ -79,10 +74,9 @@ class TopRightAnchor:
     def anchor(self, parent):
         if parent is None:
             return (self.right, self.top)
-        else:
-            tlp = parent.topleft()
-            brp = parent.bottomright()
-            return (brp[0] - self.right, tlp[1] + self.top)
+        tlp = parent.topleft()
+        brp = parent.bottomright()
+        return (brp[0] - self.right, tlp[1] + self.top)
 
     def topleft(self, dim, parent):
         anchor = self.anchor(parent)

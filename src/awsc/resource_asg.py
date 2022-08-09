@@ -73,10 +73,9 @@ class ASGResourceLister(ResourceLister):
     def determine_launch_info(self, asg):
         if "LaunchConfigurationName" in asg and bool(asg["LaunchConfigurationName"]):
             return asg["LaunchConfigurationName"]
-        elif "LaunchTemplate" in asg:
+        if "LaunchTemplate" in asg:
             return asg["LaunchTemplate"]["LaunchTemplateName"]
-        else:
-            return ""
+        return ""
 
     def determine_instance_count(self, asg):
         healthy = len([h for h in asg["Instances"] if h["HealthStatus"] == "Healthy"])
@@ -168,20 +167,10 @@ class ASGDescriber(Describer):
     prefix = "asg_browser"
     title = "Autoscaling Group"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "autoscaling"
         self.describe_method = "describe_auto_scaling_groups"
         self.describe_kwarg_name = "AutoScalingGroupNames"
         self.describe_kwarg_is_list = True
         self.object_path = ".AutoScalingGroups[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)

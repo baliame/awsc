@@ -11,7 +11,14 @@ disable=
 	import-outside-toplevel,
 	too-many-lines,
 	line-too-long,
-	R
+	too-many-instance-attributes,
+	too-few-public-methods,
+	too-many-locals,
+	too-many-return-statements,
+	too-many-branches,
+	too-many-statements,
+	too-many-nested-blocks,
+	too-many-arguments
 extension-pkg-whitelist=jq
 [BASIC]
 good-names=i,j,k,x,x0,y,y0,x1,y1,_,op,ip,ui,jq,fn,xy

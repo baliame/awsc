@@ -9,7 +9,6 @@ from .base_control import (
     SingleSelectorDialog,
 )
 from .common import Common
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.common import Commons
 from .termui.ui import ControlCodes
 
@@ -121,15 +120,11 @@ class UserLister(ResourceLister):
     def delete_user(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="user",
             resource_identifier=self.selection["name"],
             callback=self.do_delete,
-            action_name="Delete",
         )
 
     def do_delete(self, **kwargs):
@@ -209,10 +204,7 @@ class UserLister(ResourceLister):
     def remove_from_group(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="user",
             resource_identifier=self.selection["name"],
@@ -360,22 +352,12 @@ class UserDescriber(Describer):
     prefix = "user_browser"
     title = "User"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "iam"
         self.describe_method = "get_user"
         self.describe_kwarg_name = "UserName"
         self.object_path = ".User"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class LoginProfileDescriber(Describer):
@@ -385,39 +367,25 @@ class LoginProfileDescriber(Describer):
     def title_info(self):
         return f"User: {self.user['name']}"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, entry, **kwargs):
         self.user = entry
         self.resource_key = "iam"
         self.describe_method = "get_login_profile"
         self.describe_kwarg_name = "UserName"
         self.object_path = ".LoginProfile"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry=entry, **kwargs)
         self.add_hotkey(
             ControlCodes.D, self.delete_login_profile, "Delete Login Profile"
         )
 
     def delete_login_profile(self, _):
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="login profile",
             resource_identifier=self.user["name"],
             from_what="user",
             from_what_name=self.user["name"],
             callback=self.do_delete_login_profile,
-            action_name="Delete",
         )
 
     def do_delete_login_profile(self, *args, **kwargs):
@@ -502,15 +470,11 @@ class GroupLister(ResourceLister):
     def delete_group(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="group",
             resource_identifier=self.selection["name"],
             callback=self.do_delete,
-            action_name="Delete",
         )
 
     def do_delete(self, **kwargs):
@@ -531,10 +495,7 @@ class GroupLister(ResourceLister):
     def remove_from_group(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="user",
             resource_identifier=self.user["name"],
@@ -645,22 +606,12 @@ class GroupDescriber(Describer):
     prefix = "group_browser"
     title = "Group"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "iam"
         self.describe_method = "get_group"
         self.describe_kwarg_name = "GroupName"
         self.object_path = ".Group"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class PolicyLister(ResourceLister):
@@ -671,12 +622,11 @@ class PolicyLister(ResourceLister):
     def title_info(self):
         if self.user is not None:
             return f"User: {self.user['name']}"
-        elif self.group is not None:
+        if self.group is not None:
             return f"Group: {self.group['name']}"
-        elif self.role is not None:
+        if self.role is not None:
             return f"Role: {self.role['name']}"
-        else:
-            return None
+        return None
 
     def get_scope_tooltip(self):
         return f"Change Scope ({self.scope})"
@@ -725,10 +675,7 @@ class PolicyLister(ResourceLister):
                 "Policy must be detached before deletion", Common.color("message_error")
             )
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="policy",
             resource_identifier=self.selection["name"],
@@ -763,10 +710,7 @@ class PolicyLister(ResourceLister):
         elif self.role is not None:
             dtype = "role"
             dname = self.role.name
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="policy",
             resource_identifier=self.selection["name"],
@@ -869,9 +813,7 @@ class PolicyDescriber(Describer):
     prefix = "policy_browser"
     title = "Policy"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="arn", **kwargs
-    ):
+    def __init__(self, *args, entry_key="arn", **kwargs):
         self.resource_key = "iam"
         self.describe_method = "get_policy"
         self.describe_kwarg_name = "PolicyArn"
@@ -884,15 +826,7 @@ class PolicyDescriber(Describer):
                 "kwargs": {"entry": None},
             }
         }
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
 class PolicyVersionDescriber(Describer):
@@ -902,17 +836,7 @@ class PolicyVersionDescriber(Describer):
     def title_info(self):
         return self.name
 
-    def __init__(
-        self,
-        parent,
-        alignment,
-        dimensions,
-        entry,
-        *args,
-        policy="",
-        entry_key="arn",
-        **kwargs,
-    ):
+    def __init__(self, *args, policy="", **kwargs):
         self.resource_key = "iam"
         self.describe_method = "get_policy_version"
         self.object_path = ".PolicyVersion"
@@ -920,9 +844,9 @@ class PolicyVersionDescriber(Describer):
         self.name = Common.Session.jq(".PolicyName").input(text=policy).first()
         version = Common.Session.jq(".DefaultVersionId").input(text=policy).first()
         self.describe_kwargs = {"PolicyArn": self.arn, "VersionId": version}
-        super().__init__(
-            parent, alignment, dimensions, *args, entry=None, entry_key=None, **kwargs
-        )
+        kwargs["entry"] = None
+        kwargs["entry_key"] = None
+        super().__init__(*args, **kwargs)
 
 
 class InlinePolicyLister(ResourceLister):
@@ -935,17 +859,13 @@ class InlinePolicyLister(ResourceLister):
     def delete_policy(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="inline policy",
             resource_identifier=self.selection["name"],
             from_what=self.datatype,
             from_what_name=self.data["name"],
             callback=self.do_delete,
-            action_name="Delete",
         )
 
     def do_delete(self, **kwargs):
@@ -1001,35 +921,14 @@ class InlinePolicyDescriber(Describer):
     prefix = "user_inline_policy_browser"
     title = "Inline Policy"
 
-    def __init__(
-        self,
-        parent,
-        alignment,
-        dimensions,
-        entry,
-        *args,
-        entry_key="name",
-        caller=None,
-        datatype="",
-        data=None,
-        **kwargs,
-    ):
+    def __init__(self, *args, caller=None, datatype="", data=None, **kwargs):
         self.resource_key = "iam"
         self.describe_method = f"get_{datatype}_policy"
         self.arg = f"{datatype.capitalize()}Name"
         self.describe_kwarg_name = "PolicyName"
         self.describe_kwargs = {self.arg: data["name"]}
         self.object_path = "."
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            caller=caller,
-            **kwargs,
-        )
+        super().__init__(*args, caller=caller, **kwargs)
 
 
 class RoleLister(ResourceLister):
@@ -1132,10 +1031,7 @@ class RoleLister(ResourceLister):
     def detach_from_instance_profile(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="role",
             resource_identifier=self.selection["name"],
@@ -1164,10 +1060,7 @@ class RoleLister(ResourceLister):
         self.refresh_data()
 
     def delete_role(self, _):
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="role",
             resource_identifier=self.selection["name"],
@@ -1267,22 +1160,12 @@ class RoleDescriber(Describer):
     prefix = "role_browser"
     title = "Role"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "iam"
         self.describe_method = "get_role"
         self.describe_kwarg_name = "RoleName"
         self.object_path = ".Role"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class InstanceProfileLister(ResourceLister):
@@ -1327,10 +1210,7 @@ class InstanceProfileLister(ResourceLister):
     def remove_from_role(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="role",
             resource_identifier=self.role["name"],
@@ -1359,15 +1239,11 @@ class InstanceProfileLister(ResourceLister):
         self.refresh_data()
 
     def delete_instance_profile(self, _):
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="instance profile",
             resource_identifier=self.selection["name"],
             callback=self.do_delete,
-            action_name="Delete",
         )
 
     def do_delete(self, **kwargs):
@@ -1446,9 +1322,7 @@ class InstanceProfileDescriber(Describer):
     prefix = "instance_profile_browser"
     title = "Instance Profile"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, entry, entry_key="name", **kwargs):
         from .arn import ARN
 
         self.resource_key = "iam"
@@ -1459,12 +1333,4 @@ class InstanceProfileDescriber(Describer):
             arn = ARN(entry["id"])
             entry_key = "name"
             entry["name"] = arn.resource_id_first
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry=entry, entry_key=entry_key, **kwargs)

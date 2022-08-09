@@ -48,23 +48,13 @@ class ListenerDescriber(Describer):
     prefix = "listener_browser"
     title = "Listener"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "elbv2"
         self.describe_method = "describe_listeners"
         self.describe_kwarg_name = "ListenerArns"
         self.describe_kwarg_is_list = True
         self.object_path = ".Listeners[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class ListenerActionResourceLister(ResourceLister):
@@ -110,44 +100,40 @@ class ListenerActionResourceLister(ResourceLister):
         if self.selection is not None:
             if self.selection["action type"] == "forward":
                 return super().open(*args)
-            else:
-                return self.describe(*args)
+            return self.describe(*args)
+        return None
 
     def determine_condition(self, result, *args):
         if len(result["Conditions"]) > 1:
             return "<multiple>"
-        elif len(result["Conditions"]) == 1:
+        if len(result["Conditions"]) == 1:
             cond = result["Conditions"][0]
             field = cond["Field"]
             if field == "host-header":
                 if "Values" in cond and len(cond["Values"]):
                     if isinstance(cond["Values"], str):
                         return f"Host: {cond['Values']}"
-                    else:
-                        src = cond["Values"]
+                    src = cond["Values"]
                 else:
                     src = cond["HostHeaderConfig"]["Values"]
                 return f"Host: {'|'.join(src)}"
-            elif field == "path":
+            if field == "path":
                 if "Values" in cond and len(cond["Values"]):
                     if isinstance(cond["Values"], str):
                         return f"Path: {cond['Values']}"
-                    else:
-                        src = cond["Values"]
+                    src = cond["Values"]
                 else:
                     src = cond["PathPatternConfig"]["Values"]
                 return f"Path: {'|'.join(src)}"
 
             return field
-        else:
-            return "<always>"
+        return "<always>"
 
     def determine_action_type(self, result, *args):
         if len(result["Actions"]) > 0:
             act = result["Actions"][-1]
             return act["Type"]
-        else:
-            return "N/A"
+        return "N/A"
 
     def determine_target(self, result, *args):
         if len(result["Actions"]) > 0:
@@ -159,7 +145,7 @@ class ListenerActionResourceLister(ResourceLister):
                         for i in act["ForwardConfig"]["TargetGroups"]
                     ]
                 )
-            elif act["Type"] == "redirect":
+            if act["Type"] == "redirect":
                 redirect = act["RedirectConfig"]
                 proto = (
                     "http(s)"
@@ -185,20 +171,10 @@ class ListenerActionDescriber(Describer):
     prefix = "listener_action_browser"
     title = "Listener Rule"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="arn", **kwargs
-    ):
+    def __init__(self, *args, entry_key="arn", **kwargs):
         self.resource_key = "elbv2"
         self.describe_method = "describe_rules"
         self.describe_kwarg_name = "RuleArns"
         self.describe_kwarg_is_list = True
         self.object_path = ".Rules[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)

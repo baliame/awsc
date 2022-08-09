@@ -10,7 +10,7 @@ class SubnetResourceLister(ResourceLister):
     def title_info(self):
         if self.vpc is not None:
             return self.vpc["id"]
-        elif self.db_subnet_group is not None:
+        if self.db_subnet_group is not None:
             return self.db_subnet_group["name"]
         return None
 
@@ -103,20 +103,10 @@ class SubnetDescriber(Describer):
     prefix = "subnet_browser"
     title = "Subnet"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="id", **kwargs
-    ):
+    def __init__(self, *args, entry_key="id", **kwargs):
         self.resource_key = "ec2"
         self.describe_method = "describe_subnets"
         self.describe_kwarg_name = "SubnetIds"
         self.describe_kwarg_is_list = True
         self.object_path = ".Subnets[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)

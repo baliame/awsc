@@ -49,14 +49,17 @@ class BaseChart(BarGraph):
 
 
 class SessionAwareDialog(DialogControl):
+    line_size = 10
+
     @classmethod
-    def opener(cls, caller, *args, **kwargs):
+    def opener(cls, *args, caller, **kwargs):
         return cls(
             caller.parent,
             CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+            Dimension("80%|40", f"{cls.line_size}"),
             caller=caller,
             *args,
+            weight=-500,
             **kwargs,
         )
 

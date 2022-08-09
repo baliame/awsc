@@ -37,11 +37,11 @@ class Screen:
             self.clear()
 
         def clear(self):
-            if len(self.buf) == self.screen.ui.w:
+            if len(self.buf) == self.screen.ui.width:
                 for character in self.buf:
                     character.clear()
             else:
-                self.buf = [Character() for i in range(self.screen.ui.w)]
+                self.buf = [Character() for i in range(self.screen.ui.width)]
 
         def __getitem__(self, i):
             return self.buf[i]
@@ -50,11 +50,11 @@ class Screen:
             return "".join(x.output() for x in self.buf)
 
     def clear(self):
-        if len(self.buf) == self.ui.h:
+        if len(self.buf) == self.ui.height:
             for character in self.buf:
                 character.clear()
         else:
-            self.buf = [Screen.Row(self) for i in range(self.ui.h)]
+            self.buf = [Screen.Row(self) for i in range(self.ui.height)]
 
     def __getitem__(self, i):
         return self.buf[i]

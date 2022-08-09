@@ -86,25 +86,25 @@ class Session:
         latest_tag = version.parse(current_version)
         latest_stable = latest_tag
         current_tag = latest_tag
-        resp = urllib.request.urlopen("https://pypi.org/pypi/awsc/json")
-        if resp.status == 200:
-            package_info = resp.read()
-            package_info_json = json.loads(package_info)
-            for release in package_info_json["releases"].keys():
-                release_tag = version.parse(release)
-                if release_tag > latest_tag:
-                    latest_tag = release_tag
-                if not release_tag.is_prerelease and release_tag > latest_stable:
-                    latest_stable = release_tag
-            if latest_tag != current_tag:
-                if latest_stable != current_tag:
-                    version_str = f"{str(current_tag)} ({update_character}{str(latest_stable)}, {update_character}?{str(latest_tag)}"
+        with urllib.request.urlopen("https://pypi.org/pypi/awsc/json") as resp:
+            if resp.status == 200:
+                package_info = resp.read()
+                package_info_json = json.loads(package_info)
+                for release in package_info_json["releases"].keys():
+                    release_tag = version.parse(release)
+                    if release_tag > latest_tag:
+                        latest_tag = release_tag
+                    if not release_tag.is_prerelease and release_tag > latest_stable:
+                        latest_stable = release_tag
+                if latest_tag != current_tag:
+                    if latest_stable != current_tag:
+                        version_str = f"{str(current_tag)} ({update_character}{str(latest_stable)}, {update_character}?{str(latest_tag)}"
+                    else:
+                        version_str = (
+                            f"{str(current_tag)} ({update_character}?{str(latest_tag)}"
+                        )
                 else:
-                    version_str = (
-                        f"{str(current_tag)} ({update_character}?{str(latest_tag)}"
-                    )
-            else:
-                version_str = str(current_tag)
+                    version_str = str(current_tag)
 
         self.info_display["AWSC Version"] = version_str
 
@@ -225,11 +225,11 @@ class Session:
 
     def textedit(self, value):
         editor = self.config["editor_command"]
-        temp = tempfile.NamedTemporaryFile("w", delete=False)
-        temp_file = temp.name
-        try:
+        with tempfile.NamedTemporaryFile("w", delete=False) as temp:
+            temp_file = temp.name
             temp.write(value)
             temp.close()
+        try:
             self.ui.unraw(subprocess.run, ["bash", "-c", editor.format(temp_file)])
             # TODO: Implement libmagic
             with open(temp_file, "r", encoding="utf-8") as temp:

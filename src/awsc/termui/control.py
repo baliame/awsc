@@ -58,7 +58,7 @@ class Border:
     def paint(self, block):
         if self.style is None or self.color is None:
             return
-        corners = block.corners()
+        corners = block.corners
         dimensions = block.dimensions()
         for i in range(corners[1][0], corners[1][1] + 1):
             if i == corners[1][0]:
@@ -171,7 +171,7 @@ class Control(Block):
 
     @property
     def inner(self):
-        corners = self.corners()
+        corners = self.corners
         x0 = corners[0][0] + (0 if self.border is None else 1)
         x1 = corners[0][1] - (0 if self.border is None else 1)
         y0 = corners[1][0] + (0 if self.border is None else 1)
@@ -186,3 +186,35 @@ class Control(Block):
         if self.border is not None:
             self.border.paint(self)
         super().paint()
+
+
+class HotkeyControl(Control):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.hotkeys = {}
+        self.tooltips = {}
+        self.hotkey_is_validated = {}
+
+    def add_hotkey(self, hotkey, action, tooltip=None, is_validated=False):
+        self.hotkeys[hotkey] = action
+        if tooltip is not None:
+            self.tooltips[hotkey] = tooltip
+        self.hotkey_is_validated[hotkey] = is_validated
+        Commons.UIInstance.dirty = True
+
+    def validate_hotkey(self, key):
+        return True
+
+    def input(self, key):
+
+        inkey = str(key)
+        if key.is_sequence:
+            inkey = key.name
+        else:
+            inkey = inkey.lower()
+        if inkey in self.hotkeys:
+            if not self.hotkey_is_validated[inkey] or self.validate_hotkey(inkey):
+                self.hotkeys[inkey](self)
+                Commons.UIInstance.dirty = True
+            return True
+        return False

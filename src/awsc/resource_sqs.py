@@ -5,7 +5,6 @@ from .base_control import (
     ResourceLister,
 )
 from .common import Common
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.ui import ControlCodes
 
 
@@ -17,10 +16,7 @@ class SQSLister(ResourceLister):
     def delete_queue(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="queue",
             resource_identifier=self.selection["url"],
@@ -46,10 +42,7 @@ class SQSLister(ResourceLister):
     def purge_queue(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="queue",
             resource_identifier=self.selection["url"],
@@ -181,20 +174,10 @@ class SQSDescriber(Describer):
     prefix = "sqs_browser"
     title = "Queue"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="url", **kwargs
-    ):
+    def __init__(self, *args, entry_key="url", **kwargs):
         self.resource_key = "sqs"
         self.describe_method = "get_queue_attributes"
         self.describe_kwarg_name = "QueueUrl"
         self.describe_kwargs = {"AttributeNames": ["All"]}
         self.object_path = "."
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)

@@ -1,52 +1,17 @@
+from .base_control import OpenableListControl
 from .common import Common, DefaultAnchor, DefaultDimension, default_border
 from .info import HotkeyDisplay
 from .termui.alignment import Dimension, TopRightAnchor
-from .termui.list_control import ListControl, ListEntry
+from .termui.list_control import ListEntry
 
 
-class CommanderOptionsLister(ListControl):
+class CommanderOptionsLister(OpenableListControl):
     title = "Commands"
+    prefix = "help"
 
-    @classmethod
-    def opener(cls, **kwargs):
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            **kwargs,
-        )
-        instance.border = default_border("help", "Commands", None)
-        return [instance, instance.hotkey_display]
-
-    def __init__(self, parent, alignment, dimensions, *args, **kwargs):
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            color=Common.color("help_list_generic", "generic"),
-            selection_color=Common.color("help_list_selection", "selection"),
-            title_color=Common.color("help_list_heading", "column_title"),
-            *args,
-            **kwargs,
-        )
-        self.phony = {
-            "ctx": "AWS Contexts",
-            "context": "AWS Contexts",
-            "region": "AWS Region",
-            "ssh": "SSH Keys",
-            "logs": "Logs",
-        }
-        self.hotkey_display = HotkeyDisplay(
-            self.parent,
-            TopRightAnchor(1, 0),
-            Dimension("33%|50", 8),
-            self,
-            session=Common.Session,
-            highlight_color=Common.color("hotkey_display_title"),
-            generic_color=Common.color("hotkey_display_value"),
-        )
-        self.add_hotkey("KEY_ENTER", self.select_and_close, "Open")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.phony = {}
         self.column_titles = {}
         self.column_order = []
         self.add_column("command", 12)

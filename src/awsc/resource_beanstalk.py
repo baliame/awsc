@@ -6,7 +6,6 @@ from .base_control import (
     SingleSelectorDialog,
 )
 from .common import Common
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.dialog import DialogFieldCheckbox
 from .termui.ui import ControlCodes
 
@@ -17,23 +16,15 @@ class EBApplicationResourceLister(ResourceLister):
     command_palette = ["ebapplication", "ebapp", "elasticbeanstalkapplication"]
 
     def delete_application(self, _):
-        if self.selection is None:
-            return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="application",
             resource_identifier=self.selection["name"],
             callback=self.do_delete,
-            action_name="Delete",
             can_force=True,
         )
 
     def do_delete(self, force, **kwargs):
-        if self.selection is None:
-            return
         api_kwargs = {
             "ApplicationName": self.selection["name"],
             "TerminateEnvByForce": force,
@@ -81,30 +72,22 @@ class EBApplicationResourceLister(ResourceLister):
         self.sort_column = "name"
         self.primary_key = "name"
         super().__init__(*args, **kwargs)
+        self.add_hotkey(
+            ControlCodes.D, self.delete_application, "Delete application", True
+        )
 
 
 class EBApplicationDescriber(Describer):
     prefix = "eb_application_browser"
     title = "Beanstalk Application"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "elasticbeanstalk"
         self.describe_method = "describe_applications"
         self.describe_kwarg_name = "ApplicationNames"
         self.describe_kwarg_is_list = True
         self.object_path = ".Applications[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
-        # self.add_hotkey(ControlCodes.D, self.delete_application, "Delete application")
+        super().__init__(*args, **kwargs)
 
 
 class EBApplicationVersionResourceLister(ResourceLister):
@@ -117,23 +100,15 @@ class EBApplicationVersionResourceLister(ResourceLister):
     ]
 
     def delete_application_version(self, _):
-        if self.selection is None:
-            return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="application version",
             resource_identifier=self.selection["name"],
             callback=self.do_delete,
-            action_name="Delete",
             can_force=True,
         )
 
     def do_delete(self, **kwargs):
-        if self.selection is None:
-            return
         api_kwargs = {
             "ApplicationName": self.selection["application"],
             "VersionLabel": self.selection["version"],
@@ -178,30 +153,23 @@ class EBApplicationVersionResourceLister(ResourceLister):
         self.sort_column = "name"
         self.primary_key = "name"
         super().__init__(*args, **kwargs)
+        self.add_hotkey(
+            ControlCodes.D, self.delete_application_version, "Delete appversion", True
+        )
 
 
 class EBApplicationVersionDescriber(Describer):
     prefix = "eb_application_version_browser"
     title = "Beanstalk Application Version"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, entry, **kwargs):
         self.resource_key = "elasticbeanstalk"
         self.describe_method = "describe_application_versions"
         self.describe_kwarg_name = "VersionLabels"
         self.describe_kwarg_is_list = True
         self.describe_kwargs = {"ApplicationName": entry["application"]}
         self.object_path = ".Applications[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry=entry, **kwargs)
 
 
 class EBEnvironmentLister(ResourceLister):
@@ -210,17 +178,11 @@ class EBEnvironmentLister(ResourceLister):
     command_palette = ["ebenvironment", "ebenv", "elasticbeanstalkenvironment"]
 
     def delete_environment(self, _):
-        if self.selection is None:
-            return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="environment",
             resource_identifier=self.selection["name"],
             callback=self.do_delete,
-            action_name="Delete",
             can_force=True,
             extra_fields={
                 "terminate_resources_field": DialogFieldCheckbox(
@@ -233,8 +195,6 @@ class EBEnvironmentLister(ResourceLister):
         )
 
     def do_delete(self, force, terminate_resources_field, **kwargs):
-        if self.selection is None:
-            return
         api_kwargs = {
             "EnvironmentName": self.selection["name"],
             "ForceTerminate": force,
@@ -253,22 +213,14 @@ class EBEnvironmentLister(ResourceLister):
         self.refresh_data()
 
     def delete_environment_config(self, _):
-        if self.selection is None:
-            return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="environment configuration",
             resource_identifier=self.selection["name"],
             callback=self.do_delete_config,
-            action_name="Delete",
         )
 
     def do_delete_config(self, force, terminate_resources_field, **kwargs):
-        if self.selection is None:
-            return
         api_kwargs = {
             "EnvironmentName": self.selection["name"],
             "ApplicationName": self.selection["application"],
@@ -286,12 +238,7 @@ class EBEnvironmentLister(ResourceLister):
         self.refresh_data()
 
     def rebuild_environment(self, _):
-        if self.selection is None:
-            return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="environment",
             resource_identifier=self.selection["name"],
@@ -300,8 +247,6 @@ class EBEnvironmentLister(ResourceLister):
         )
 
     def do_rebuild(self, **kwargs):
-        if self.selection is None:
-            return
         api_kwargs = {
             "EnvironmentName": self.selection["name"],
         }
@@ -318,8 +263,6 @@ class EBEnvironmentLister(ResourceLister):
         self.refresh_data()
 
     def swap_cnames(self, _):
-        if self.selection is None:
-            return
         SingleSelectorDialog(
             self.parent,
             f"Swap CNames of environment '{self.selection['name']}' with other environment",
@@ -331,8 +274,6 @@ class EBEnvironmentLister(ResourceLister):
         )
 
     def do_swap(self, other_env):
-        if self.selection is None:
-            return
         if other_env == self.selection["name"]:
             Common.Session.error(
                 "Source and destination environments are the same.",
@@ -417,14 +358,17 @@ class EBEnvironmentLister(ResourceLister):
         super().__init__(*args, **kwargs)
         if self.selector_cb is None:
             self.add_hotkey(
-                ControlCodes.B, self.rebuild_environment, "Rebuild environment"
+                ControlCodes.B, self.rebuild_environment, "Rebuild environment", True
             )
-            self.add_hotkey(ControlCodes.S, self.swap_cnames, "Swap CNames")
+            self.add_hotkey(ControlCodes.S, self.swap_cnames, "Swap CNames", True)
             self.add_hotkey(
-                ControlCodes.D, self.delete_environment, "Terminate environment"
+                ControlCodes.D, self.delete_environment, "Terminate environment", True
             )
             self.add_hotkey(
-                ControlCodes.E, self.delete_environment, "Delete env config"
+                ControlCodes.E,
+                self.delete_environment_config,
+                "Delete env config",
+                True,
             )
 
     def title_info(self):
@@ -435,46 +379,26 @@ class EBEnvironmentDescriber(Describer):
     prefix = "eb_environment_browser"
     title = "Beanstalk Environment"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "elasticbeanstalk"
         self.describe_method = "describe_environments"
         self.describe_kwarg_name = "EnvironmentNames"
         self.describe_kwarg_is_list = True
         self.object_path = ".Environments[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class EBEnvironmentHealthDescriber(Describer):
     prefix = "eb_environment_health_browser"
     title = "Beanstalk Environment Health"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "elasticbeanstalk"
         self.describe_method = "describe_environment_health"
         self.describe_kwarg_name = "EnvironmentName"
         self.describe_kwarg_is_list = True
         self.object_path = "."
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class EBEnvironmentResourceLister(SingleRelationLister):
@@ -586,22 +510,12 @@ class EBPlatformBranchDescriber(Describer):
     prefix = "eb_platform_branch_browser"
     title = "Beanstalk Platform Branch"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="arn", **kwargs
-    ):
+    def __init__(self, *args, entry_key="arn", **kwargs):
         self.resource_key = "elasticbeanstalk"
         self.describe_method = "describe_platform_version"
         self.describe_kwarg_name = "PlatformArn"
         self.object_path = ".PlatformDescription"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
 class EBPlatformVersionLister(ResourceLister):
@@ -675,22 +589,12 @@ class EBPlatformVersionDescriber(Describer):
     prefix = "eb_platform_version_browser"
     title = "Beanstalk Platform Version"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="arn", **kwargs
-    ):
+    def __init__(self, *args, entry_key="arn", **kwargs):
         self.resource_key = "elasticbeanstalk"
         self.describe_method = "describe_platform_version"
         self.describe_kwarg_name = "PlatformArn"
         self.object_path = ".PlatformDescription"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
 class EBInstanceHealthLister(ResourceLister):

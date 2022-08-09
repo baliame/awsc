@@ -2,15 +2,12 @@ import datetime
 
 from .color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold
 from .common import Commons
-from .control import Control
+from .control import HotkeyControl
 
 
-class ListControl(Control):
+class ListControl(HotkeyControl):
     def __init__(
         self,
-        parent,
-        alignment,
-        dimensions,
         *args,
         color=ColorGold,
         selection_color=ColorBlackOnGold,
@@ -19,17 +16,14 @@ class ListControl(Control):
         update_selection_color=ColorBlackOnGold,
         **kwargs
     ):
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.entries = []
-        self.hotkeys = {
-            "KEY_DOWN": self.list_down,
-            "KEY_UP": self.list_up,
-            "KEY_PGUP": self.pageup,
-            "KEY_PGDOWN": self.pagedown,
-            "KEY_END": self.end,
-            "KEY_HOME": self.home,
-        }
-        self.tooltips = {}
+        self.add_hotkey("KEY_DOWN", self.list_down)
+        self.add_hotkey("KEY_UP", self.list_up)
+        self.add_hotkey("KEY_PGUP", self.pageup)
+        self.add_hotkey("KEY_PGDOWN", self.pagedown)
+        self.add_hotkey("KEY_END", self.end)
+        self.add_hotkey("KEY_HOME", self.home)
         self.color = color
         self.selection_color = selection_color
         self.title_color = title_color
@@ -45,6 +39,9 @@ class ListControl(Control):
         self.top = 0
         self.update_color = update_color
         self.update_selection_color = update_selection_color
+
+    def validate_hotkey(self, key):
+        return self.selection is not None
 
     @property
     def filter(self):
@@ -63,24 +60,6 @@ class ListControl(Control):
         self.sort()
         self._cache = None
         Commons.UIInstance.dirty = True
-
-    def add_hotkey(self, hotkey, action, tooltip=None):
-        self.hotkeys[hotkey] = action
-        if tooltip is not None:
-            self.tooltips[hotkey] = tooltip
-        Commons.UIInstance.dirty = True
-
-    def input(self, key):
-        inkey = str(key)
-        if key.is_sequence:
-            inkey = key.name
-        else:
-            inkey = inkey.lower()
-        if inkey in self.hotkeys:
-            self.hotkeys[inkey](self)
-            Commons.UIInstance.dirty = True
-            return True
-        return False
 
     @property
     def filtered(self):
@@ -142,7 +121,7 @@ class ListControl(Control):
 
     @property
     def rows(self):
-        corners = self.corners()
+        corners = self.corners
         y0 = corners[1][0] + (0 if self.border is None else 1)
         y1 = corners[1][1] - (0 if self.border is None else 1)
         return y1 - y0
@@ -180,11 +159,8 @@ class ListControl(Control):
 
     def before_paint(self):
         super().before_paint()
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             self.before_paint_critical()
-        finally:
-            self.mutex.release()
         # if self.selected >= len(self.entries):
         #  self.selected = len(self.entries) - 1
         # if self.selected < 0:
@@ -225,7 +201,7 @@ class ListControl(Control):
             self.calculated = win
 
         super().paint()
-        corners = self.corners()
+        corners = self.corners
         y = corners[1][0] + (0 if self.border is None else 1)
         x = corners[0][0] + (0 if self.border is None else 1)
         now = datetime.datetime.now()

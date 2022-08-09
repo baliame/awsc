@@ -1,59 +1,31 @@
 import re
 from pathlib import Path
 
-from .common import Common, DefaultAnchor, DefaultDimension, default_border
-from .info import HotkeyDisplay
-from .termui.alignment import CenterAnchor, Dimension, TopRightAnchor
+from .base_control import OpenableListControl
+from .common import Common
+from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.dialog import DialogControl, DialogFieldText
-from .termui.list_control import ListControl, ListEntry
+from .termui.list_control import ListEntry
 
 
-class SSHList(ListControl):
-    @classmethod
-    def opener(cls, **kwargs):
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            **kwargs,
-        )
-        instance.border = default_border("ssh", "SSH Keys", None)
-        return [instance, instance.hotkey_display]
+class SSHList(OpenableListControl):
+    prefix = "ssh"
+    title = "SSH Keys"
 
-    @classmethod
-    def selector(cls, callback, **kwargs):
-        return cls.opener(**{"selector_cb": callback, **kwargs})
-
-    def __init__(
-        self, parent, alignment, dimensions, *args, selector_cb=None, **kwargs
-    ):
+    def __init__(self, *args, selector_cb=None, **kwargs):
         super().__init__(
-            parent,
-            alignment,
-            dimensions,
+            *args,
             color=Common.color("ssh_key_list_generic", "generic"),
             selection_color=Common.color("ssh_key_list_selection", "selection"),
             title_color=Common.color("ssh_key_list_heading", "column_title"),
-            *args,
+            selector_cb=selector_cb,
             **kwargs,
         )
-        self.selector_cb = selector_cb
-        self.hotkey_display = HotkeyDisplay(
-            self.parent,
-            TopRightAnchor(1, 0),
-            Dimension("33%|50", 8),
-            self,
-            session=Common.Session,
-            highlight_color=Common.color("hotkey_display_title"),
-            generic_color=Common.color("hotkey_display_value"),
-        )
+
         self.add_hotkey("d", self.set_default_ssh_key, "Set as default")
         self.add_hotkey("e", self.set_default_ssh_username, "Set default username")
-        if selector_cb is not None:
-            self.add_hotkey("KEY_ENTER", self.select_and_close, "Select and close")
-        else:
+        if selector_cb is None:
             self.add_hotkey("KEY_ENTER", self.select_ssh_key, "Select ssh key")
         self.add_column("usage frequency", 12)
         self.add_column("has public key", 12)
@@ -116,11 +88,6 @@ class SSHList(ListControl):
         if self.selection is not None:
             Common.Session.ssh_key = self.selection.name
 
-    def select_and_close(self, _):
-        if self.selection is not None and self.selector_cb is not None:
-            self.selector_cb(self.selection["name"])
-            Common.Session.pop_frame()
-
     def set_default_ssh_username(self, _):
         SSHDefaultUsernameDialog(
             self.parent,
@@ -133,9 +100,7 @@ class SSHList(ListControl):
 
 
 class SSHDefaultUsernameDialog(DialogControl):
-    def __init__(
-        self, parent, alignment, dimensions, *args, key_name="", caller=None, **kwargs
-    ):
+    def __init__(self, *args, key_name="", caller=None, **kwargs):
         self.key_name = key_name
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
@@ -149,7 +114,7 @@ class SSHDefaultUsernameDialog(DialogControl):
                 "ssh_modal_dialog_border_title_info", "modal_dialog_border_title_info"
             ),
         )
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         def_text = (
             Common.Configuration["default_ssh_usernames"][self.key_name]
             if self.key_name in Common.Configuration["default_ssh_usernames"]

@@ -19,36 +19,6 @@ def awscheck():
     return bool(Common.Session.context) and bool(Common.Session.region)
 
 
-def open_context_lister():
-    ctxl = ContextList(
-        Common.Session.ui.top_block,
-        DefaultAnchor,
-        DefaultDimension,
-        border=default_border("context_list", "Contexts"),
-        weight=0,
-    )
-    return [ctxl, ctxl.hotkey_display]
-
-
-def open_region_lister():
-    regl = RegionList(
-        Common.Session.ui.top_block,
-        DefaultAnchor,
-        DefaultDimension,
-        border=default_border("region_list", "Regions"),
-        weight=0,
-    )
-    return [regl, regl.hotkey_display]
-
-
-def open_ssh_lister():
-    return SSHList.opener()
-
-
-def open_logs_lister():
-    return LogLister.opener()
-
-
 def open_filterer():
     if Common.Session.filterer is None:
         return Filterer(
@@ -65,8 +35,7 @@ def open_filterer():
                 Common.border("search_bar"), Common.color("search_bar_border")
             ),
         )
-    else:
-        Common.Session.filterer.resume()
+    return Common.Session.filterer.resume()
 
 
 def open_commander():
@@ -90,6 +59,7 @@ def main(*args, **kwargs):
     old_stderr = None
     try:
         if os.fstat(0) == os.fstat(1):
+            # pylint: disable=consider-using-with # With would be extremely roundabout here.
             log_file_handle = open("error.log", "w", buffering=1, encoding="utf-8")
 
             old_stderr = sys.stderr
@@ -98,16 +68,16 @@ def main(*args, **kwargs):
         Common.initialize()
         Common.Session.service_provider = AWS()
         Common.post_initialize()
-        Common.Session.replace_frame(open_context_lister())
+        Common.Session.replace_frame(ContextList.opener())
 
         Common.Session.info_display.commander_hook = open_commander
         Common.Session.info_display.filterer_hook = open_filterer
 
-        Common.Session.commander_options["ctx"] = open_context_lister
-        Common.Session.commander_options["context"] = open_context_lister
-        Common.Session.commander_options["region"] = open_region_lister
-        Common.Session.commander_options["ssh"] = open_ssh_lister
-        Common.Session.commander_options["logs"] = open_logs_lister
+        Common.Session.commander_options["ctx"] = ContextList.opener
+        Common.Session.commander_options["context"] = ContextList.opener
+        Common.Session.commander_options["region"] = RegionList.opener
+        Common.Session.commander_options["ssh"] = SSHList.opener
+        Common.Session.commander_options["logs"] = LogLister.opener
         Common.Session.commander_options["?"] = CommanderOptionsLister.opener
         Common.Session.commander_options["help"] = CommanderOptionsLister.opener
 

@@ -2,7 +2,6 @@ import subprocess
 
 from .base_control import Describer, ResourceLister
 from .common import Common, SessionAwareDialog
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.dialog import DialogFieldText
 
@@ -54,46 +53,24 @@ class RDSResourceLister(ResourceLister):
                     Common.color("message_error"),
                 )
             else:
-                RDSClientDialog(
-                    self.parent,
-                    CenterAnchor(0, 0),
-                    Dimension("80%|40", "10"),
-                    instance_entry=self.selection,
-                    caller=self,
-                    weight=-500,
-                )
+                RDSClientDialog.opener(instance_entry=self.selection, caller=self)
 
 
 class RDSDescriber(Describer):
     prefix = "rds_browser"
     title = "RDS Instance"
 
-    def __init__(
-        self,
-        parent,
-        alignment,
-        dimensions,
-        entry,
-        *args,
-        entry_key="instance id",
-        **kwargs,
-    ):
+    def __init__(self, *args, entry_key="instance id", **kwargs):
         self.resource_key = "rds"
         self.describe_method = "describe_db_instances"
         self.describe_kwarg_name = "DBInstanceIdentifier"
         self.object_path = ".DBInstances[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
 class RDSClientDialog(SessionAwareDialog):
+    line_size = 15
+
     def __init__(
         self,
         parent,

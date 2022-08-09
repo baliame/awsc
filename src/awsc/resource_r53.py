@@ -9,7 +9,6 @@ from .base_control import (
     ResourceLister,
 )
 from .common import Common
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.ui import ControlCodes
 
 
@@ -21,16 +20,11 @@ class R53ResourceLister(ResourceLister):
     def delete_hosted_zone(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="route53 hosted zone",
             resource_identifier=self.selection["id"],
             callback=self.do_delete,
-            action_name="Delete",
-            can_force=True,
         )
 
     def do_delete(self, **kwargs):
@@ -173,16 +167,12 @@ class R53RecordLister(ResourceLister):
     def delete_record(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="route53 DNS entry",
             resource_identifier=f"{self.selection['entry']} {self.selection['name']}",
             callback=self.do_delete,
             action_name="Delete",
-            can_force=True,
         )
 
     def do_delete(self, **kwargs):
@@ -282,22 +272,12 @@ class R53Describer(Describer):
     prefix = "r53_browser"
     title = "Route53 Hosted Zone"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="id", **kwargs
-    ):
+    def __init__(self, *args, entry_key="id", **kwargs):
         self.resource_key = "route53"
         self.describe_method = "get_hosted_zone"
         self.describe_kwarg_name = "Id"
         self.object_path = "."
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
 class R53RecordDescriber(Describer):
@@ -314,29 +294,12 @@ class R53RecordDescriber(Describer):
         self.describe_kwargs["StartRecordType"] = self.record_type
         self.describe_kwargs["StartRecordName"] = self.record_name
 
-    def __init__(
-        self,
-        parent,
-        alignment,
-        dimensions,
-        entry,
-        *args,
-        entry_key="hosted_zone_id",
-        **kwargs,
-    ):
+    def __init__(self, *args, entry_key="hosted_zone_id", **kwargs):
         self.resource_key = "route53"
         self.describe_method = "list_resource_record_sets"
         self.describe_kwarg_name = "HostedZoneId"
         self.object_path = ".ResourceRecordSets[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
     def title_info(self):
         return f"{self.record_type} {self.record_name}"
@@ -421,16 +384,11 @@ class R53HealthCheckLister(ResourceLister):
     def delete_health_check(self, _):
         if self.selection is None:
             return
-        DeleteResourceDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "10"),
+        DeleteResourceDialog.opener(
             caller=self,
             resource_type="route53 health check",
             resource_identifier=self.selection["id"],
             callback=self.do_delete,
-            action_name="Delete",
-            can_force=True,
         )
 
     def do_delete(self, **kwargs):
@@ -491,10 +449,9 @@ class R53HealthCheckLister(ResourceLister):
             else:
                 op = "?"
             return f"<cloudwatch>: {cwac['MetricName']} {op} {cwac['Threshold']}"
-
-        elif hcc["Type"] == "CALCULATED":
+        if hcc["Type"] == "CALCULATED":
             return "<calculated>"
-        elif hcc["Type"] == "RECOVERY_CONTROL":
+        if hcc["Type"] == "RECOVERY_CONTROL":
             return "<recovery control>"
         if ["IPAddress"] in hcc and hcc["IPAddress"] != "":
             host = hcc["IPAddress"]
@@ -522,5 +479,4 @@ class R53HealthCheckLister(ResourceLister):
         )
         if resp["Success"]:
             return resp["Response"]["HealthCheckObservations"]["StatusReport"]["Status"]
-        else:
-            return "<n/a>"
+        return "<n/a>"

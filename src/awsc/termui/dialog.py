@@ -149,25 +149,23 @@ class DialogFieldText(DialogField):
                     self.left -= 1
                 Commons.UIInstance.dirty = True
                 return True
-            elif inkey.name == "KEY_RIGHT":
+            if inkey.name == "KEY_RIGHT":
                 self.left += 1
                 Commons.UIInstance.dirty = True
                 return True
-            elif inkey.name == "KEY_HOME":
+            if inkey.name == "KEY_HOME":
                 self.left = 0
                 Commons.UIInstance.dirty = True
                 return True
-            elif inkey.name == "KEY_END":
-                self.left = len(self.text) - self.drawable
-                if self.left < 0:
-                    self.left = 0
+            if inkey.name == "KEY_END":
+                self.left = max(len(self.text) - self.drawable, 0)
                 Commons.UIInstance.dirty = True
                 return True
-            elif inkey.name == "KEY_BACKSPACE" and len(self.text) > 0:
+            if inkey.name == "KEY_BACKSPACE" and len(self.text) > 0:
                 self.text = self.text[:-1]
                 Commons.UIInstance.dirty = True
                 return True
-            elif inkey.name == "KEY_DELETE":
+            if inkey.name == "KEY_DELETE":
                 self.text = ""
                 Commons.UIInstance.dirty = True
                 return True
@@ -268,7 +266,7 @@ class DialogControl(Control):
                     break
             Commons.UIInstance.dirty = True
             return True
-        elif key.is_sequence and key.name == "KEY_BTAB":
+        if key.is_sequence and key.name == "KEY_BTAB":
             orig = self.highlighted
             while True:
                 self.highlighted -= 1
@@ -284,7 +282,7 @@ class DialogControl(Control):
         return True  # Modals should prevent input from being piped to others.
 
     def paint(self):
-        corners = self.corners()
+        corners = self.corners
         if self.background_color is not None:
             width = corners[0][1] - corners[0][0] + 1
             for row in range(corners[1][0], corners[1][1] + 1):

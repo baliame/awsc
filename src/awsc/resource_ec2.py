@@ -199,10 +199,7 @@ class EC2ResourceLister(ResourceLister):
     def stop_start_instance(self, _):
         if self.selection is not None:
             if self.selection["state"] == "running":
-                DeleteResourceDialog(
-                    self.parent,
-                    CenterAnchor(0, 0),
-                    Dimension("80%|40", "10"),
+                DeleteResourceDialog.opener(
                     caller=self,
                     resource_type="EC2 Instance",
                     resource_identifier=self.selection["instance id"],
@@ -211,10 +208,7 @@ class EC2ResourceLister(ResourceLister):
                     action_name="Stop",
                 )
             elif self.selection["state"] == "stopped":
-                DeleteResourceDialog(
-                    self.parent,
-                    CenterAnchor(0, 0),
-                    Dimension("80%|40", "10"),
+                DeleteResourceDialog.opener(
                     caller=self,
                     resource_type="EC2 Instance",
                     resource_identifier=self.selection["instance id"],
@@ -230,10 +224,7 @@ class EC2ResourceLister(ResourceLister):
 
     def terminate_instance(self, _):
         if self.selection is not None:
-            DeleteResourceDialog(
-                self.parent,
-                CenterAnchor(0, 0),
-                Dimension("80%|40", "10"),
+            DeleteResourceDialog.opener(
                 caller=self,
                 resource_type="EC2 Instance",
                 resource_identifier=self.selection["instance id"],
@@ -353,10 +344,7 @@ class EC2ResourceLister(ResourceLister):
                     Common.color("message_error"),
                 )
             else:
-                EC2SSHDialog(
-                    self.parent,
-                    CenterAnchor(0, 0),
-                    Dimension("80%|40", "10"),
+                EC2SSHDialog.opener(
                     instance_entry=self.selection,
                     caller=self,
                     weight=-500,
@@ -367,33 +355,18 @@ class EC2Describer(Describer):
     prefix = "ec2_browser"
     title = "EC2 Instance"
 
-    def __init__(
-        self,
-        parent,
-        alignment,
-        dimensions,
-        entry,
-        *args,
-        entry_key="instance id",
-        **kwargs,
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "ec2"
         self.describe_method = "describe_instances"
         self.describe_kwarg_name = "InstanceIds"
         self.describe_kwarg_is_list = True
         self.object_path = ".Reservations[0].Instances[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class EC2SSHDialog(SessionAwareDialog):
+    line_size = 15
+
     def __init__(
         self,
         parent,

@@ -35,20 +35,10 @@ class LCDescriber(Describer):
     prefix = "lc_browser"
     title = "Launch Configuration"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "autoscaling"
         self.describe_method = "describe_launch_configurations"
         self.describe_kwarg_name = "LaunchConfigurationNames"
         self.describe_kwarg_is_list = True
         self.object_path = ".LaunchConfigurations[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs
-        )
+        super().__init__(*args, **kwargs)

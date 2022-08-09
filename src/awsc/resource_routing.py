@@ -60,31 +60,20 @@ class RouteTableResourceLister(ResourceLister):
             return "<multiple>"
         if "SubnetId" in result["Associations"][0]:
             return result["Associations"][0]["SubnetId"]
-        else:
-            return "<VPC default>"
+        return "<VPC default>"
 
 
 class RouteTableDescriber(Describer):
     prefix = "route_table_browser"
     title = "Route Table"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="id", **kwargs
-    ):
+    def __init__(self, *args, entry_key="id", **kwargs):
         self.resource_key = "ec2"
         self.describe_method = "describe_route_tables"
         self.describe_kwarg_name = "RouteTableIds"
         self.describe_kwarg_is_list = True
         self.object_path = ".RouteTables[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
 # Routes
@@ -156,37 +145,35 @@ class RouteResourceLister(ResourceLister):
     def determine_gateway_type(self, entry):
         if "NatGatewayId" in entry:
             return "NAT"
-        elif "InstanceId" in entry:
+        if "InstanceId" in entry:
             return "Instance"
-        elif "TransitGatewayId" in entry:
+        if "TransitGatewayId" in entry:
             return "Transit"
-        elif "LocalGatewayId" in entry:
+        if "LocalGatewayId" in entry:
             return "Local"
-        elif "CarrierGatewayId" in entry:
+        if "CarrierGatewayId" in entry:
             return "Carrier"
-        elif "VpcPeeringConnectionId" in entry:
+        if "VpcPeeringConnectionId" in entry:
             return "VPC Peering"
-        elif "EgressOnlyInternetGatewayId" in entry:
+        if "EgressOnlyInternetGatewayId" in entry:
             return "Egress-Only"
-        elif entry["GatewayId"] == "local":
+        if entry["GatewayId"] == "local":
             return "VPC-Local"
-        else:
-            return "Internet"
+        return "Internet"
 
     def determine_gateway(self, entry):
         if "NatGatewayId" in entry:
             return entry["NatGatewayId"]
-        elif "InstanceId" in entry:
+        if "InstanceId" in entry:
             return entry["InstanceId"]
-        elif "TransitGatewayId" in entry:
+        if "TransitGatewayId" in entry:
             return entry["TransitGatewayId"]
-        elif "LocalGatewayId" in entry:
+        if "LocalGatewayId" in entry:
             return entry["LocalGatewayId"]
-        elif "CarrierGatewayId" in entry:
+        if "CarrierGatewayId" in entry:
             return entry["CarrierGatewayId"]
-        elif "VpcPeeringConnectionId" in entry:
+        if "VpcPeeringConnectionId" in entry:
             return entry["VpcPeeringConnectionId"]
-        elif "EgressOnlyInternetGatewayId" in entry:
+        if "EgressOnlyInternetGatewayId" in entry:
             return entry["EgressOnlyInternetGatewayId"]
-        else:
-            return entry["GatewayId"]
+        return entry["GatewayId"]

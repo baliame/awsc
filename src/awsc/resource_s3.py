@@ -52,22 +52,12 @@ class S3Describer(Describer):
     prefix = "s3_browser"
     title = "S3 Bucket"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "rds"
         self.describe_method = "get_bucket_policy"
         self.describe_kwarg_name = "Bucket"
         self.object_path = "."
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class CancelDownload(Exception):
@@ -81,8 +71,7 @@ class S3ObjectLister(ResourceLister):
     def title_info(self):
         if self.path is None:
             return self.bucket
-        else:
-            return f"{self.bucket}/{self.path}"
+        return f"{self.bucket}/{self.path}"
 
     def __init__(self, *args, bucket, path=None, **kwargs):
         self.icons = {
@@ -204,52 +193,50 @@ class S3ObjectLister(ResourceLister):
         if self.selection is not None:
             if self.path is None:
                 return f"{self.selection['name']}{self.selection['is_dir']}"
-            else:
-                return f"{self.path}{self.selection['name']}{self.selection['is_dir']}"
+            return f"{self.path}{self.selection['name']}{self.selection['is_dir']}"
         return None
 
     def get_cache_name(self):
         return f"{self.bucket}/{self.get_selection_path}".replace("/", "--")
 
     def cache_fetch(self, obj, *args, **kwargs):
-        if self.selection is not None:
-            selection_path = self.get_selection_path()
-            obj_size = float(self.selection["size_in_bytes"])
-            downloaded = 0
+        selection_path = self.get_selection_path()
+        obj_size = float(self.selection["size_in_bytes"])
+        downloaded = 0
 
-            def fn(chunk):
-                nonlocal downloaded
-                downloaded += chunk
-                perc = float(downloaded) / obj_size
-                key = Common.Session.ui.check_one_key()
-                if key == ControlCodes.C:
-                    raise KeyboardInterrupt
-                elif key == ControlCodes.D:
-                    raise CancelDownload()
-                Common.Session.ui.progress_bar_paint(perc)
+        def fn(chunk):
+            nonlocal downloaded
+            downloaded += chunk
+            perc = float(downloaded) / obj_size
+            key = Common.Session.ui.check_one_key()
+            if key == ControlCodes.C:
+                raise KeyboardInterrupt
+            if key == ControlCodes.D:
+                raise CancelDownload()
+            Common.Session.ui.progress_bar_paint(perc)
 
-            Common.generic_api_call(
-                "s3",
-                "download_file",
-                {
-                    "Bucket": self.bucket,
-                    "Key": selection_path,
-                    "Filename": obj,
-                    "Callback": fn,
-                },
-                "Download File",
-                "S3",
-                subcategory="Object",
-                resource=f"{self.bucket}/{selection_path}",
-            )
+        Common.generic_api_call(
+            "s3",
+            "download_file",
+            {
+                "Bucket": self.bucket,
+                "Key": selection_path,
+                "Filename": obj,
+                "Callback": fn,
+            },
+            "Download File",
+            "S3",
+            subcategory="Object",
+            resource=f"{self.bucket}/{selection_path}",
+        )
 
-            try:
-                # TODO: Implement use of libmagic
-                with open(obj, "r", encoding="utf-8") as file:
-                    return file.read()
-            except UnicodeDecodeError:
-                with open(obj, "rb") as file:
-                    return file.read()
+        try:
+            # TODO: Implement use of libmagic
+            with open(obj, "r", encoding="utf-8") as file:
+                return file.read()
+        except UnicodeDecodeError:
+            with open(obj, "rb") as file:
+                return file.read()
 
     def download_selection(self, *args, **kwargs):
         if self.selection is not None:
@@ -268,7 +255,7 @@ class S3ObjectLister(ResourceLister):
                 Common.Session.set_message(
                     "Download cancelled", Common.color("message_info")
                 )
-                return None
+                return
             fpath = path / self.selection["name"]
             # TODO: Implement libmagic
             mode = "w"
@@ -282,7 +269,6 @@ class S3ObjectLister(ResourceLister):
                 f"Downloaded file to {fpath.resolve()}",
                 Common.color("message_success"),
             )
-        return None
 
     def view_selection(self, *args, **kwargs):
         if self.selection is not None:

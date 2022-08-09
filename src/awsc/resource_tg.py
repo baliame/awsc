@@ -70,23 +70,13 @@ class TargetGroupDescriber(Describer):
         except KeyError:
             self.name = self.entry_id
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="arn", **kwargs
-    ):
+    def __init__(self, *args, entry_key="arn", **kwargs):
         self.resource_key = "elbv2"
         self.describe_method = "describe_target_groups"
         self.describe_kwarg_name = "TargetGroupArns"
         self.describe_kwarg_is_list = True
         self.object_path = ".TargetGroups[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
     def title_info(self):
         return self.name

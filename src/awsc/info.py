@@ -173,11 +173,7 @@ class HotkeyDisplay(Control):
 
     def paint(self):
         super().paint()
-        corners = self.corners()
-        x0 = corners[0][0] + (0 if self.border is None else 1)
-        x1 = corners[0][1] - (0 if self.border is None else 1)
-        y0 = corners[1][0] + (0 if self.border is None else 1)
-        y1 = corners[1][1] - (0 if self.border is None else 1)
+        ((x0, x1), (y0, y1)) = self.inner
         width = x1 - x0 + 1
         colw = int(width / self.cols)
         x = x0

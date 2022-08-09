@@ -1,53 +1,11 @@
 from botocore import exceptions as botoerror
 
+from .base_control import OpenableListControl, DeleteResourceDialog
 from .common import Common, SessionAwareDialog
-from .info import HotkeyDisplay
-from .termui.alignment import CenterAnchor, Dimension, TopRightAnchor
+from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.dialog import DialogFieldLabel, DialogFieldText
-from .termui.list_control import ListControl, ListEntry
-
-
-class DeleteContextDialog(SessionAwareDialog):
-    def __init__(
-        self, parent, alignment, dimensions, *args, name="", caller=None, **kwargs
-    ):
-        kwargs["ok_action"] = self.accept_and_close
-        kwargs["cancel_action"] = self.close
-        kwargs["border"] = Border(
-            Common.border("default"),
-            Common.color("modal_dialog_border"),
-            "Delete Context",
-            Common.color("modal_dialog_border_title"),
-        )
-        super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
-        self.name = name
-        self.add_field(
-            DialogFieldLabel(
-                [
-                    ('Delete context "', Common.color("modal_dialog_label")),
-                    (name, Common.color("modal_dialog_label_highlight")),
-                    ('"?', Common.color("modal_dialog_label")),
-                ]
-            )
-        )
-        self.highlighted = 1
-        self.caller = caller
-
-    def input(self, key):
-        if key.is_sequence and key.name == "KEY_ESCAPE":
-            self.close()
-            return True
-        return super().input(key)
-
-    def accept_and_close(self):
-        Common.Configuration.delete_context(self.name)
-        self.close()
-
-    def close(self):
-        if self.caller is not None:
-            self.caller.reload_contexts()
-        super().close()
+from .termui.list_control import ListEntry
 
 
 class ImportContextDialog(SessionAwareDialog):
@@ -278,28 +236,12 @@ class AddContextDialog(SessionAwareDialog):
         super().close()
 
 
-class ContextList(ListControl):
-    def __init__(self, parent, alignment, dimensions, *args, **kwargs):
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            color=Common.color("context_list_generic", "generic"),
-            selection_color=Common.color("context_list_selection", "selection"),
-            title_color=Common.color("context_list_heading", "column_title"),
-            *args,
-            **kwargs,
-        )
-        self.hotkey_display = HotkeyDisplay(
-            self.parent,
-            TopRightAnchor(1, 0),
-            Dimension("33%|50", 8),
-            self,
-            session=Common.Session,
-            highlight_color=Common.color("hotkey_display_title"),
-            generic_color=Common.color("hotkey_display_value"),
-            tag="context",
-        )
+class ContextList(OpenableListControl):
+    prefix = "context_list"
+    title = "Contexts"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.add_hotkey("a", self.add_new_context, "Add new context")
         self.add_hotkey("d", self.set_default_context, "Set as default")
         self.add_hotkey("i", self.import_context, "Import context")
@@ -313,24 +255,28 @@ class ContextList(ListControl):
 
     def reload_contexts(self):
         self.entries = []
-        self.selected = 0
-        idx = 0
-        defa = 0
         for context, data in Common.Configuration["contexts"].items():
-            if context == Common.Configuration["default_context"]:
-                defa = idx
-                is_default = "✓"
-            else:
-                is_default = " "
             self.add_entry(
                 ListEntry(
-                    context, **{"account id": data["account_id"], "default": is_default}
+                    context,
+                    **{
+                        "account id": data["account_id"],
+                        "default": "✓"
+                        if context == Common.Configuration["default_context"]
+                        else " ",
+                    }
                 )
             )
-
-            idx += 1
-        if self.selected >= len(self.entries) or self.selected < 0:
-            self.selected = defa
+        if 0 <= self.selected < len(self.entries):
+            return
+        try:
+            self.selected = (
+                Common.Configuration["contexts"]
+                .keys()
+                .index(Common.Configuration["default_context"])
+            )
+        except ValueError:
+            self.selected = 0
 
     def add_new_context(self, _):
         AddContextDialog(
@@ -362,11 +308,13 @@ class ContextList(ListControl):
 
     def delete_selected_context(self, _):
         if self.selection is not None:
-            DeleteContextDialog(
-                self.parent,
-                CenterAnchor(0, 0),
-                Dimension("80%|40", 10),
-                name=self.selection.name,
+            DeleteResourceDialog.opener(
                 caller=self,
-                weight=-500,
+                resource_type="context",
+                resource_identifier=self.selection["name"],
+                callback=self.do_delete,
             )
+
+    def do_delete(self):
+        Common.Configuration.delete_context(self.selection["name"])
+        self.reload_contexts()

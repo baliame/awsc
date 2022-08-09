@@ -1,33 +1,32 @@
 import datetime
 import json
 
-from .base_control import GenericDescriber, datetime_hack
-from .common import Common, DefaultAnchor, DefaultDimension, default_border
-from .info import HotkeyDisplay
-from .termui.alignment import Dimension, TopRightAnchor
-from .termui.list_control import ListControl, ListEntry
+from .base_control import GenericDescriber, OpenableListControl, datetime_hack
+from .common import Common
+from .termui.list_control import ListEntry
 
 
-class LogLister(ListControl):
-    @classmethod
-    def opener(cls, **kwargs):
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
+class LogViewer(GenericDescriber):
+    def __init__(self, parent, alignment, dimensions, *args, log_line, **kwargs):
+        columns = log_line.columns.copy()
+        columns["context"] = json.loads(columns["context"])
+        content = json.dumps(columns, default=datetime_hack, indent=2, sort_keys=True)
+        super().__init__(
+            parent,
+            alignment,
+            dimensions,
+            describing="logs",
+            content=content,
             **kwargs,
         )
-        instance.border = default_border("log", "Logs", None)
-        return [instance, instance.hotkey_display]
 
-    @classmethod
-    def selector(cls, callback, **kwargs):
-        return cls.opener(**{"selector_cb": callback, **kwargs})
 
-    def __init__(
-        self, parent, alignment, dimensions, *args, selector_cb=None, **kwargs
-    ):
+class LogLister(OpenableListControl):
+    prefix = "log"
+    title = "Logs"
+    describer = LogViewer.opener
+
+    def __init__(self, parent, alignment, dimensions, *args, **kwargs):
         super().__init__(
             parent,
             alignment,
@@ -38,21 +37,7 @@ class LogLister(ListControl):
             *args,
             **kwargs,
         )
-        self.selector_cb = selector_cb
-        self.hotkey_display = HotkeyDisplay(
-            self.parent,
-            TopRightAnchor(1, 0),
-            Dimension("33%|50", 8),
-            self,
-            session=Common.Session,
-            highlight_color=Common.color("hotkey_display_title"),
-            generic_color=Common.color("hotkey_display_value"),
-        )
-        self.add_hotkey("d", self.describe, "Show full entry")
-        if selector_cb is not None:
-            self.add_hotkey("KEY_ENTER", self.select_and_close, "Select and close")
-        else:
-            self.add_hotkey("KEY_ENTER", self.describe, "Show full entry")
+
         self.add_column("type", 12)
         self.add_column("category", 20)
         self.add_column("subcategory", 20)
@@ -86,33 +71,9 @@ class LogLister(ListControl):
             )
         )
 
-    def describe(self, _):
-        if self.selection is not None:
-            Common.Session.push_frame(LogViewer.opener(log_line=self.selection))
-
-    def select_and_close(self, _):
-        if self.selection is not None and self.selector_cb is not None:
-            self.selector_cb(self.selection["name"])
-            Common.Session.pop_frame()
-
     def sort(self):
         self.entries.sort(reverse=True, key=lambda x: x.columns["raw_timestamp"])
         self._cache = None
 
     def on_close(self):
         self.logholder.detach()
-
-
-class LogViewer(GenericDescriber):
-    def __init__(self, parent, alignment, dimensions, *args, log_line, **kwargs):
-        columns = log_line.columns.copy()
-        columns["context"] = json.loads(columns["context"])
-        content = json.dumps(columns, default=datetime_hack, indent=2, sort_keys=True)
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            describing="logs",
-            content=content,
-            **kwargs,
-        )

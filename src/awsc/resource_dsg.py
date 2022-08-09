@@ -39,20 +39,10 @@ class DBSubnetGroupDescriber(Describer):
     prefix = "subnet_browser"
     title = "Subnet"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "rds"
         self.describe_method = "describe_db_subnet_groups"
         self.describe_kwarg_name = "DBSubnetGroupName"
         self.describe_kwarg_is_list = True
         self.object_path = ".DBSubnetGroups[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs
-        )
+        super().__init__(*args, **kwargs)

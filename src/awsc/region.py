@@ -1,47 +1,35 @@
+from .base_control import OpenableListControl
 from .common import Common
-from .info import HotkeyDisplay
-from .termui.alignment import Dimension, TopRightAnchor
-from .termui.list_control import ListControl, ListEntry
+from .termui.list_control import ListEntry
 
 
-class RegionList(ListControl):
-    def __init__(self, parent, alignment, dimensions, *args, **kwargs):
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            color=Common.color("region_list_generic", "generic"),
-            selection_color=Common.color("region_list_selection", "selection"),
-            title_color=Common.color("region_list_heading", "column_title"),
-            *args,
-            **kwargs,
-        )
-        self.hotkey_display = HotkeyDisplay(
-            self.parent,
-            TopRightAnchor(1, 0),
-            Dimension("33%|50", 8),
-            self,
-            session=Common.Session,
-            highlight_color=Common.color("hotkey_display_title"),
-            generic_color=Common.color("hotkey_display_value"),
-        )
+class RegionList(OpenableListControl):
+    prefix = "region_list"
+    title = "Regions"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.add_hotkey("d", self.set_default_region, "Set as default")
         self.add_hotkey("KEY_ENTER", self.select_region, "Select region")
         self.add_column("usage frequency", 12)
         self.add_column("default", 8)
-        idx = 0
-        defa = 0
-        for region in sorted(Common.Session.service_provider.list_regions()):
-            if region == Common.Configuration["default_region"]:
-                defa = idx
-                is_default = "✓"
-            else:
-                is_default = " "
+        regions = sorted(Common.Session.service_provider.list_regions())
+        for region in regions:
             self.add_entry(
-                ListEntry(region, **{"usage frequency": 0, "default": is_default})
+                ListEntry(
+                    region,
+                    **{
+                        "usage frequency": 0,
+                        "default": "✓"
+                        if region == Common.Configuration["default_region"]
+                        else " ",
+                    }
+                )
             )
-            idx += 1
-        self.selected = defa
+        try:
+            self.selected = regions.index(Common.Configuration["default_region"])
+        except ValueError:
+            self.selected = 0
 
     def set_default_region(self, _):
         if self.selection is not None:

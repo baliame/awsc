@@ -27,6 +27,7 @@ from .termui.dialog import (
 from .termui.list_control import ListControl, ListEntry
 from .termui.text_browser import TextBrowser
 from .termui.ui import ControlCodes
+from typing import Union, Callable, Any
 
 
 def datetime_hack(x):
@@ -37,6 +38,62 @@ def datetime_hack(x):
 
 class StopLoadingData(Exception):
     pass
+
+
+class OpenableListControl(ListControl):
+    prefix = "CHANGEME"
+    title = "CHANGEME"
+    describer: Union[None, Callable[[], None]] = None
+
+    @classmethod
+    def opener(cls, **kwargs):
+        instance = cls(
+            Common.Session.ui.top_block,
+            DefaultAnchor,
+            DefaultDimension,
+            weight=0,
+            **kwargs,
+        )
+        instance.border = default_border(cls.prefix, cls.title, None)
+        return [instance, instance.hotkey_display]
+
+    @classmethod
+    def selector(cls, callback, **kwargs):
+        return cls.opener(**{"selector_cb": callback, **kwargs})
+
+    def __init__(self, *args, selector_cb=None, **kwargs):
+        kwargs["color"] = Common.color(f"{self.prefix}_generic", "generic")
+        kwargs["selection_color"] = Common.color(
+            f"{self.prefix}_selection", "selection"
+        )
+        kwargs["title_color"] = Common.color(f"{self.prefix}_heading", "column_title")
+        super().__init__(*args, **kwargs)
+        self.selector_cb = selector_cb
+        self.hotkey_display = HotkeyDisplay(
+            self.parent,
+            TopRightAnchor(1, 0),
+            Dimension("33%|50", 8),
+            self,
+            session=Common.Session,
+            highlight_color=Common.color("hotkey_display_title"),
+            generic_color=Common.color("hotkey_display_value"),
+        )
+        if selector_cb is not None:
+            self.add_hotkey("KEY_ENTER", self.select_and_close, "Select and close")
+        elif self.describer is not None:
+            self.add_hotkey("KEY_ENTER", self.describe, "Describe")
+        if self.describer is not None:
+            self.add_hotkey("d", self.describe, "Describe")
+
+    def describe(self, _):
+        if self.selection is not None and self.describer is not None:
+            # pylint: disable=not-callable # Yes it is.
+            Common.Session.push_frame(self.describer(log_line=self.selection))
+
+    def select_and_close(self, _):
+        if self.selection is not None and self.selector_cb is not None:
+            self.selector_cb(self.selection["name"])
+            Common.Session.pop_frame()
 
 
 class ResourceListerBase(ListControl):
@@ -84,21 +141,15 @@ class ResourceListerBase(ListControl):
 
     def async_inner(self, *args, fn, clear=False, **kwargs):
         try:
-            self.mutex.acquire()
-            try:
+            with self.mutex:
                 if clear or (
                     not hasattr(self, "primary_key") or self.primary_key is None
                 ):
                     self.thread_share["clear"] = True
-            finally:
-                self.mutex.release()
 
-            for data in fn(*args, **kwargs):
-                self.mutex.acquire()
-                try:
-                    self.thread_share["new_entries"].extend(data)
-                finally:
-                    self.mutex.release()
+                for data in fn(*args, **kwargs):
+                    with self.mutex:
+                        self.thread_share["new_entries"].extend(data)
 
         except StopLoadingData:
             pass
@@ -115,12 +166,9 @@ class ResourceListerBase(ListControl):
             Common.Session.set_message(
                 "Refresh thread execution failed", Common.color("message_error")
             )
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             self.thread_share["updating"] = False
             self.thread_share["finalize"] = True
-        finally:
-            self.mutex.release()
 
     def handle_finalization_critical(self):
         if hasattr(self, "primary_key") and self.primary_key is not None:
@@ -169,7 +217,7 @@ class ResourceListerBase(ListControl):
                 api_provider=resource_key,
                 classname=type(self).__name__,
             )
-            return
+            return []
         if callable(list_kwargs):
             list_kwargs = list_kwargs()
         ret = []
@@ -242,7 +290,7 @@ class ResourceListerBase(ListControl):
             else:
                 next_marker = ""
 
-    def matches(self, list_entry, elem, *args):
+    def matches(self, list_entry, *args):
         return True
 
     def tag_finder_generator(self, tagname, default="", taglist_key="Tags"):
@@ -298,7 +346,7 @@ class DialogFieldResourceListSelector(DialogField):
                 )
                 Common.Session.ui.dirty = True
                 return True
-            elif inkey.name == "KEY_BACKSPACE" or inkey.name == "KEY_DELETE":
+            if inkey.name in ("KEY_BACKSPACE", "KEY_DELETE"):
                 self.text = ""
                 Common.Session.ui.dirty = True
                 return True
@@ -679,14 +727,11 @@ class ResourceLister(ResourceListerBase):
             self.refresh_data()
 
     def refresh_data(self, *args, **kwargs):
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             if "updating" in self.thread_share and self.thread_share["updating"]:
                 return
             self.thread_share["updating"] = True
             self.thread_share["acquired"] = []
-        finally:
-            self.mutex.release()
         self.auto_refresh_last = datetime.datetime.now()
         self.asynch(self.get_data)
 
@@ -919,7 +964,8 @@ class MultiLister(ResourceListerBase):
             except NoResults:
                 continue
 
-    def matches(self, list_entry, elem, *args):
+    def matches(self, list_entry, *args):
+        elem = args[0]
         raw_item = list_entry.controller_data
         if "compare_as_list" not in elem or not elem["compare_as_list"]:
             if callable(elem["compare_path"]):
@@ -934,18 +980,15 @@ class MultiLister(ResourceListerBase):
                 except StopIteration:
                     return False
             return val == self.compare_value
-        else:
-            if callable(elem["compare_path"]):
-                return self.compare_value in elem["compare_path"](raw_item)
-            else:
-                try:
-                    for val in (
-                        Common.Session.jq(elem["compare_path"]).input(raw_item).first()
-                    ):
-                        if val == self.compare_value:
-                            return True
-                except StopIteration:
-                    return False
+        if callable(elem["compare_path"]):
+            return self.compare_value in elem["compare_path"](raw_item)
+
+        try:
+            for val in Common.Session.jq(elem["compare_path"]).input(raw_item).first():
+                if val == self.compare_value:
+                    return True
+        except StopIteration:
+            return False
         return False
 
     def refresh_data(self, *args, **kwargs):
@@ -1038,7 +1081,7 @@ class Describer(TextBrowser):
         )
 
     def __init__(
-        self, parent, alignment, dimensions, *args, entry, entry_key, **kwargs
+        self, parent, alignment, dimensions, *args, entry, entry_key="name", **kwargs
     ):
         self.populate_entry(entry=entry, entry_key=entry_key)
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
@@ -1243,23 +1286,17 @@ def format_timedelta(delta):
     seconds = delta.seconds - hours * 3600 - minutes * 60
     if delta.days > 0:
         return f"{delta.days}d{hours}h ago"
-    elif hours > 0:
+    if hours > 0:
         return f"{hours}h{minutes}m ago"
-    elif minutes > 0:
+    if minutes > 0:
         return f"{minutes}m{seconds}s ago"
-    elif seconds > 0:
+    if seconds > 0:
         return f"{seconds}s ago"
-    else:
-        return "<1s ago"
+    return "<1s ago"
 
 
 def isdumpable(obj):
-    return not (
-        isinstance(obj, int)
-        or isinstance(obj, float)
-        or isinstance(obj, str)
-        or isinstance(obj, bool)
-    )
+    return not isinstance(obj, (int, float, str, bool))
 
 
 class ListResourceDocumentEditor:

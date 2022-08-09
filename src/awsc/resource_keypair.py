@@ -51,7 +51,7 @@ class KeyPairResourceLister(ResourceLister):
             self.refresh_data()
 
     def create_keypair(self, _):
-        KeyPairCreateDialog.opener(self)
+        KeyPairCreateDialog.opener(self, caller=self)
 
     def remove_keypair_association(self, _):
         if self.selection is not None:
@@ -137,20 +137,10 @@ class KeyPairDescriber(Describer):
     prefix = "keypair_browser"
     title = "EC2 Keypair"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="id", **kwargs
-    ):
+    def __init__(self, *args, entry_key="id", **kwargs):
         self.resource_key = "ec2"
         self.describe_method = "describe_key_pairs"
         self.describe_kwarg_name = "KeyPairIds"
         self.describe_kwarg_is_list = True
         self.object_path = ".KeyPairs[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)

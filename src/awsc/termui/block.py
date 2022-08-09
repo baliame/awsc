@@ -28,18 +28,19 @@ class Block:
 
     @property
     def width(self):
-        corners = self.corners()
+        corners = self.corners
         return corners[0][1] - corners[0][0] + 1
 
     @property
     def height(self):
-        corners = self.corners()
+        corners = self.corners
         return corners[1][1] - corners[1][0] + 1
 
     @property
     def w_in(self):
         return self.width
 
+    @property
     def corners(self):
         topleft = self.topleft()
         botright = (

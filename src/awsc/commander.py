@@ -55,6 +55,7 @@ class Filterer(Control):
 
     def resume(self):
         self.paused = False
+        return self
 
     def close(self):
         self.parent.remove_block(self)

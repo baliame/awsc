@@ -54,20 +54,14 @@ class EBSDescriber(Describer):
     prefix = "ebs_browser"
     title = "EBS Volume"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="id", **kwargs
-    ):
+    def __init__(self, *args, entry_key="id", **kwargs):
         self.resource_key = "ec2"
         self.describe_method = "describe_volumes"
         self.describe_kwarg_name = "VolumeIds"
         self.describe_kwarg_is_list = True
         self.object_path = ".Volumes[0]"
         super().__init__(
-            parent,
-            alignment,
-            dimensions,
             *args,
-            entry=entry,
             entry_key=entry_key,
             **kwargs,
         )

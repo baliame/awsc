@@ -2,10 +2,10 @@ import datetime
 
 from .color import ColorDarkGreen, ColorGold
 from .common import Commons
-from .control import Control
+from .control import HotkeyControl
 
 
-class BarGraph(Control):
+class BarGraph(HotkeyControl):
     DPB_ZeroOrLessToMax = 0
     DPB_ZeroToMax = 1
     DPB_MinToMax = 2
@@ -52,34 +52,13 @@ class BarGraph(Control):
         self.max_time = now
         self.color = color
         self.highlight_color = highlight_color
-        self.hotkeys = {
-            "KEY_END": self.end,
-            "KEY_HOME": self.home,
-            "KEY_LEFT": self.scroll_left,
-            "KEY_RIGHT": self.scroll_right,
-        }
-        self.tooltips = {}
+        self.add_hotkey("KEY_END", self.end)
+        self.add_hotkey("KEY_HOME", self.home)
+        self.add_hotkey("KEY_LEFT", self.scroll_left)
+        self.add_hotkey("KEY_RIGHT", self.scroll_right)
 
         self.left = 0
         self.highlight = 0
-
-    def input(self, key):
-        inkey = str(key)
-        if key.is_sequence:
-            inkey = key.name
-        else:
-            inkey = inkey.lower()
-        if inkey in self.hotkeys:
-            self.hotkeys[inkey](self)
-            Commons.UIInstance.dirty = True
-            return True
-        return False
-
-    def add_hotkey(self, hotkey, action, tooltip=None):
-        self.hotkeys[hotkey] = action
-        if tooltip is not None:
-            self.tooltips[hotkey] = tooltip
-        Commons.UIInstance.dirty = True
 
     def scroll_left(self, *args):
         if self.highlight > 0:
@@ -156,7 +135,7 @@ class BarGraph(Control):
             self.highlight = len(self.datapoints) - 1
             Commons.UIInstance.dirty = True
 
-    @Control.border.setter  # type: ignore[attr-defined]
+    @HotkeyControl.border.setter  # type: ignore[attr-defined]
     def border(self, value):
         self._border = value
         # Do not execute on border initialization
@@ -166,7 +145,7 @@ class BarGraph(Control):
 
     @property
     def colspace(self):
-        corners = self.corners()
+        corners = self.corners
         wspace = corners[0][1] - corners[0][0] + 1 - (0 if self.border is None else 2)
         max_label = f"{float(self.max_point):.2f}"
         min_label = f"{float(self.min_point):.2f}"
@@ -175,7 +154,7 @@ class BarGraph(Control):
 
     def paint(self):
         super().paint()
-        corners = self.corners()
+        corners = self.corners
         wspace = corners[0][1] - corners[0][0] + 1 - (0 if self.border is None else 2)
         hspace = corners[1][1] - corners[1][0] + 1 - (0 if self.border is None else 2)
         x0 = corners[0][0] + (0 if self.border is None else 1)
@@ -247,7 +226,7 @@ class BarGraph(Control):
                     else:
                         row[rowindex] += self.subdivisions[0] * colw
                 else:
-                    if row_bounds[0] < 0 and row_bounds[1] > 0:
+                    if row_bounds[0] < 0 < row_bounds[1]:
                         row[rowindex] += self.subdivisions[8] * colw
                     elif datapoint > 0:
                         if point_step != 0:

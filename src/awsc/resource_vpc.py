@@ -51,20 +51,10 @@ class VPCDescriber(Describer):
     prefix = "vpc_browser"
     title = "VPC"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="id", **kwargs
-    ):
+    def __init__(self, *args, entry_key="id", **kwargs):
         self.resource_key = "ec2"
         self.describe_method = "describe_vpcs"
         self.describe_kwarg_name = "VpcIds"
         self.describe_kwarg_is_list = True
         self.object_path = ".Vpcs[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs
-        )
+        super().__init__(*args, entry_key=entry_key, **kwargs)

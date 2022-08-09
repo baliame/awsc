@@ -44,20 +44,10 @@ class InstanceClassDescriber(Describer):
     prefix = "instance_class_browser"
     title = "Instance Class"
 
-    def __init__(
-        self, parent, alignment, dimensions, entry, *args, entry_key="name", **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         self.resource_key = "ec2"
         self.describe_method = "describe_instance_types"
         self.describe_kwarg_name = "InstanceTypes"
         self.describe_kwarg_is_list = True
         self.object_path = ".InstanceTypes[0]"
-        super().__init__(
-            parent,
-            alignment,
-            dimensions,
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
