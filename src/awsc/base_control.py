@@ -146,9 +146,9 @@ class ResourceListerBase(ListControl):
                 ):
                     self.thread_share["clear"] = True
 
-                for data in fn(*args, **kwargs):
-                    with self.mutex:
-                        self.thread_share["new_entries"].extend(data)
+            for data in fn(*args, **kwargs):
+                with self.mutex:
+                    self.thread_share["new_entries"].extend(data)
 
         except StopLoadingData:
             pass
