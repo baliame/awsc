@@ -7,7 +7,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Python Linter
-      uses: sunnysid3up/python-linter@master
+      uses: baliame/python-linter@master
       with:
         source: "src"
         mypy-options: "--ignore-missing-imports --show-error-codes"
