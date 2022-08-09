@@ -1,6 +1,6 @@
 from botocore import exceptions as botoerror
 
-from .base_control import OpenableListControl, DeleteResourceDialog
+from .base_control import DeleteResourceDialog, OpenableListControl
 from .common import Common, SessionAwareDialog
 from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border

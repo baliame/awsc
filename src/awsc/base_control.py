@@ -2,7 +2,7 @@ import datetime
 import json
 import threading
 import traceback
-from typing import List
+from typing import Callable, List, Union
 
 import pyperclip
 from botocore import exceptions as botoerror
@@ -27,7 +27,6 @@ from .termui.dialog import (
 from .termui.list_control import ListControl, ListEntry
 from .termui.text_browser import TextBrowser
 from .termui.ui import ControlCodes
-from typing import Union, Callable, Any
 
 
 def datetime_hack(x):
