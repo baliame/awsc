@@ -110,7 +110,7 @@ class ListenerActionResourceLister(ResourceLister):
             cond = result["Conditions"][0]
             field = cond["Field"]
             if field == "host-header":
-                if "Values" in cond and len(cond["Values"]):
+                if "Values" in cond and cond["Values"]:
                     if isinstance(cond["Values"], str):
                         return f"Host: {cond['Values']}"
                     src = cond["Values"]
@@ -118,7 +118,7 @@ class ListenerActionResourceLister(ResourceLister):
                     src = cond["HostHeaderConfig"]["Values"]
                 return f"Host: {'|'.join(src)}"
             if field == "path":
-                if "Values" in cond and len(cond["Values"]):
+                if "Values" in cond and cond["Values"]:
                     if isinstance(cond["Values"], str):
                         return f"Path: {cond['Values']}"
                     src = cond["Values"]
