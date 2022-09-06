@@ -1,3 +1,6 @@
+"""
+Module for Cloudformation-related resources.
+"""
 import datetime
 
 from .arn import ARN
@@ -7,71 +10,17 @@ from .base_control import (
     NoResults,
     ResourceLister,
     format_timedelta,
+    tag_finder_generator,
 )
 from .common import Common
-
-
-class CFNResourceLister(ResourceLister):
-    prefix = "cfn_list"
-    title = "CloudFormation Stacks"
-    command_palette = ["cfn", "cloudformation"]
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "cloudformation"
-        self.list_method = "describe_stacks"
-        self.item_path = ".Stacks"
-        self.column_paths = {
-            "name": ".StackName",
-            "status": ".StackStatus",
-            "drift": ".DriftInformation.StackDriftStatus",
-            "created": self.determine_created,
-            "updated": self.determine_updated,
-        }
-        self.hidden_columns = {
-            "arn": ".StackId",
-        }
-        self.imported_column_sizes = {
-            "name": 30,
-            "status": 15,
-            "drift": 15,
-            "created": 20,
-            "updated": 20,
-        }
-        self.describe_command = CFNDescriber.opener
-        self.open_command = CFNRelated.opener
-        self.open_selection_arg = "compare_value"
-
-        self.imported_column_order = ["name", "status", "drift", "created", "updated"]
-        self.sort_column = "name"
-        self.primary_key = "name"
-        super().__init__(*args, **kwargs)
-        self.add_hotkey("p", self.parameters, "Parameters")
-        self.add_hotkey("o", self.outputs, "Outputs")
-
-    def parameters(self, _):
-        if self.selection is not None:
-            Common.Session.push_frame(CFNParameters.opener(stack=self.selection))
-
-    def outputs(self, _):
-        if self.selection is not None:
-            Common.Session.push_frame(CFNOutputs.opener(stack=self.selection))
-
-    def determine_created(self, cfn):
-        return format_timedelta(
-            datetime.datetime.now(datetime.timezone.utc)
-            - datetime.datetime.fromisoformat(cfn["CreationTime"])
-        )
-
-    def determine_updated(self, cfn):
-        if "LastUpdatedTime" in cfn:
-            return format_timedelta(
-                datetime.datetime.now(datetime.timezone.utc)
-                - datetime.datetime.fromisoformat(cfn["LastUpdatedTime"])
-            )
-        return self.determine_created(cfn)
+from .resource_common import multilister_with_compare_path
 
 
 class CFNDescriber(Describer):
+    """
+    Describer control for Cloudformation Stack resources.
+    """
+
     prefix = "cfn_browser"
     title = "CloudFormation Stack"
 
@@ -91,7 +40,12 @@ class CFNDescriber(Describer):
         super().__init__(*args, **kwargs)
 
 
+# TODO: Refactor
 class CFNRelated(MultiLister):
+    """
+    Related resource lister for Cloudformation Stack resources.
+    """
+
     prefix = "cfn_related"
     title = "Resources in CloudFormation Stack"
 
@@ -102,20 +56,12 @@ class CFNRelated(MultiLister):
         self.stack_res_list = {}
         kwargs["compare_key"] = "arn"
         self.resource_descriptors = [
-            {
-                "resource_key": "ec2",
-                "list_method": "describe_instances",
-                "list_kwargs": {},
-                "item_path": "[.Reservations[].Instances[]]",
-                "column_paths": {
-                    "type": lambda x: "EC2 Instance",
-                    "id": ".InstanceId",
-                    "name": self.tag_finder_generator("Name"),
-                },
-                "hidden_columns": {},
-                "compare_as_list": False,
-                "compare_path": '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
-            },
+            multilister_with_compare_path(
+                "ec2", '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value'
+            ),
+            multilister_with_compare_path(
+                "rds", '.TagList[] | select(.Key=="aws:cloudformation:stack-id").Value'
+            ),
             {
                 "resource_key": "autoscaling",
                 "list_method": "describe_auto_scaling_groups",
@@ -129,20 +75,6 @@ class CFNRelated(MultiLister):
                 "hidden_columns": {},
                 "compare_as_list": False,
                 "compare_path": '.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value',
-            },
-            {
-                "resource_key": "rds",
-                "list_method": "describe_db_instances",
-                "list_kwargs": {},
-                "item_path": ".DBInstances",
-                "column_paths": {
-                    "type": lambda x: "RDS Instance",
-                    "id": ".DBInstanceIdentifier",
-                    "name": ".Endpoint.Address",
-                },
-                "hidden_columns": {},
-                "compare_as_list": False,
-                "compare_path": '.TagList[] | select(.Key=="aws:cloudformation:stack-id").Value',
             },
             {
                 "resource_key": "elbv2",
@@ -208,7 +140,7 @@ class CFNRelated(MultiLister):
                 "column_paths": {
                     "type": lambda x: "VPC",
                     "id": ".VpcId",
-                    "name": self.tag_finder_generator("Name"),
+                    "name": tag_finder_generator("Name"),
                 },
                 "hidden_columns": {},
                 "compare_as_list": False,
@@ -222,7 +154,7 @@ class CFNRelated(MultiLister):
                 "column_paths": {
                     "type": lambda x: "VPC Subnet",
                     "id": ".SubnetId",
-                    "name": self.tag_finder_generator("Name"),
+                    "name": tag_finder_generator("Name"),
                 },
                 "hidden_columns": {},
                 "compare_as_list": False,
@@ -252,7 +184,7 @@ class CFNRelated(MultiLister):
                 "column_paths": {
                     "type": lambda x: "VPC",
                     "id": ".VpcId",
-                    "name": self.tag_finder_generator("Name"),
+                    "name": tag_finder_generator("Name"),
                 },
                 "hidden_columns": {},
                 "compare_as_list": False,
@@ -266,7 +198,7 @@ class CFNRelated(MultiLister):
                 "column_paths": {
                     "type": lambda x: "Subnet",
                     "id": ".SubnetId",
-                    "name": self.tag_finder_generator("Name"),
+                    "name": tag_finder_generator("Name"),
                 },
                 "hidden_columns": {},
                 "compare_as_list": False,
@@ -280,7 +212,7 @@ class CFNRelated(MultiLister):
                 "column_paths": {
                     "type": lambda x: "Route Table",
                     "id": ".RouteTableId",
-                    "name": self.tag_finder_generator("Name"),
+                    "name": tag_finder_generator("Name"),
                 },
                 "hidden_columns": {},
                 "compare_as_list": False,
@@ -290,6 +222,20 @@ class CFNRelated(MultiLister):
         super().__init__(*args, **kwargs)
 
     def full_resource_id_from_arn_generator(self, arn_path):
+        """
+        Column callback factory. Returns a function which retrieves the full resource ID from an ARN.
+
+        Parameters
+        ----------
+        arn_path : str
+            The jq path for the ARN.
+
+        Returns
+        -------
+        callable(dict) -> str
+            A function which retrieves the full resource ID from the ARN at arn_path.
+        """
+
         def fn(raw_item):
             arn = ARN(Common.Session.jq(arn_path).input(raw_item).first())
             return arn.resource_id
@@ -297,6 +243,20 @@ class CFNRelated(MultiLister):
         return fn
 
     def resource_id_from_arn_generator(self, arn_path):
+        """
+        Column callback factory. Returns a function which retrieves the first resource ID from an ARN.
+
+        Parameters
+        ----------
+        arn_path : str
+            The jq path for the ARN.
+
+        Returns
+        -------
+        callable(dict) -> str
+            A function which retrieves the first resource ID from the ARN at arn_path.
+        """
+
         def fn(raw_item):
             arn = ARN(Common.Session.jq(arn_path).input(raw_item).first())
             return arn.resource_id_first
@@ -304,6 +264,28 @@ class CFNRelated(MultiLister):
         return fn
 
     def comparer_generator(self, cfn_type, physical_id_path):
+        """
+        Comparer function generator. The comparer function generated by this generator determines whether a resource's physical ID is present
+        in the list of physical resource IDs associated with the stack.
+
+        If a MultiLister descriptor's compare_path is a function, the return value of that function is used for the comparison rather than the
+        result of jq applied to the input. This enables us to use custom, more complex comparisons where required, while also retaining the
+        ability to use very generic functions (such as one that simply returns the ID of the cloudformation stack a resource is associated
+        with). For this reason, this comparer_generator can generate a compare_path function for us.
+
+        Parameters
+        ----------
+        cfn_type : str
+            Cloudformation type specification for the resources being compared by the comparer.
+        physical_id_path : str
+            The jq path where the resource's physical ID is available.
+
+        Returns
+        -------
+        callable(dict) -> str
+            A function which returns the stack ID of this stack if the resource is present in the stack, or None otherwise.
+        """
+
         def fn(raw_item):
             phys_id = Common.Session.jq(physical_id_path).input(raw_item).first()
             if (
@@ -316,6 +298,23 @@ class CFNRelated(MultiLister):
         return fn
 
     def kwargs_from_physids_generator(self, kwarg, cfn_type):
+        """
+        Kwargs callback factory. Returns a function which returns a list of physical IDs for stack resources with a certain Cloudformation
+        type, as a dict, with a specified key.
+
+        Parameters
+        ----------
+        kwarg : str
+            The key for the resource ID list in the returned dict.
+        cfn_type : str
+            The Cloudformation type for which resource IDs will be listed.
+
+        Returns
+        -------
+        callable() -> dict
+            A function which returns a map mapping kwarg to the list of physical IDs of resources of type cfn_type.
+        """
+
         def fn():
             if cfn_type in self.stack_res_list:
                 return {kwarg: self.stack_res_list[cfn_type]}
@@ -344,62 +343,119 @@ class CFNRelated(MultiLister):
         return super().async_inner(*args, fn=fn, clear=clear, **kwargs)
 
 
+def _cfn_determine_created(cfn):
+    """
+    Column callback for extracting when a stack was created.
+    """
+    return format_timedelta(
+        datetime.datetime.now(datetime.timezone.utc)
+        - datetime.datetime.fromisoformat(cfn["CreationTime"])
+    )
+
+
+def _cfn_determine_updated(cfn):
+    """
+    Column callback for extracting when a stack was updated.
+    """
+    if "LastUpdatedTime" in cfn:
+        return format_timedelta(
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.datetime.fromisoformat(cfn["LastUpdatedTime"])
+        )
+    return _cfn_determine_created(cfn)
+
+
+class CFNResourceLister(ResourceLister):
+    """
+    Lister control for Cloudformation Stack resources.
+    """
+
+    prefix = "cfn_list"
+    title = "CloudFormation Stacks"
+    command_palette = ["cfn", "cloudformation"]
+
+    resource_type = "stack"
+    main_provider = "cloudformation"
+    category = "Cloudformation"
+    subcategory = "Stack"
+    list_method = "describe_stacks"
+    item_path = ".Stacks"
+    columns = {
+        "name": {"path": ".StackName", "size": 30, "weight": 0, "sort_weight": 0},
+        "status": {"path": ".StackStatus", "size": 15, "weight": 1},
+        "drift": {
+            "path": ".DriftInformation.StackDriftStatus",
+            "size": 15,
+            "weight": 2,
+        },
+        "created": {"path": _cfn_determine_created, "size": 20, "weight": 3},
+        "updated": {"path": _cfn_determine_updated, "size": 20, "weight": 4},
+        "arn": {"path": ".StackId", "hidden": True},
+    }
+    describe_command = CFNDescriber.opener
+    open_command = CFNRelated.opener
+    open_selection_arg = "compare_value"
+
+
+def _cfn_determine_parameter_value(param):
+    if param["ParameterValue"] == "*" * len(param["ParameterValue"]):
+        return "<hidden>"
+    return param["ParameterValue"]
+
+
+@ResourceLister.Autocommand("CFNResourceLister", "p", "Parameters", "stack")
 class CFNParameters(ResourceLister):
+    """
+    Lister control for Cloudformation Stack parameters.
+    """
+
     prefix = "cfn_list"
     title = "CloudFormation Stack Parameters"
 
+    resource_type = "stack parameter"
+    main_provider = "cloudformation"
+    category = "Cloudformation"
+    subcategory = "Stack Parameters"
+    list_method = "describe_stacks"
+    item_path = ".Stacks[0].Parameters"
+    columns = {
+        "name": {"path": ".ParameterKey", "size": 30, "weight": 0, "sort_weight": 0},
+        "value": {"path": _cfn_determine_parameter_value, "size": 30, "weight": 1},
+    }
+
     def title_info(self):
         return self.stack_name
 
     def __init__(self, *args, stack=None, **kwargs):
-        self.resource_key = "cloudformation"
-        self.list_method = "describe_stacks"
-        self.item_path = ".Stacks[0].Parameters"
-        self.column_paths = {
-            "name": ".ParameterKey",
-            "value": self.determine_value,
-        }
-        self.list_kwargs = {"StackName": stack["name"]}
-        self.imported_column_sizes = {
-            "name": 30,
-            "value": 30,
-        }
-        self.imported_column_order = ["name", "value"]
-
-        self.sort_column = "name"
-        self.primary_key = "name"
         self.stack_name = stack["name"]
+        self.list_kwargs = {"StackName": stack["name"]}
         super().__init__(*args, **kwargs)
 
-    def determine_value(self, param):
-        if param["ParameterValue"] == "*" * len(param["ParameterValue"]):
-            return "<hidden>"
-        return param["ParameterValue"]
 
-
+@ResourceLister.Autocommand("CFNResourceLister", "o", "Outputs", "stack")
 class CFNOutputs(ResourceLister):
+    """
+    Lister control for Cloudformation Stack outputs.
+    """
+
     prefix = "cfn_list"
     title = "CloudFormation Stack Outputs"
 
+    resource_type = "stack output"
+    main_provider = "cloudformation"
+    category = "Cloudformation"
+    subcategory = "Stack Outputs"
+    list_method = "describe_stacks"
+    item_path = ".Stacks[0].Outputs"
+    columns = {
+        "name": {"path": ".OutputKey", "size": 30, "weight": 0, "sort_weight": 0},
+        "value": {"path": ".OutputValue", "size": 30, "weight": 1},
+    }
+
     def title_info(self):
         return self.stack_name
 
     def __init__(self, *args, stack=None, **kwargs):
-        self.resource_key = "cloudformation"
-        self.list_method = "describe_stacks"
-        self.item_path = ".Stacks[0].Outputs"
-        self.column_paths = {
-            "name": ".OutputKey",
-            "value": ".OutputValue",
-        }
-        self.list_kwargs = {"StackName": stack["name"]}
-        self.imported_column_sizes = {
-            "name": 30,
-            "value": 30,
-        }
-        self.imported_column_order = ["name", "value"]
-
-        self.sort_column = "name"
-        self.primary_key = "name"
         self.stack_name = stack["name"]
+        self.list_kwargs = {"StackName": stack["name"]}
         super().__init__(*args, **kwargs)

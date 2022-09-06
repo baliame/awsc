@@ -1,48 +1,14 @@
-from .base_control import Describer, ResourceLister
-
-
-class LBResourceLister(ResourceLister):
-    prefix = "lb_list"
-    title = "Load Balancers"
-    command_palette = ["lb", "elbv2", "loadbalancing"]
-
-    def __init__(self, *args, **kwargs):
-        from .resource_listener import ListenerResourceLister
-
-        self.resource_key = "elbv2"
-        self.list_method = "describe_load_balancers"
-        self.item_path = ".LoadBalancers"
-        self.column_paths = {
-            "name": ".LoadBalancerName",
-            "type": ".Type",
-            "scheme": self.determine_scheme,
-            "hostname": ".DNSName",
-        }
-        self.imported_column_sizes = {
-            "name": 30,
-            "type": 15,
-            "scheme": 8,
-            "hostname": 120,
-        }
-        self.hidden_columns = {
-            "arn": ".LoadBalancerArn",
-        }
-        self.describe_command = LBDescriber.opener
-        self.open_command = ListenerResourceLister.opener
-        self.open_selection_arg = "lb"
-
-        self.imported_column_order = ["name", "type", "scheme", "hostname"]
-        self.sort_column = "name"
-        self.primary_key = "name"
-        super().__init__(*args, **kwargs)
-
-    def determine_scheme(self, result, *args):
-        if result["Scheme"] == "internet-facing":
-            return "public"
-        return "private"
+"""
+Mdoule for controls related to load balanching.
+"""
+from .base_control import Describer, ResourceLister, ResourceRefByClass
 
 
 class LBDescriber(Describer):
+    """
+    Describer control for v2 load balancers.
+    """
+
     prefix = "lb_browser"
     title = "Load Balancer"
 
@@ -53,3 +19,52 @@ class LBDescriber(Describer):
         self.describe_kwarg_is_list = True
         self.object_path = ".LoadBalancers[0]"
         super().__init__(*args, **kwargs)
+
+
+def _elbv2_determine_scheme(result, *args):
+    """
+    Column callback for determining load balancer scheme.
+    """
+    if result["Scheme"] == "internet-facing":
+        return "public"
+    return "private"
+
+
+class LBResourceLister(ResourceLister):
+    """
+    Lister control for v2 load balancers.
+    """
+
+    prefix = "lb_list"
+    title = "Load Balancers"
+    command_palette = ["lb", "elbv2", "loadbalancing"]
+
+    resource_type = "load balancer"
+    main_provider = "elbv2"
+    category = "ELB v2"
+    subcategory = "Load Balancer"
+    list_method = "describe_load_balancers"
+    item_path = ".LoadBalancers"
+    columns = {
+        "name": {
+            "path": ".LoadBalancerName",
+            "size": 30,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "type": {"path": ".Type", "size": 15, "weight": 1},
+        "scheme": {
+            "path": _elbv2_determine_scheme,
+            "size": 8,
+            "weight": 2,
+        },
+        "hostname": {
+            "path": ".DNSName",
+            "size": 120,
+            "weight": 3,
+        },
+        "arn": {"path": ".LoadBalancerArn", "hidden": True},
+    }
+    describe_command = LBDescriber.opener
+    open_command = ResourceRefByClass("ListenerResourceLister")
+    open_selection_arg = "lb"

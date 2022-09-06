@@ -1,0 +1,30 @@
+name: Generate documentation
+on:
+  push:
+    branches:
+    - master
+jobs:
+  generate_doc:
+    runs-on: ubuntu-latest
+    name: "Generate documentation"
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+        cache: 'pip'
+    - run: pip install -r requirements.txt
+    - run: pip install -e .
+    - run: ./doc.sh
+    - uses: cpina/github-action-push-to-another-repository@main
+      env:
+        API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+      with:
+        source-directory: build/html
+        destination-github-username: baliame
+        destination-repository-name: baliame.github.io
+        user-name: baliame
+        user-email: baliame@github.io
+        target-directory: awsc
+        commit-message: "Update generated documentation from $ORIGIN_COMMIT"
+        target-branch: master

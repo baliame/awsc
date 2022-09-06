@@ -1,3 +1,6 @@
+"""
+Module for keypair resources.
+"""
 from pathlib import Path
 
 from .base_control import Describer, ResourceLister
@@ -7,59 +10,110 @@ from .termui.control import Border
 from .termui.dialog import DialogFieldLabel, DialogFieldText
 
 
+class KeyPairDescriber(Describer):
+    """
+    Describer control for keypairs.
+    """
+
+    prefix = "keypair_browser"
+    title = "EC2 Keypair"
+
+    def __init__(self, *args, entry_key="id", **kwargs):
+        self.resource_key = "ec2"
+        self.describe_method = "describe_key_pairs"
+        self.describe_kwarg_name = "KeyPairIds"
+        self.describe_kwarg_is_list = True
+        self.object_path = ".KeyPairs[0]"
+        super().__init__(*args, entry_key=entry_key, **kwargs)
+
+
+def _keypair_determine_association(entry):
+    return Common.Session.get_keypair_association(entry["KeyPairId"])
+
+
 class KeyPairResourceLister(ResourceLister):
+    """
+    Lister control for keypairs.
+    """
+
     prefix = "keypair_list"
     title = "EC2 Keypairs"
     command_palette = ["key", "keypair"]
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "ec2"
-        self.list_method = "describe_key_pairs"
-        self.item_path = ".KeyPairs"
-        self.column_paths = {
-            "id": ".KeyPairId",
-            "name": ".KeyName",
-            "fingerprint": ".KeyFingerprint",
-            "association": self.determine_keypair_association,
-        }
-        self.imported_column_sizes = {
-            "id": 16,
-            "name": 32,
-            "fingerprint": 48,
-            "association": 16,
-        }
-        self.describe_command = KeyPairDescriber.opener
-        self.imported_column_order = ["id", "name", "fingerprint", "association"]
-        self.primary_key = "id"
-        self.sort_column = "id"
-        super().__init__(*args, **kwargs)
-        self.add_hotkey("a", self.set_keypair_association, "Associate with SSH key")
-        self.add_hotkey("c", self.create_keypair, "Create new keypair")
-        self.add_hotkey("x", self.remove_keypair_association, "Remove association")
+    resource_type = "keypair"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Keypair"
+    list_method = "describe_key_pairs"
+    item_path = ".KeyPairs"
+    columns = {
+        "id": {
+            "path": ".KeyPairId",
+            "size": 16,
+            "weight": 0,
+        },
+        "name": {"path": ".KeyName", "size": 32, "weight": 1, "sort_weight": 0},
+        "fingerprint": {
+            "path": ".KeyFingerprint",
+            "size": 48,
+            "weight": 2,
+        },
+        "association": {
+            "path": _keypair_determine_association,
+            "size": 16,
+            "weight": 3,
+        },
+    }
+    primary_key = "id"
+    describe_command = KeyPairDescriber.opener
 
-    def determine_keypair_association(self, entry):
-        return Common.Session.get_keypair_association(entry["KeyPairId"])
-
+    @ResourceLister.Autohotkey("a", "Associate with SSH key", True)
     def set_keypair_association(self, _):
-        if self.selection is not None:
-            Common.Session.push_frame(SSHList.selector(self.ssh_selector_callback))
-            Common.Session.ui.dirty = True
+        """
+        Hotkey callback for setting keypair association.
+        """
+        Common.Session.push_frame(SSHList.selector(self.ssh_selector_callback))
+        Common.Session.ui.dirty = True
 
     def ssh_selector_callback(self, val):
-        if self.selection is not None:
-            Common.Session.set_keypair_association(self.selection["id"], val)
-            self.refresh_data()
+        """
+        Selector callback for keypair association.
+        """
+        Common.Session.set_keypair_association(self.selection["id"], val)
+        self.refresh_data()
 
+    @ResourceLister.Autohotkey("n", "New keypair")
     def create_keypair(self, _):
+        """
+        Hotkey callback for creating a new keypair.
+        """
         KeyPairCreateDialog.opener(self, caller=self)
 
+    @ResourceLister.Autohotkey("x", "Remove association", True)
     def remove_keypair_association(self, _):
-        if self.selection is not None:
-            Common.Session.set_keypair_association(self.selection["id"], "")
-            self.refresh_data()
+        """
+        Hotkey callback for deleting keypair association.
+        """
+        Common.Session.set_keypair_association(self.selection["id"], "")
+        self.refresh_data()
 
 
 class KeyPairCreateDialog(SessionAwareDialog):
+    """
+    Dialog for creating a keypair.
+
+    Attributes
+    ----------
+    name_field : awsc.termui.dialog.DialogFieldText
+        The textfield for entering a name.
+    error_label : awsc.termui.dialog.DialogFieldLabel
+        A label where error feedback may be dispalyed.
+    dotssh : pathlib.Path
+        The path to ~/.ssh
+    save_as_field : awsc.termui.dialog.DialogFieldText
+        The name of the output file for the downloaded SSH key.
+    """
+
     def __init__(self, *args, caller=None, **kwargs):
         kwargs["border"] = Border(
             Common.border("default"),
@@ -68,17 +122,10 @@ class KeyPairCreateDialog(SessionAwareDialog):
             Common.color("modal_dialog_border_title"),
         )
         super().__init__(*args, caller=caller, **kwargs)
-        self.add_field(DialogFieldLabel("Enter keypair details"))
-        self.error_label = DialogFieldLabel(
-            "", default_color=Common.color("modal_dialog_error")
-        )
-        self.add_field(self.error_label)
+        self.set_title_label("Enter keypair details")
         self.name_field = DialogFieldText(
             "Name:",
-            label_min=16,
-            color=Common.color("modal_dialog_textfield"),
-            selected_color=Common.color("modal_dialog_textfield_selected"),
-            label_color=Common.color("modal_dialog_textfield_label"),
+            **Common.textfield_colors("ec2_keypair"),
         )
         self.add_field(self.name_field)
         self.dotssh = Path.home() / ".ssh"
@@ -87,10 +134,7 @@ class KeyPairCreateDialog(SessionAwareDialog):
         )
         self.save_as_field = DialogFieldText(
             "Filename:",
-            label_min=16,
-            color=Common.color("modal_dialog_textfield"),
-            selected_color=Common.color("modal_dialog_textfield_selected"),
-            label_color=Common.color("modal_dialog_textfield_label"),
+            **Common.textfield_colors("ec2_keypair"),
         )
         self.add_field(self.save_as_field)
         self.caller = caller
@@ -131,16 +175,3 @@ class KeyPairCreateDialog(SessionAwareDialog):
         if self.caller is not None:
             self.caller.refresh_data()
         super().close()
-
-
-class KeyPairDescriber(Describer):
-    prefix = "keypair_browser"
-    title = "EC2 Keypair"
-
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_key_pairs"
-        self.describe_kwarg_name = "KeyPairIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".KeyPairs[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)

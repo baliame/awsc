@@ -1,69 +1,146 @@
+"""
+Module for VPC routing resources.
+"""
 import json
 
-from .base_control import Describer, GenericDescriber, ResourceLister
+from .base_control import (
+    Describer,
+    GenericDescriber,
+    ResourceLister,
+    tagged_column_generator,
+)
 from .common import Common
 
 
-class RouteTableResourceLister(ResourceLister):
-    prefix = "route_table_list"
-    title = "Route Tables"
-    command_palette = ["rt", "routetable"]
+def _route_determine_gateway_type(self, entry):
+    """
+    Column callback for determining the type of a gateway at the tail end of a route.
+    """
+    if "NatGatewayId" in entry:
+        return "NAT"
+    if "InstanceId" in entry:
+        return "Instance"
+    if "TransitGatewayId" in entry:
+        return "Transit"
+    if "LocalGatewayId" in entry:
+        return "Local"
+    if "CarrierGatewayId" in entry:
+        return "Carrier"
+    if "VpcPeeringConnectionId" in entry:
+        return "VPC Peering"
+    if "EgressOnlyInternetGatewayId" in entry:
+        return "Egress-Only"
+    if entry["GatewayId"] == "local":
+        return "VPC-Local"
+    return "Internet"
+
+
+def _route_determine_gateway(self, entry):
+    """
+    Column callback for determining the gateway ID at the tail end of a route.
+    """
+    if "NatGatewayId" in entry:
+        return entry["NatGatewayId"]
+    if "InstanceId" in entry:
+        return entry["InstanceId"]
+    if "TransitGatewayId" in entry:
+        return entry["TransitGatewayId"]
+    if "LocalGatewayId" in entry:
+        return entry["LocalGatewayId"]
+    if "CarrierGatewayId" in entry:
+        return entry["CarrierGatewayId"]
+    if "VpcPeeringConnectionId" in entry:
+        return entry["VpcPeeringConnectionId"]
+    if "EgressOnlyInternetGatewayId" in entry:
+        return entry["EgressOnlyInternetGatewayId"]
+    return entry["GatewayId"]
+
+
+class RouteResourceLister(ResourceLister):
+    """
+    Lister control for VPC route resources.
+    """
+
+    prefix = "route_list"
+    title = "Routes"
+    command_palette = ["route"]
+
+    resource_type = "route"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "VPC Route"
+    list_method = "describe_route_tables"
+    item_path = "[.RouteTables[] as $rt | $rt.Routes[] as $r | $r | .RouteTableId = $rt.RouteTableId]"
+    columns = {
+        "route table": {
+            "path": ".RouteTableId",
+            "size": 30,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "gateway type": {
+            "path": _route_determine_gateway_type,
+            "size": 20,
+            "weight": 1,
+            "sort_weight": 1,
+        },
+        "gateway": {
+            "path": _route_determine_gateway,
+            "size": 30,
+            "weight": 2,
+        },
+        "destination": {
+            "path": ".DestinationCidrBlock",
+            "size": 30,
+            "weight": 3,
+        },
+        "state": {
+            "path": ".State",
+            "size": 10,
+            "weight": 4,
+        },
+        "name": {
+            "path": lambda _: "",
+            "hidden": True,
+        },
+    }
+    primary_key = None
 
     def title_info(self):
-        if self.subnet is not None:
-            return self.subnet["id"]
+        if self.route_table is not None:
+            return self.route_table["id"]
         return None
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "ec2"
-        self.list_method = "describe_route_tables"
-        self.item_path = ".RouteTables"
-        if "subnet" in kwargs:
-            self.subnet = kwargs["subnet"]
-            self.list_kwargs = {
-                "Filters": [
-                    {
-                        "Name": "association.subnet-id",
-                        "Values": [
-                            self.subnet["id"],
-                        ],
-                    }
-                ]
-            }
-        else:
-            self.subnet = None
-        self.column_paths = {
-            "id": ".RouteTableId",
-            "name": self.tag_finder_generator("Name"),
-            "vpc": ".VpcId",
-            "subnet": self.determine_subnet_association,
-        }
-        self.imported_column_sizes = {
-            "id": 30,
-            "name": 30,
-            "vpc": 30,
-            "subnet": 30,
-        }
-        self.describe_command = RouteTableDescriber.opener
-        self.open_command = RouteResourceLister.opener
-        self.open_selection_arg = "route_table"
-
-        self.imported_column_order = ["id", "name", "vpc", "subnet"]
-        self.sort_column = "id"
-        self.primary_key = "id"
+    def __init__(self, *args, route_table=None, **kwargs):
+        if route_table is not None:
+            self.route_table = route_table
+            self.list_kwargs = {"RouteTableIds": [self.route_table["id"]]}
         super().__init__(*args, **kwargs)
 
-    def determine_subnet_association(self, result, *args):
-        if "Associations" not in result or len(result["Associations"]) == 0:
-            return "<none>"
-        if len(result["Associations"]) > 1:
-            return "<multiple>"
-        if "SubnetId" in result["Associations"][0]:
-            return result["Associations"][0]["SubnetId"]
-        return "<VPC default>"
+    @ResourceLister.Autohotkey("d", "Describe", True)
+    @ResourceLister.Autohotkey("KEY_ENTER", "Describe", True)
+    def generic_describe(self, entry):
+        """
+        Custom describer for routes. We're inventing our own description here, AWS provides none.
+        """
+        Common.Session.push_frame(
+            GenericDescriber.opener(
+                **{
+                    "describing": f"Route in route table {self.selection['route table']}",
+                    "content": json.dumps(
+                        self.selection.controller_data, sort_keys=True, indent=2
+                    ),
+                    "pushed": True,
+                }
+            )
+        )
 
 
 class RouteTableDescriber(Describer):
+    """
+    Describer control for VPC route tables.
+    """
+
     prefix = "route_table_browser"
     title = "Route Table"
 
@@ -76,104 +153,70 @@ class RouteTableDescriber(Describer):
         super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
-# Routes
-class RouteResourceLister(ResourceLister):
-    prefix = "route_list"
-    title = "Routes"
-    command_palette = ["route"]
+def _route_table_determine_subnet_association(self, result, *args):
+    if "Associations" not in result or len(result["Associations"]) == 0:
+        return "<none>"
+    if len(result["Associations"]) > 1:
+        return "<multiple>"
+    if "SubnetId" in result["Associations"][0]:
+        return result["Associations"][0]["SubnetId"]
+    return "<VPC default>"
+
+
+@ResourceLister.Autocommand("SubnetResourceLister", "t", "View Route Table", "subnet")
+class RouteTableResourceLister(ResourceLister):
+    """
+    Lister control for VPC route tables.
+    """
+
+    prefix = "route_table_list"
+    title = "Route Tables"
+    command_palette = ["rt", "routetable"]
+
+    resource_type = "route table"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "VPC Route Table"
+    list_method = "describe_route_tables"
+    item_path = ".RouteTables"
+    columns = {
+        "id": {
+            "path": ".RouteTableId",
+            "size": 30,
+            "weight": 0,
+            "sort_weight": 1,
+        },
+        **tagged_column_generator("name", "name", weight=1, sort_weight=0, size=30),
+        "vpc": {
+            "path": ".VpcId",
+            "size": 30,
+            "weight": 2,
+        },
+        "type": {
+            "path": _route_table_determine_subnet_association,
+            "size": 30,
+            "weight": 3,
+        },
+    }
+    primary_key = "id"
+    describe_command = RouteTableDescriber.opener
+    open_command = RouteResourceLister.opener
+    open_selection_arg = "route_table"
 
     def title_info(self):
-        if self.route_table is not None:
-            return self.route_table["id"]
-        return None
+        return self.subnet["id"] if self.subnet is not None else None
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "ec2"
-        self.list_method = "describe_route_tables"
-        self.item_path = "[.RouteTables[] as $rt | $rt.Routes[] as $r | $r | .RouteTableId = $rt.RouteTableId]"
-        if "route_table" in kwargs:
-            self.route_table = kwargs["route_table"]
-            self.list_kwargs = {"RouteTableIds": [self.route_table["id"]]}
-        else:
-            self.route_table = None
-        self.column_paths = {
-            "route table": ".RouteTableId",
-            "gateway type": self.determine_gateway_type,
-            "gateway": self.determine_gateway,
-            "destination": ".DestinationCidrBlock",
-            "state": ".State",
-        }
-        self.hidden_columns = {
-            "name": self.empty,
-        }
-        self.imported_column_sizes = {
-            "route table": 30,
-            "gateway type": 20,
-            "gateway": 30,
-            "destination": 30,
-            "state": 10,
-        }
-
-        self.imported_column_order = [
-            "route table",
-            "gateway type",
-            "gateway",
-            "destination",
-            "state",
-        ]
-        self.sort_column = "route table"
-        self.primary_key = None
-        super().__init__(*args, **kwargs)
-
-        self.add_hotkey("d", self.generic_describe, "Describe")
-        self.add_hotkey("KEY_ENTER", self.generic_describe, "Describe")
-
-    def generic_describe(self, entry):
-        if self.selection is not None:
-            Common.Session.push_frame(
-                GenericDescriber.opener(
-                    **{
-                        "describing": f"Route in route table {self.selection['route table']}",
-                        "content": json.dumps(
-                            self.selection.controller_data, sort_keys=True, indent=2
-                        ),
-                        "pushed": True,
+    def __init__(self, *args, subnet=None, **kwargs):
+        self.subnet = subnet
+        if subnet is not None:
+            self.list_kwargs = {
+                "Filters": [
+                    {
+                        "Name": "association.subnet-id",
+                        "Values": [
+                            self.subnet["id"],
+                        ],
                     }
-                )
-            )
-
-    def determine_gateway_type(self, entry):
-        if "NatGatewayId" in entry:
-            return "NAT"
-        if "InstanceId" in entry:
-            return "Instance"
-        if "TransitGatewayId" in entry:
-            return "Transit"
-        if "LocalGatewayId" in entry:
-            return "Local"
-        if "CarrierGatewayId" in entry:
-            return "Carrier"
-        if "VpcPeeringConnectionId" in entry:
-            return "VPC Peering"
-        if "EgressOnlyInternetGatewayId" in entry:
-            return "Egress-Only"
-        if entry["GatewayId"] == "local":
-            return "VPC-Local"
-        return "Internet"
-
-    def determine_gateway(self, entry):
-        if "NatGatewayId" in entry:
-            return entry["NatGatewayId"]
-        if "InstanceId" in entry:
-            return entry["InstanceId"]
-        if "TransitGatewayId" in entry:
-            return entry["TransitGatewayId"]
-        if "LocalGatewayId" in entry:
-            return entry["LocalGatewayId"]
-        if "CarrierGatewayId" in entry:
-            return entry["CarrierGatewayId"]
-        if "VpcPeeringConnectionId" in entry:
-            return entry["VpcPeeringConnectionId"]
-        if "EgressOnlyInternetGatewayId" in entry:
-            return entry["EgressOnlyInternetGatewayId"]
-        return entry["GatewayId"]
+                ]
+            }
+        super().__init__(*args, **kwargs)

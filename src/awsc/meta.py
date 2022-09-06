@@ -1,13 +1,28 @@
+"""
+Module for meta controls.
+"""
 from .base_control import OpenableListControl
 from .common import Common
 from .termui.list_control import ListEntry
 
 
 class CommanderOptionsLister(OpenableListControl):
+    """
+    List page for available command palette options.
+
+    Attributes
+    ----------
+    phony : dict
+        Deprecated. Legacy map of commands mapped to titles for bare ListControl subclasses.
+    """
+
     title = "Commands"
     prefix = "help"
 
     def __init__(self, *args, **kwargs):
+        """
+        Initializes a CommanderOptionsLister.
+        """
         super().__init__(*args, **kwargs)
         self.phony = {}
         self.column_titles = {}
@@ -16,7 +31,10 @@ class CommanderOptionsLister(OpenableListControl):
         self.add_column("resource", 48)
         self.reload()
 
-    def reload(self, move=True):
+    def reload(self):
+        """
+        Reloads the list of available commands, repopulating the control.
+        """
         self.entries = []
         for cmd in Common.Session.commander_options:
             opt = Common.Session.commander_options[cmd]
@@ -30,6 +48,9 @@ class CommanderOptionsLister(OpenableListControl):
             self.entries.append(list_entry)
         self.entries.sort(key=lambda x: x["command"])
 
-    def select_and_close(self, _):
-        if self.selection is not None:
-            Common.Session.replace_frame(self.selection.controller_data["fn"]())
+    @OpenableListControl.Autohotkey("KEY_ENTER", "Open", True)
+    def open(self, _):
+        """
+        Hotkey callback for opening the list control for the current selection.
+        """
+        Common.Session.replace_frame(self.selection.controller_data["fn"]())

@@ -1,25 +1,48 @@
+"""
+Module for informational display controls.
+"""
 from typing import Callable
 
-from .termui.common import Commons
+from .termui.common import Commons, column_sizer
 from .termui.control import Control
 from .termui.dialog import DialogControl
-from .termui.ui import ControlCodes
 
 
 class InfoDisplay(Control):
+    """
+    The info display is the control situated in the top left corner of the screen. It is intended to display information on the active session as a list
+    of key-value pairs. The info display also registers the global hotkeys.
+
+    Attributes
+    ----------
+    info : dict
+        The actual info being displayed, as a mapping of label to data.
+    order : list
+        The order in which the info should be displayed.
+    special_colors : dict
+        A mapping of label to color for which pieces of data should be highlighted with a non-standard color, for example, for use with errors.
+    cols : int
+        The number of info columns to divide the available space to.
+    highlight_color : awsc.termui.color.Color
+        The color of the label.
+    generic_color : awsc.termui.color.Color
+        The default color of data.
+    commander_hook : callable
+        The callback to call for opening the commander.
+    filterer_hook : callable
+        The callback to call for opening the filterer.
+    """
+
     def __init__(
         self,
-        parent,
-        alignment,
-        dimensions,
         *args,
         info=None,
         cols=2,
         highlight_color=None,
         generic_color=None,
-        **kwargs
+        **kwargs,
     ):
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.info = {}
         self.order = info[:] if info is not None else []
         self.special_colors = {}
@@ -57,24 +80,9 @@ class InfoDisplay(Control):
         colw = int(width / self.cols)
         x = x0
         y = y0
-        longest = []
-        length = 0
-
-        for name in self.order:
-            if name not in self.info:
-                continue
-            display = name + ": "
-            if len(display) > length:
-                length = len(display)
-            y += 1
-            if y > y1:
-                y = y0
-                longest.append(length)
-                length = 0
-        if length > 0:
-            longest.append(length)
-        y = y0
+        longest = column_sizer(y0, y1, self.order, self.info)
         col = 0
+
         for name in self.order:
             if name not in self.info:
                 continue
@@ -99,132 +107,13 @@ class InfoDisplay(Control):
             )
             y += 1
             if y > y1:
-                y = y0
-                col += 1
-                x += colw
+                (x, y, col) = (x + colw, y0, col + 1)
 
 
 class NeutralDialog(DialogControl):
+    """
+    A dialog that does nothing and handles no inputs.
+    """
+
     def input(self, key):
         return False
-
-
-class HotkeyDisplay(Control):
-    translations = {
-        "KEY_DOWN": "↓",
-        "KEY_RIGHT": "→",
-        "KEY_UP": "↑",
-        "KEY_LEFT": "←",
-        "KEY_ENTER": "↲",
-        "\n": "↲",
-        "\t": "↹",
-        "KEY_BACKSPACE": "⇦",
-        "KEY_DELETE": "del",
-        "KEY_END": "end",
-        "KEY_HOME": "home",
-        "KEY_ESCAPE": "esc",
-        "KEY_PGUP": "pgup",
-        "KEY_PGDOWN": "pgdn",
-        "KEY_INSERT": "ins",
-        ControlCodes.A: "ctrl-a",
-        ControlCodes.B: "ctrl-b",
-        ControlCodes.C: "ctrl-c",
-        ControlCodes.D: "ctrl-d",
-        ControlCodes.E: "ctrl-e",
-        ControlCodes.F: "ctrl-f",
-        ControlCodes.G: "ctrl-g",
-        ControlCodes.K: "ctrl-k",
-        ControlCodes.L: "ctrl-l",
-        ControlCodes.M: "ctrl-m",
-        ControlCodes.N: "ctrl-n",
-        ControlCodes.O: "ctrl-o",
-        ControlCodes.P: "ctrl-p",
-        ControlCodes.Q: "ctrl-q",
-        ControlCodes.R: "ctrl-r",
-        ControlCodes.S: "ctrl-s",
-        ControlCodes.T: "ctrl-t",
-        ControlCodes.U: "ctrl-u",
-        ControlCodes.V: "ctrl-v",
-        ControlCodes.W: "ctrl-w",
-        ControlCodes.X: "ctrl-x",
-        ControlCodes.Y: "ctrl-y",
-        ControlCodes.Z: "ctrl-z",
-    }
-
-    def __init__(
-        self,
-        parent,
-        alignment,
-        dimensions,
-        holder,
-        *args,
-        session=None,
-        cols=2,
-        highlight_color=None,
-        generic_color=None,
-        **kwargs
-    ):
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
-        self.holder = holder
-        self.cols = cols
-        self.highlight_color = highlight_color
-        self.generic_color = generic_color
-        self.session = session
-
-    def paint(self):
-        super().paint()
-        ((x0, x1), (y0, y1)) = self.inner
-        width = x1 - x0 + 1
-        colw = int(width / self.cols)
-        x = x0
-        y = y0
-        longest = []
-        length = 0
-        tooltips = {**self.holder.tooltips, **self.session.global_hotkey_tooltips}
-        for hotkey, tooltip in tooltips.items():
-            display = (
-                "<"
-                + (
-                    HotkeyDisplay.translations[hotkey]
-                    if hotkey in HotkeyDisplay.translations
-                    else hotkey
-                )
-                + "> "
-            )
-            if len(display) > length:
-                length = len(display)
-            y += 1
-            if y > y1:
-                y = y0
-                longest.append(length)
-                length = 0
-        if length > 0:
-            longest.append(length)
-        y = y0
-        col = 0
-        for hotkey, tooltip in tooltips.items():
-            display = (
-                "<"
-                + (
-                    HotkeyDisplay.translations[hotkey]
-                    if hotkey in HotkeyDisplay.translations
-                    else hotkey
-                )
-                + "> "
-            )
-            if len(display) < longest[col]:
-                display += " " * (longest[col] - len(display))
-            Commons.UIInstance.print(
-                display, xy=(x, y), color=self.highlight_color, bold=True
-            )
-            text = tooltip if not callable(tooltip) else tooltip()
-            if len(text) > colw - longest[col]:
-                text = text[: colw - longest[col]]
-            Commons.UIInstance.print(
-                text, xy=(x + longest[col], y), color=self.generic_color
-            )
-            y += 1
-            if y > y1:
-                y = y0
-                col += 1
-                x += colw

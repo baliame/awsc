@@ -1,3 +1,6 @@
+"""
+This module defines a bar graph control that can be used to display timeseries.
+"""
 import datetime
 
 from .color import ColorDarkGreen, ColorGold
@@ -6,21 +9,53 @@ from .control import HotkeyControl
 
 
 class BarGraph(HotkeyControl):
+    """
+    In the most particular culmination of horrible ideas, this control attempts to - remarkably successfully, if I might add - display a bar
+    graph in a terminal environment. It is fully capable of displaying a timestamped time series in an understandable fashion.
+
+    Attributes
+    ----------
+    DPB_ZeroOrLessToMax : int
+        Data point behaviour constant. Bar graphs with this data point behaviour will extend their min-point to the negative numbers if any
+        datapoint is negative, but will never place their min-point higher than zero.
+    DPB_ZeroToMax : int
+        Data point behaviour constant. Bar graphs with this data point behaviour will always place their min-point at zero, even if some
+        datapoints are negative. Negative datapoints will be displayed as an empty bar.
+    DPB_MinToMax : int
+        Data point behaviour constant. Bar graphs with this data point behaviour will always place their min-point at the value of the lowest
+        datapoint, regardless of whether it is negative, zero or positive.
+    subdivisions : dict
+        The characters used to represent subdivisions of a single character cell. The key zero represents an empty cell, positive numbers up
+        to 8 represent that many eighths of a cell to be filled on a bar extending upwards, while negative numbers are the same down to -8
+        for a bar extending downwards. The question mark represents cells where something went horribly wrong.
+    datapoints : list(tuple(datetime.datetime, float))
+        A list of datapoints in the time series. Each datapoint is a tuple of the time of measuring, and the value of the datapoint.
+    max_point : float
+        The calculated highest datapoint in the graph.
+    min_point : float
+        The calculated lowest datapoint in the graph.
+    color : awsc.termui.color.Color
+        The main color to use for text and unselected columns.
+    highlight_color : awsc.termui.color.Color
+        The color to use for highlighted columns.
+    left : int
+        The offset for how many columns to skip before drawing - basically, the amount you are scrolled to the right by.
+    highlight : int
+        The index of the selected column.
+    """
+
     DPB_ZeroOrLessToMax = 0
     DPB_ZeroToMax = 1
     DPB_MinToMax = 2
 
     def __init__(
         self,
-        parent,
-        alignment,
-        dimensions,
         *args,
         color=ColorGold,
         highlight_color=ColorDarkGreen,
         **kwargs,
     ):
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.subdivisions = {
             0: " ",
             1: "▁",
@@ -61,6 +96,9 @@ class BarGraph(HotkeyControl):
         self.highlight = 0
 
     def scroll_left(self, *args):
+        """
+        Hotkey callback for KEY_LEFT. Moves the selection one column to the left.
+        """
         if self.highlight > 0:
             self.highlight -= 1
             if self.left > self.highlight:
@@ -68,16 +106,25 @@ class BarGraph(HotkeyControl):
             Commons.UIInstance.dirty = True
 
     def home(self, *args):
+        """
+        Hotkey callback for KEY_HOME. Moves the selection all the way to the left.
+        """
         self.left = 0
         self.highlight = 0
         Commons.UIInstance.dirty = True
 
     def end(self, *args):
+        """
+        Hotkey callback for KEY_END. Moves the selection all the way to the right.
+        """
         self.highlight = len(self.datapoints) - 1
         self.left = max(len(self.datapoints) - self.colspace, 0)
         Commons.UIInstance.dirty = True
 
     def scroll_right(self, *args):
+        """
+        Hotkey callback for KEY_RIGHT. Moves the selection one column to the right.
+        """
         if self.highlight < len(self.datapoints) - 1:
             self.highlight += 1
             if self.highlight >= self.left + self.colspace:
@@ -86,6 +133,15 @@ class BarGraph(HotkeyControl):
 
     @property
     def data_points_behaviour(self):
+        """
+        Property representing the data points behaviour of this bar graph. Can be set to one of the data points behaviour constants defined
+        in this class. Controls how the minimum point on the graph is determined when painting the graph.
+
+        Raises
+        ------
+        ValueError
+            The datapoint behaviour being set is not one of the allowed values.
+        """
         return self._data_points_behaviour
 
     @data_points_behaviour.setter
@@ -107,6 +163,16 @@ class BarGraph(HotkeyControl):
             raise ValueError
 
     def add_datapoint(self, timestamp, datapoint):
+        """
+        Inserts a new datapoint into the bar graph.
+
+        Parameters
+        ----------
+        timestamp : datetime.datetime
+            The time of measurement for the datapoint.
+        datapoint : float
+            The value at the time of the measurement.
+        """
         try:
             if len(self.datapoints) == 0:
                 self.max_point = datapoint
@@ -145,6 +211,10 @@ class BarGraph(HotkeyControl):
 
     @property
     def colspace(self):
+        """
+        Read-only property representing the amount of displayable columns. This is shorter than the inner width of the control as there
+        is a label for the minimum and maximum values on the graph.
+        """
         corners = self.corners
         wspace = corners[0][1] - corners[0][0] + 1 - (0 if self.border is None else 2)
         max_label = f"{float(self.max_point):.2f}"

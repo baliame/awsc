@@ -1,11 +1,9 @@
 [pylint]
 ignore=
 	resources.py,
+	conf.py,
 disable=
 	import-error,
-	missing-module-docstring,
-	missing-function-docstring,
-	missing-class-docstring,
 	unused-argument,
 	broad-except,
 	import-outside-toplevel,

@@ -1,26 +1,39 @@
+"""
+Module that contains the special control bars for the awsc UI.
+"""
 from .termui.common import Commons
 from .termui.control import Control
 
 
 class Filterer(Control):
-    def __init__(
-        self,
-        parent,
-        alignment,
-        dimensions,
-        session,
-        color,
-        symbol_color,
-        autocomplete_color,
-        inactive_color,
-        *args,
-        **kwargs
-    ):
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
+    """
+    The Filterer is the command bar for filtering the currently active control. Different top level controls react differently to filtering.
+    Lister controls will hide elements not matching the filter. Text browser controls will highlight matches in their text and jump between
+    matches.
+
+    Attributes
+    ----------
+    session : awsc.session.Session
+        The session manager object.
+    color : awsc.termui.color.Color
+        The color of the control's text and borders.
+    symbol_color : awsc.termui.color.Color
+        The color of the symbol for the filter bar.
+    inactive_color : awsc.termui.color.Color
+        The color of the bar when it is inactive.
+    paused : bool
+        Whether the bar is inactive. The inactive bar still applies its filter, but pressing keys does not type into it.
+    accepted_input : str
+        The list of accepted input keys. Defaults to accepted textfield inputs.
+    text : str
+        The current filter.
+    """
+
+    def __init__(self, *args, session, color, symbol_color, inactive_color, **kwargs):
+        super().__init__(*args, **kwargs)
         self.session = session
         self.color = color
         self.symbol_color = symbol_color
-        self.autocomplete_color = autocomplete_color
         self.inactive_color = inactive_color
         self.paused = False
         self.session.filterer = self
@@ -51,13 +64,27 @@ class Filterer(Control):
         return True
 
     def pause(self):
+        """
+        Sets pause flag.
+        """
         self.paused = True
 
     def resume(self):
+        """
+        Unsets pause flag.
+
+        Returns
+        -------
+        awsc.commander.Filterer
+            Self.
+        """
         self.paused = False
         return self
 
     def close(self):
+        """
+        Closes the filter bar and removes it from view.
+        """
         self.parent.remove_block(self)
         self.paused = True
         self.session.filterer = None
@@ -76,21 +103,46 @@ class Filterer(Control):
 
 
 class Commander(Control):
+    """
+    The Commander is the command bar for switching between controls. It allows navigation between AWS resources by typing commands defined
+    by the command_palette attribute of ResourceListers into the command bar.
+
+    Attributes
+    ----------
+    session : awsc.session.Session
+        The session manager object.
+    color : awsc.termui.color.Color
+        The color of the control's text and borders.
+    symbol_color : awsc.termui.color.Color
+        The color of the symbol for the filter bar.
+    autocomplete_color : awsc.termui.color.Color
+        The color of the autocompletion text in the bar.
+    ok_color : awsc.termui.color.Color
+        The color of the text in the bar when it fully matches a valid command.
+    autocomplete_color : awsc.termui.color.Color
+        The color of the text in the bar when it does not match a valid command and does not autocomplete to a valid command.
+    paused : bool
+        Whether the bar is inactive. The inactive bar still applies its filter, but pressing keys does not type into it.
+    accepted_input : str
+        The list of accepted input keys. Defaults to accepted textfield inputs.
+    text : str
+        The current filter.
+    options : dict(str, callable() -> list(awsc.termui.control.Control))
+        A mapping of valid options to their respective callbacks.
+    """
+
     def __init__(
         self,
-        parent,
-        alignment,
-        dimensions,
+        *args,
         session,
         color,
         symbol_color,
         autocomplete_color,
         ok_color,
         error_color,
-        *args,
         **kwargs
     ):
-        super().__init__(parent, alignment, dimensions, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.session = session
         self.color = color
         self.symbol_color = symbol_color
@@ -103,6 +155,15 @@ class Commander(Control):
         self.options = session.commander_options
 
     def autocomplete(self):
+        """
+        Autocompletion callback. Returns the first autocompletion match for the text that has been typed. The first match is always the
+        shortest possible match.
+
+        Returns
+        -------
+        str
+            The autocompleted command. None if nothing has been typed or no matches are found.
+        """
         if len(self.text) == 0:
             return None
         opt_keys = self.options.keys()
@@ -113,6 +174,9 @@ class Commander(Control):
         return None
 
     def accept_autocomplete(self):
+        """
+        Called when the user accepts the autocompletion, by pressing TAB. Fills the command bar to the autocompletion.
+        """
         acp = self.autocomplete()
         if acp is not None:
             self.text = acp
@@ -137,6 +201,10 @@ class Commander(Control):
         return True
 
     def accept_and_close(self):
+        """
+        Hotkey callback for pressing ENTER. If the text is a valid command in the bar, opens the associated control. If the command is not
+        valid but autocompletes to a valid command, that command is used instead. If neither is valid, does nothing.
+        """
         text = self.text.lower()
         option = None
         if text in self.options:
@@ -150,6 +218,9 @@ class Commander(Control):
             self.close()
 
     def close(self):
+        """
+        Closes the commander and removes it from view.
+        """
         self.parent.remove_block(self)
         self.session.commander = None
 

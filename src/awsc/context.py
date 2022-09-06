@@ -1,14 +1,40 @@
+"""
+Module which contains AWS context-related resources.
+
+Contexts are keypairs able to access different AWS accounts.
+"""
 from botocore import exceptions as botoerror
 
 from .base_control import DeleteResourceDialog, OpenableListControl
 from .common import Common, SessionAwareDialog
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.dialog import DialogFieldLabel, DialogFieldText
 from .termui.list_control import ListEntry
+from .termui.ui import ControlCodes
 
 
 class ImportContextDialog(SessionAwareDialog):
+    """
+    Dialog control for importing a context from the environment.
+
+    Attributes
+    ----------
+    caller : awsc.termui.control.Control
+        Parent control which controls this dialog.
+    error_label : awsc.termui.dialog.DialogFieldLabel
+        Error label for displaying validation errors.
+    name_field : awsc.termui.dialog.DialogFieldText
+        Textfield for entering the name of the context.
+    access_key : str
+        The access key being imported.
+    secret_key : str
+        The secret key being imported.
+    access_key_field : awsc.termui.dialog.DialogFieldLabel
+        Field for displaying the access key being imported.
+    secret_key_field : awsc.termui.dialog.DialogFieldLabel
+        Field for displaying that a secret key is being imported. It is masked.
+    """
+
     def __init__(self, parent, alignment, dimensions, *args, caller=None, **kwargs):
         self.accepts_inputs = True
         kwargs["border"] = Border(
@@ -21,26 +47,9 @@ class ImportContextDialog(SessionAwareDialog):
         kwargs["cancel_action"] = self.close
         super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
         self.caller = caller
-        self.add_field(DialogFieldLabel("Enter AWS context details"))
-        self.error_label = DialogFieldLabel(
-            "", default_color=Common.color("modal_dialog_error")
-        )
-        self.add_field(self.error_label)
-        self.add_field(DialogFieldLabel(""))
+        self.set_title_label("Enter AWS context details")
         self.name_field = DialogFieldText(
-            "Name:",
-            label_min=12,
-            color=Common.color(
-                "context_add_modal_dialog_textfield", "modal_dialog_textfield"
-            ),
-            selected_color=Common.color(
-                "context_add_modal_dialog_textfield_selected",
-                "modal_dialog_textfield_selected",
-            ),
-            label_color=Common.color(
-                "context_add_modal_dialog_textfield_label",
-                "modal_dialog_textfield_label",
-            ),
+            "Name:", **Common.textfield_colors("context_add")
         )
         self.add_field(self.name_field)
         creds = Common.Session.service_provider.env_session().get_credentials()
@@ -113,6 +122,23 @@ class ImportContextDialog(SessionAwareDialog):
 
 
 class AddContextDialog(SessionAwareDialog):
+    """
+    Dialog control for adding a new context.
+
+    Attributes
+    ----------
+    caller : awsc.termui.control.Control
+        Parent control which controls this dialog.
+    error_label : awsc.termui.dialog.DialogFieldLabel
+        Error label for displaying validation errors.
+    name_field : awsc.termui.dialog.DialogFieldText
+        Textfield for entering the name of the context.
+    access_key_field : awsc.termui.dialog.DialogFieldText
+        Textfield for entering the access key.
+    secret_key_field : awsc.termui.dialog.DialogFieldText
+        Textfield for entering the secret key.
+    """
+
     def __init__(self, parent, alignment, dimensions, *args, caller=None, **kwargs):
         self.accepts_inputs = True
         kwargs["border"] = Border(
@@ -124,12 +150,7 @@ class AddContextDialog(SessionAwareDialog):
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
         super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
-        self.add_field(DialogFieldLabel("Enter AWS context details"))
-        self.error_label = DialogFieldLabel(
-            "", default_color=Common.color("modal_dialog_error")
-        )
-        self.add_field(self.error_label)
-        self.add_field(DialogFieldLabel(""))
+        self.set_title_label("Enter AWS context details")
         self.name_field = DialogFieldText(
             "Name:",
             label_min=16,
@@ -237,23 +258,24 @@ class AddContextDialog(SessionAwareDialog):
 
 
 class ContextList(OpenableListControl):
+    """
+    Lister control for contexts.
+    """
+
     prefix = "context_list"
     title = "Contexts"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.add_hotkey("a", self.add_new_context, "Add new context")
-        self.add_hotkey("d", self.set_default_context, "Set as default")
-        self.add_hotkey("i", self.import_context, "Import context")
-        self.add_hotkey("KEY_ENTER", self.select_context, "Select context")
-        self.add_hotkey("\x04", self.delete_selected_context, "Delete context")
-        self.new_context_dialog = None
         self.add_column("account id", 12)
         self.add_column("default", 7)
 
         self.reload_contexts()
 
     def reload_contexts(self):
+        """
+        Refreshes the list of contexts from configuration.
+        """
         self.entries = []
         for context, data in Common.Configuration["contexts"].items():
             self.add_entry(
@@ -278,35 +300,43 @@ class ContextList(OpenableListControl):
         except ValueError:
             self.selected = 0
 
+    @OpenableListControl.Autohotkey("a", "Add new context")
     def add_new_context(self, _):
-        AddContextDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "20"),
-            caller=self,
-            weight=-500,
-        )
+        """
+        Hotkey callback for adding a new context.
+        """
+        AddContextDialog.opener(caller=self)
 
+    @OpenableListControl.Autohotkey("i", "Import context")
     def import_context(self, _):
-        ImportContextDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "20"),
-            caller=self,
-            weight=-500,
-        )
+        """
+        Hotkey callback for importing a context.
+        """
+        ImportContextDialog.opener(caller=self)
 
+    @OpenableListControl.Autohotkey("d", "Set as default", True)
     def set_default_context(self, _):
+        """
+        Hotkey callback for setting the default context.
+        """
         if self.selection is not None:
             Common.Configuration["default_context"] = self.selection.name
             Common.Configuration.write_config()
             self.reload_contexts()
 
+    @OpenableListControl.Autohotkey("KEY_ENTER", "Select", True)
     def select_context(self, _):
+        """
+        Hotkey callback for setting the active context.
+        """
         if self.selection is not None:
             Common.Session.context = self.selection.name
 
+    @OpenableListControl.Autohotkey(ControlCodes.D, "Delete context", True)
     def delete_selected_context(self, _):
+        """
+        Hotkey callback for deleting the selected context.
+        """
         if self.selection is not None:
             DeleteResourceDialog.opener(
                 caller=self,
@@ -316,5 +346,8 @@ class ContextList(OpenableListControl):
             )
 
     def do_delete(self):
+        """
+        Action callback for the context deletion dialog.
+        """
         Common.Configuration.delete_context(self.selection["name"])
         self.reload_contexts()

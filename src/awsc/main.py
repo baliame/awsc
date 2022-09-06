@@ -1,3 +1,6 @@
+"""
+Main module for the awsc application.
+"""
 import os
 import sys
 
@@ -16,19 +19,24 @@ from .termui.control import Border
 
 
 def awscheck():
+    """
+    Predicate function for checking if AWS is initialized.
+    """
     return bool(Common.Session.context) and bool(Common.Session.region)
 
 
 def open_filterer():
+    """
+    Hotkey callback for opening the filter bar.
+    """
     if Common.Session.filterer is None:
         return Filterer(
             Common.Session.ui.top_block,
             TopLeftAnchor(0, 8),
             Dimension("100%", "3"),
-            Common.Session,
+            session=Common.Session,
             color=Common.color("search_bar_color"),
             symbol_color=Common.color("search_bar_symbol_color"),
-            autocomplete_color=Common.color("search_bar_autocomplete_color"),
             inactive_color=Common.color("search_bar_inactive_color"),
             weight=-200,
             border=Border(
@@ -39,11 +47,14 @@ def open_filterer():
 
 
 def open_commander():
+    """
+    Hotkey callback for opening the command palette.
+    """
     return Commander(
         Common.Session.ui.top_block,
         TopLeftAnchor(0, 8),
         Dimension("100%", "3"),
-        Common.Session,
+        session=Common.Session,
         color=Common.color("command_bar_color"),
         symbol_color=Common.color("command_bar_symbol_color"),
         autocomplete_color=Common.color("command_bar_autocomplete_color"),
@@ -55,6 +66,9 @@ def open_commander():
 
 
 def main(*args, **kwargs):
+    """
+    Entrypoint for awsc.
+    """
     # stderr hack
     old_stderr = None
     try:

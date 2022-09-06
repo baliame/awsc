@@ -1,71 +1,84 @@
+"""
+Module for SQS resources.
+"""
+from typing import Dict
+
 from .base_control import (
-    DeleteResourceDialog,
     Describer,
     ListResourceDocumentCreator,
     ResourceLister,
+    SelectionAttribute,
+    TemplateDict,
 )
 from .common import Common
 from .termui.ui import ControlCodes
 
 
+def _sqs_determine_queue_arn(result):
+    return SQSLister.get_attrib_cache(result, "QueueArn")
+
+
+def _sqs_determine_available_messages(result):
+    return SQSLister.get_attrib_cache(result, "ApproximateNumberOfMessages")
+
+
+class SQSDescriber(Describer):
+    """
+    Describer control for SQS queues.
+    """
+
+    prefix = "sqs_browser"
+    title = "Queue"
+
+    def __init__(self, *args, entry_key="url", **kwargs):
+        self.resource_key = "sqs"
+        self.describe_method = "get_queue_attributes"
+        self.describe_kwarg_name = "QueueUrl"
+        self.describe_kwargs = {"AttributeNames": ["All"]}
+        self.object_path = "."
+        super().__init__(*args, entry_key=entry_key, **kwargs)
+
+
 class SQSLister(ResourceLister):
+    """
+    Lister control for SQS queues.
+    """
+
+    _sqs_attrib_cache: Dict[str, str] = {}
+
     prefix = "sqs_list"
     title = "Queues"
     command_palette = ["sqs", "queue", "queues"]
 
-    def delete_queue(self, _):
-        if self.selection is None:
-            return
-        DeleteResourceDialog.opener(
-            caller=self,
-            resource_type="queue",
-            resource_identifier=self.selection["url"],
-            callback=self.do_delete,
-            action_name="Delete",
-        )
+    resource_type = "Queue"
+    main_provider = "sqs"
+    category = "SQS"
+    subcategory = "Queue"
+    list_method = "list_queues"
+    item_path = ".QueueUrls"
+    columns = {
+        "url": {
+            "path": ".",
+            "size": 80,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "available": {
+            "path": _sqs_determine_available_messages,
+            "size": 9,
+            "weight": 1,
+        },
+        "name": {"path": ".", "hidden": True},
+        "arn": {"path": _sqs_determine_queue_arn, "hidden": True},
+    }
+    describe_command = SQSDescriber.opener
+    primary_key = "url"
 
-    def do_delete(self, **kwargs):
-        if self.selection is None:
-            return
-        Common.generic_api_call(
-            "sqs",
-            "delete_queue",
-            {"QueueUrl": self.selection["url"]},
-            "Delete Queue",
-            "SQS",
-            subcategory="Queue",
-            success_template="Deleting queue {0}",
-            resource=self.selection["url"],
-        )
-        self.refresh_data()
-
-    def purge_queue(self, _):
-        if self.selection is None:
-            return
-        DeleteResourceDialog.opener(
-            caller=self,
-            resource_type="queue",
-            resource_identifier=self.selection["url"],
-            callback=self.do_purge,
-            action_name="Purge",
-        )
-
-    def do_purge(self, force, terminate_resources_field, **kwargs):
-        if self.selection is None:
-            return
-        Common.generic_api_call(
-            "sqs",
-            "purge_queue",
-            {"QueueUrl": self.selection["url"]},
-            "Purge Queue",
-            "SQS",
-            subcategory="Queue",
-            success_template="Purging queue {0}",
-            resource=self.selection["url"],
-        )
-        self.refresh_data()
-
+    @ResourceLister.Autohotkey("s", "Send message", True)
     def send_message(self, _):
+        """
+        Hotkey callback for inserting a message into the queue.
+        """
         if self.selection is None:
             return
         doc = {
@@ -88,22 +101,26 @@ class SQSLister(ResourceLister):
         )
         creator.edit()
 
+    @ResourceLister.Autohotkey("n", "Create queue")
     def create_queue(self, _):
+        """
+        Hotkey callback for creating a new queue.
+        """
         doc = {
             "QueueName": "",
             "Attributes": {
-                "DelaySeconds": 0,
-                "MaximumMessageSize": 262144,
-                "MessageRetentionPeriod": 345600,
+                "DelaySeconds": "0",
+                "MaximumMessageSize": "262144",
+                "MessageRetentionPeriod": "345600",
                 "Policy": "",
-                "ReceiveMessageWaitTimeSeconds": 0,
+                "ReceiveMessageWaitTimeSeconds": "0",
                 "RedrivePolicy": "",
-                "VisibilityTimeout": 30,
+                "VisibilityTimeout": "30",
                 "KmsMasterKeyId": "",
-                "KmsDataKeyReusePeriodSeconds": 300,
-                "SqsManagedSseEnabled": False,
-                "FifoQueue": False,
-                "ContentBasedDeduplication": False,
+                "KmsDataKeyReusePeriodSeconds": "300",
+                "SqsManagedSseEnabled": "false",
+                "FifoQueue": "false",
+                "ContentBasedDeduplication": "false",
                 "DeduplicationScope": "queue",
                 "FifoThroughputLimit": "perQueue",
             },
@@ -118,34 +135,57 @@ class SQSLister(ResourceLister):
         )
         creator.edit()
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "sqs"
-        self.list_method = "list_queues"
-        self.item_path = ".QueueUrls"
-        self.column_paths = {"url": ".", "available": self.determine_available_messages}
-        self.imported_column_sizes = {
-            "url": 80,
-            "available": 9,
-        }
-        self.hidden_columns = {"arn": self.determine_queue_arn, "name": "."}
-        self.describe_command = SQSDescriber.opener
+    @ResourceLister.Autohotkey(ControlCodes.P, "Purge Queue", True)
+    def purge(self, _):
+        """
+        Hotkey callback for purging a queue.
+        """
+        self.confirm_template(
+            "purge_queue",
+            TemplateDict(
+                {
+                    "QueueUrl": SelectionAttribute("url"),
+                }
+            ),
+            action_name="Purge",
+        )(self.selection)
 
-        self.imported_column_order = ["url", "available"]
-        self.sort_column = "url"
-        self.primary_key = "url"
-        super().__init__(*args, **kwargs)
-        self.add_hotkey(ControlCodes.D, self.delete_queue, "Delete Queue")
-        self.add_hotkey(ControlCodes.P, self.purge_queue, "Purge Queue")
-        self.add_hotkey(ControlCodes.S, self.send_message, "Send Message")
-        self.add_hotkey(ControlCodes.N, self.create_queue, "Create Queue")
-        self._attrib_cache = {}
+    @ResourceLister.Autohotkey(ControlCodes.D, "Delete Queue", True)
+    def delete_queue(self, _):
+        """
+        Hotkey callback for queue deletion.
+        """
+        self.confirm_template(
+            "delete_queue",
+            TemplateDict(
+                {
+                    "QueueUrl": SelectionAttribute("url"),
+                }
+            ),
+        )(self.selection)
 
     def refresh_data(self, *args, **kwargs):
-        self._attrib_cache = {}
+        SQSLister._attrib_cache = {}
         return super().refresh_data(*args, **kwargs)
 
-    def get_attrib_cache(self, url, attrib):
-        if url not in self._attrib_cache:
+    @classmethod
+    def get_attrib_cache(cls, url, attrib):
+        """
+        Returns a queue attribute from the attribute cache.
+
+        Parameters
+        ----------
+        url : str
+            The url of the queue for which an attribute is being queried.
+        attrib : str
+            The name of the attribute to query.
+
+        Returns
+        -------
+        str
+            The queue attribute, or n/a if it does not exist.
+        """
+        if url not in cls._attrib_cache:
             resps = Common.generic_api_call(
                 "sqs",
                 "get_queue_attributes",
@@ -157,27 +197,8 @@ class SQSLister(ResourceLister):
             )
             if resps["Success"]:
                 attribs = resps["Response"]
-                self._attrib_cache[url] = attribs
+                cls._attrib_cache[url] = attribs
         try:
-            return self._attrib_cache[url]["Attributes"][attrib]
+            return cls._attrib_cache[url]["Attributes"][attrib]
         except KeyError:
             return "<n/a>"
-
-    def determine_queue_arn(self, result):
-        return self.get_attrib_cache(result, "QueueArn")
-
-    def determine_available_messages(self, result):
-        return self.get_attrib_cache(result, "ApproximateNumberOfMessages")
-
-
-class SQSDescriber(Describer):
-    prefix = "sqs_browser"
-    title = "Queue"
-
-    def __init__(self, *args, entry_key="url", **kwargs):
-        self.resource_key = "sqs"
-        self.describe_method = "get_queue_attributes"
-        self.describe_kwarg_name = "QueueUrl"
-        self.describe_kwargs = {"AttributeNames": ["All"]}
-        self.object_path = "."
-        super().__init__(*args, entry_key=entry_key, **kwargs)

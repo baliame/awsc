@@ -1,60 +1,14 @@
+"""
+EC2 AMI resource controls.
+"""
 from .base_control import Describer, ResourceLister
 
 
-class AMIResourceLister(ResourceLister):
-    prefix = "ami_list"
-    title = "Amazon Machine Images"
-    command_palette = ["ami", "image"]
-
-    def title_info(self):
-        return self.title_info_data
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "ec2"
-        self.list_method = "describe_images"
-        self.title_info_data = None
-        self.list_kwargs = {"Owners": ["self"]}
-        if "ec2" in kwargs:
-            self.list_kwargs["ImageIds"] = [kwargs["ec2"]["image"]]
-            self.title_info_data = f"Instance: {kwargs['ec2']['instance id']}"
-        self.item_path = ".Images"
-        self.column_paths = {
-            "id": ".ImageId",
-            "name": ".Name",
-            "arch": ".Architecture",
-            "platform": ".PlatformDetails",
-            "type": ".ImageType",
-            "owner": ".ImageOwnerAlias",
-            "state": ".State",
-            "virt": ".VirtualizationType",
-        }
-        self.imported_column_sizes = {
-            "id": 15,
-            "name": 64,
-            "arch": 8,
-            "platform": 10,
-            "type": 10,
-            "owner": 15,
-            "state": 10,
-            "virt": 10,
-        }
-        self.describe_command = AMIDescriber.opener
-        self.imported_column_order = [
-            "id",
-            "name",
-            "arch",
-            "platform",
-            "type",
-            "owner",
-            "state",
-            "virt",
-        ]
-        self.primary_key = "id"
-        self.sort_column = "id"
-        super().__init__(*args, **kwargs)
-
-
 class AMIDescriber(Describer):
+    """
+    Describer control for AMI resources.
+    """
+
     prefix = "ami_browser"
     title = "Amazon Machine Image"
 
@@ -65,3 +19,54 @@ class AMIDescriber(Describer):
         self.describe_kwarg_is_list = True
         self.object_path = ".Images[0]"
         super().__init__(*args, entry_key=entry_key, **kwargs)
+
+
+class AMIResourceLister(ResourceLister):
+    """
+    List control for AMI resources.
+
+    Attributes
+    ----------
+    ec2 : awsc.termui.list_control.ListEntry
+        List AMIs in the context of this EC2 instance.
+    """
+
+    prefix = "ami_list"
+    title = "Amazon Machine Images"
+    command_palette = ["ami", "image"]
+
+    resource_type = "AMI"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "AMI"
+    list_method = "describe_images"
+    list_kwargs = {"Owners": ["self"]}
+    item_path = ".Images"
+    primary_key = "id"
+    columns = {
+        "id": {
+            "path": ".ImageId",
+            "size": 15,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "name": {"path": ".Name", "size": 64, "weight": 1},
+        "arch": {"path": ".Architecture", "size": 8, "weight": 2},
+        "platform": {"path": ".PlatformDetails", "size": 10, "weight": 3},
+        "type": {"path": ".ImageType", "size": 10, "weight": 4},
+        "owner": {"path": ".ImageOwnerAlias", "size": 15, "weight": 5},
+        "state": {"path": ".State", "size": 10, "weight": 6},
+        "virt": {"path": ".VirtualizationType", "size": 10, "weight": 7},
+    }
+
+    describe_selection_arg = "entry"
+    describe_command = AMIDescriber.opener
+
+    def title_info(self):
+        return None if self.ec2 is None else f"Instance: {self.ec2['instance id']}"
+
+    def __init__(self, *args, ec2=None, **kwargs):
+        self.ec2 = ec2
+        if ec2 is not None:
+            self.list_kwargs["ImageIds"] = [kwargs["ec2"]["image"]]
+        super().__init__(*args, **kwargs)

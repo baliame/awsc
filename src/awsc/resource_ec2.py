@@ -1,109 +1,178 @@
+"""
+Module for EC2 instance resources.
+"""
 import subprocess
 from pathlib import Path
 
 from .base_control import (
-    DeleteResourceDialog,
     Describer,
     DialogFieldResourceListSelector,
     ListResourceDocumentCreator,
     ResourceLister,
+    ResourceRefByClass,
+    SelectionAttribute,
     SingleRelationLister,
+    TemplateDict,
+    tagged_column_generator,
 )
 from .common import Common, SessionAwareDialog
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
-from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldText
+from .termui.dialog import DialogFieldCheckbox, DialogFieldText
 from .termui.ui import ControlCodes
 
 
+@ResourceLister.Autocommand(
+    "EC2ResourceLister", "r", "View related resources", "selection"
+)
 class EC2RelatedLister(SingleRelationLister):
+    """
+    Lister control for all resources related to a single EC2 instance based on its description.
+    """
+
     prefix = "ec2_related"
     title = "EC2 Instance related resources"
 
+    resource_type = "ec2 instance"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Instance"
+    describe_method = "describe_instances"
+    describe_kwargs = TemplateDict({"InstanceIds": [SelectionAttribute("instance id")]})
+    object_path = ".Reservations[0].Instances[0]"
+    resource_descriptors = [
+        {
+            "base_path": "[.SecurityGroups[].GroupId]",
+            "type": "Security Group",
+            "describer": ResourceRefByClass("SGDescriber"),
+        },
+        {
+            "base_path": '[.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value]',
+            "type": "Cloudformation Stack",
+            "describer": ResourceRefByClass("CFNDescriber"),
+        },
+        {
+            "base_path": "[.VpcId]",
+            "type": "VPC",
+            "describer": ResourceRefByClass("VPCDescriber"),
+        },
+        {
+            "base_path": "[.NetworkInterfaces[].NetworkInterfaceId]",
+            "type": "Network Interface",
+        },
+        {
+            "base_path": "[.BlockDeviceMappings[].Ebs.VolumeId]",
+            "type": "EBS Volume",
+            "describer": ResourceRefByClass("EBSDescriber"),
+        },
+        {
+            "base_path": "[.ImageId]",
+            "type": "AMI",
+            "describer": ResourceRefByClass("AMIDescriber"),
+        },
+        {
+            "base_path": "[.KeyName]",
+            "type": "Keypair",
+        },
+        {
+            "base_path": "[.InstanceType]",
+            "type": "Instance Type",
+            "describer": ResourceRefByClass("InstanceClassDescriber"),
+        },
+        {
+            "base_path": "[.SubnetId]",
+            "type": "Subnet",
+            "describer": ResourceRefByClass("SubnetDescriber"),
+        },
+        {
+            "base_path": "[.IamInstanceProfile.Arn]",
+            "type": "Instance Profile",
+            "describer": ResourceRefByClass("InstanceProfileDescriber"),
+        },
+    ]
+
     def title_info(self):
-        return self.instance_id
+        return f"EC2: {self.parent_selection['instance id']}"
 
-    def __init__(self, *args, ec2_entry=None, **kwargs):
-        from .resource_ami import AMIDescriber
-        from .resource_cfn import CFNDescriber
-        from .resource_ebs import EBSDescriber
-        from .resource_ec2_class import InstanceClassDescriber
-        from .resource_iam import InstanceProfileDescriber
-        from .resource_sg import SGDescriber
-        from .resource_subnet import SubnetDescriber
-        from .resource_vpc import VPCDescriber
 
+@ResourceLister.Autocommand("EBInstanceHealthLister", "v", "View instance")
+class EC2Describer(Describer):
+    """
+    Describer control for EC2 instances.
+    """
+
+    prefix = "ec2_browser"
+    title = "EC2 Instance"
+
+    def __init__(self, *args, entry_key="instance id", **kwargs):
         self.resource_key = "ec2"
-        self.instance_id = ec2_entry["instance id"]
         self.describe_method = "describe_instances"
-        self.describe_kwargs = {"InstanceIds": [self.instance_id]}
+        self.describe_kwarg_name = "InstanceIds"
+        self.describe_kwarg_is_list = True
         self.object_path = ".Reservations[0].Instances[0]"
-        self.resource_descriptors = [
-            {
-                "base_path": "[.SecurityGroups[].GroupId]",
-                "type": "Security Group",
-                "describer": SGDescriber.opener,
-            },
-            {
-                "base_path": '[.Tags[] | select(.Key=="aws:cloudformation:stack-id").Value]',
-                "type": "Cloudformation Stack",
-                "describer": CFNDescriber.opener,
-            },
-            {
-                "base_path": "[.VpcId]",
-                "type": "VPC",
-                "describer": VPCDescriber.opener,
-            },
-            {
-                "base_path": "[.NetworkInterfaces[].NetworkInterfaceId]",
-                "type": "Network Interface",
-            },
-            {
-                "base_path": "[.BlockDeviceMappings[].Ebs.VolumeId]",
-                "type": "EBS Volume",
-                "describer": EBSDescriber.opener,
-            },
-            {
-                "base_path": "[.ImageId]",
-                "type": "AMI",
-                "describer": AMIDescriber.opener,
-            },
-            {
-                "base_path": "[.KeyName]",
-                "type": "Keypair",
-            },
-            {
-                "base_path": "[.InstanceType]",
-                "type": "Instance Type",
-                "describer": InstanceClassDescriber.opener,
-            },
-            {
-                "base_path": "[.SubnetId]",
-                "type": "Subnet",
-                "describer": SubnetDescriber.opener,
-            },
-            {
-                "base_path": "[.IamInstanceProfile.Arn]",
-                "type": "Instance Profile",
-                "describer": InstanceProfileDescriber.opener,
-            },
-        ]
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
+@ResourceLister.Autocommand("ASGResourceLister", "i", "View instances", "asg")
 class EC2ResourceLister(ResourceLister):
+    """
+    Lister control for EC2 instances.
+    """
+
     prefix = "ec2_list"
     title = "EC2 Instances"
     command_palette = ["ec2", "instance"]
 
+    resource_type = "instance"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Instance"
+    list_method = "describe_instances"
+    item_path = "[.Reservations[].Instances[]]"
+    columns = {
+        "instance id": {
+            "path": ".InstanceId",
+            "size": 11,
+            "weight": 0,
+            "sort_weight": 1,
+        },
+        **tagged_column_generator("name", "name", weight=1, sort_weight=0, size=30),
+        "type": {
+            "path": ".InstanceType",
+            "size": 10,
+            "weight": 2,
+        },
+        "vpc": {
+            "path": ".VpcId",
+            "size": 15,
+            "weight": 3,
+        },
+        "public ip": {
+            "path": ".PublicIpAddress",
+            "size": 15,
+            "weight": 4,
+        },
+        "key name": {
+            "path": ".KeyName",
+            "size": 30,
+            "weight": 5,
+        },
+        "state": {
+            "path": ".State.Name",
+            "size": 10,
+            "weight": 6,
+        },
+        "image": {"path": ".ImageId", "hidden": True},
+    }
+    describe_command = EC2Describer.opener
+    open_command = "r"
+    primary_key = "instance id"
+
     def title_info(self):
         return self.title_info_data
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "ec2"
-        self.list_method = "describe_instances"
+    def __init__(self, *args, asg=None, **kwargs):
         self.title_info_data = None
-        if "asg" in kwargs:
+        if asg is not None:
             self.list_kwargs = {
                 "Filters": [
                     {
@@ -113,50 +182,13 @@ class EC2ResourceLister(ResourceLister):
                 ]
             }
             self.title_info_data = f"ASG: {kwargs['asg']['name']}"
-        self.item_path = "[.Reservations[].Instances[]]"
-        self.column_paths = {
-            "instance id": ".InstanceId",
-            "name": self.tag_finder_generator("Name"),
-            "type": ".InstanceType",
-            "vpc": ".VpcId",
-            "public ip": ".PublicIpAddress",
-            "key name": ".KeyName",
-            "state": ".State.Name",
-        }
-        self.imported_column_sizes = {
-            "instance id": 11,
-            "name": 30,
-            "type": 10,
-            "vpc": 15,
-            "public ip": 15,
-            "key name": 30,
-            "state": 10,
-        }
-        self.hidden_columns = {"image": ".ImageId"}
-        self.describe_command = EC2Describer.opener
-        self.imported_column_order = [
-            "instance id",
-            "name",
-            "type",
-            "vpc",
-            "public ip",
-            "key name",
-            "state",
-        ]
-        self.sort_column = "instance id"
-        self.primary_key = "instance id"
         super().__init__(*args, **kwargs)
-        self.add_hotkey("s", self.ssh, "Open SSH")
-        self.add_hotkey("l", self.new_instance, "Launch new instance")
-        self.add_hotkey("m", self.metrics, "Metrics")
-        self.add_hotkey("r", self.related, "View related resources")
-        self.add_hotkey(ControlCodes.A, self.create_ami, "Create AMI from instance")
-        self.add_hotkey(ControlCodes.S, self.stop_start_instance, "Stop/start instance")
-        self.add_hotkey(ControlCodes.D, self.terminate_instance, "Terminate instance")
 
+    @ResourceLister.Autohotkey(ControlCodes.A, "Create AMI", True)
     def create_ami(self, _):
-        if self.selection is None:
-            return
+        """
+        Hotkey callback for creating an AMI from an instance.
+        """
         ListResourceDocumentCreator(
             "ec2",
             "create_image",
@@ -196,123 +228,85 @@ class EC2ResourceLister(ResourceLister):
             static_fields={"InstanceId": self.selection["instance id"]},
         ).edit()
 
+    @ResourceLister.Autohotkey(ControlCodes.S, "Start/stop instance", True)
     def stop_start_instance(self, _):
-        if self.selection is not None:
-            if self.selection["state"] == "running":
-                DeleteResourceDialog.opener(
-                    caller=self,
-                    resource_type="EC2 Instance",
-                    resource_identifier=self.selection["instance id"],
-                    callback=self.do_stop,
-                    undoable=True,
-                    action_name="Stop",
-                )
-            elif self.selection["state"] == "stopped":
-                DeleteResourceDialog.opener(
-                    caller=self,
-                    resource_type="EC2 Instance",
-                    resource_identifier=self.selection["instance id"],
-                    callback=self.do_start,
-                    undoable=True,
-                    action_name="Start",
-                )
-            else:
-                Common.Session.set_message(
-                    "Instance is not in running or stopped state.",
-                    Common.color("message_info"),
-                )
+        """
+        Hotkey callback for starting or stopping an instance.
+        """
+        if self.selection["state"] == "running":
+            self.confirm_template(
+                "stop_instances",
+                TemplateDict(
+                    {
+                        "InstanceIds": [SelectionAttribute("instance id")],
+                    }
+                ),
+                undoable=True,
+                action_name="Stop",
+            )(self.selection)
+        elif self.selection["state"] == "stopped":
+            self.confirm_template(
+                "start_instances",
+                TemplateDict(
+                    {
+                        "InstanceIds": [SelectionAttribute("instance id")],
+                    }
+                ),
+                undoable=True,
+                action_name="Start",
+            )(self.selection)
+        else:
+            Common.Session.set_message(
+                "Instance is not in running or stopped state.",
+                Common.color("message_info"),
+            )
 
+    @ResourceLister.Autohotkey(ControlCodes.D, "Terminate instance", True)
     def terminate_instance(self, _):
-        if self.selection is not None:
-            DeleteResourceDialog.opener(
-                caller=self,
-                resource_type="EC2 Instance",
-                resource_identifier=self.selection["instance id"],
-                callback=self.do_terminate,
-                action_name="Terminate",
-            )
-
-    def metrics(self, _):
-        from .resource_cloudwatch import MetricLister
-
-        if self.selection is not None:
-            Common.Session.push_frame(
-                MetricLister.opener(
-                    metric_namespace="AWS/EC2",
-                    dimension=("InstanceId", self.selection["instance id"]),
-                )
-            )
-
-    def related(self, _):
-        if self.selection is not None:
-            Common.Session.push_frame(EC2RelatedLister.opener(ec2_entry=self.selection))
-
-    def do_start(self, **kwargs):
-        if self.selection is None:
-            return
-        api_kwargs = {
-            "InstanceIds": [self.selection["instance id"]],
-        }
-        Common.generic_api_call(
-            "ec2",
-            "start_instances",
-            api_kwargs,
-            "Start instance",
-            "EC2",
-            subcategory="Instance",
-            success_template="Starting instance {0}",
-            resource=self.selection["instance id"],
-        )
-        self.refresh_data()
-
-    def do_stop(self, **kwargs):
-        if self.selection is None:
-            return
-        api_kwargs = {
-            "InstanceIds": [self.selection["instance id"]],
-        }
-        Common.generic_api_call(
-            "ec2",
-            "stop_instances",
-            api_kwargs,
-            "Stop instance",
-            "EC2",
-            subcategory="Instance",
-            success_template="Stopping instance {0}",
-            resource=self.selection["instance id"],
-        )
-        self.refresh_data()
-
-    def do_terminate(self, **kwargs):
-        if self.selection is None:
-            return
-        api_kwargs = {
-            "InstanceIds": [self.selection["instance id"]],
-        }
-        Common.generic_api_call(
-            "ec2",
+        """
+        Hotkey callback for terminating an instance.
+        """
+        self.confirm_template(
             "terminate_instances",
-            api_kwargs,
-            "Terminate instance",
-            "EC2",
-            subcategory="Instance",
-            success_template="Terminating instance {0}",
-            resource=self.selection["instance id"],
-        )
-        self.refresh_data()
+            TemplateDict(
+                {
+                    "InstanceIds": [SelectionAttribute("instance id")],
+                }
+            ),
+            undoable=True,
+            action_name="Terminate",
+        )(self.selection)
 
-    def new_instance(self, _):
-        EC2LaunchDialog(
-            self.parent,
-            CenterAnchor(0, 0),
-            Dimension("80%|40", "20"),
-            caller=self,
-            weight=-500,
+    @ResourceLister.Autohotkey("m", "Metrics", True)
+    def metrics(self, _):
+        """
+        Hotkey callback for listing metrics for an EC2 instance.
+        """
+        Common.Session.push_frame(
+            ResourceRefByClass("MetricLister")(
+                metric_namespace="AWS/EC2",
+                dimension=("InstanceId", self.selection["instance id"]),
+            )
         )
 
+    # @ResourceLister.Autohotkey("n", "Launch new instance")
+    # def new_instance(self, _):
+    #    """
+    #    Hotkey callback for launching a new instance.
+    #    """
+    #    EC2LaunchDialog(
+    #        self.parent,
+    #        CenterAnchor(0, 0),
+    #        Dimension("80%|40", "20"),
+    #        caller=self,
+    #        weight=-500,
+    #    )
+
+    @ResourceLister.Autohotkey("s", "SSH", True)
     def ssh(self, _):
-        if self.selection is None:
-            return
+        """
+        Hotkey callback for SSHing to an instance.
+        """
         key = Common.Session.ssh_key
         keypair_call = Common.generic_api_call(
             "ec2",
@@ -351,27 +345,15 @@ class EC2ResourceLister(ResourceLister):
                 )
 
 
-class EC2Describer(Describer):
-    prefix = "ec2_browser"
-    title = "EC2 Instance"
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_instances"
-        self.describe_kwarg_name = "InstanceIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Reservations[0].Instances[0]"
-        super().__init__(*args, **kwargs)
-
-
 class EC2SSHDialog(SessionAwareDialog):
+    """
+    Custom dialog for setting SSH parameters and initiating an SSH session to an EC2 instance.
+    """
+
     line_size = 15
 
     def __init__(
         self,
-        parent,
-        alignment,
-        dimensions,
         *args,
         instance_entry=None,
         caller=None,
@@ -390,7 +372,8 @@ class EC2SSHDialog(SessionAwareDialog):
                 "modal_dialog_border_title_info",
             ),
         )
-        super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
+        super().__init__(*args, caller=caller, **kwargs)
+        self.set_title_label("Connect to EC2 over SSH")
         self.instance_id = instance_entry["instance id"]
         self.ip = instance_entry["public ip"]
         def_text = (
@@ -411,17 +394,7 @@ class EC2SSHDialog(SessionAwareDialog):
         self.username_textfield = DialogFieldText(
             "SSH username",
             text=def_text,
-            color=Common.color(
-                "ec2_ssh_modal_dialog_textfield", "modal_dialog_textfield"
-            ),
-            selected_color=Common.color(
-                "ec2_ssh_modal_dialog_textfield_selected",
-                "modal_dialog_textfield_selected",
-            ),
-            label_color=Common.color(
-                "ec2_ssh_modal_dialog_textfield_label", "modal_dialog_textfield_label"
-            ),
-            label_min=16,
+            **Common.textfield_colors("ec2_ssh"),
         )
         self.add_field(self.use_instance_connect)
         self.add_field(self.username_textfield)
@@ -481,7 +454,12 @@ class EC2SSHDialog(SessionAwareDialog):
         self.parent.remove_block(self)
 
 
+@ResourceLister.Autocommand("EC2ResourceLister", "n", "Launch new instance", "_")
 class EC2LaunchDialog(SessionAwareDialog):
+    """
+    Custom dialog for launching a new EC2 instance.
+    """
+
     def __init__(self, parent, alignment, dimensions, *args, caller=None, **kwargs):
         from .resource_ami import AMIResourceLister
         from .resource_ec2_class import InstanceClassResourceLister
@@ -496,12 +474,7 @@ class EC2LaunchDialog(SessionAwareDialog):
             Common.color("modal_dialog_border_title"),
         )
         super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
-        self.add_field(DialogFieldLabel("Enter AWS instance details"))
-        self.error_label = DialogFieldLabel(
-            "", default_color=Common.color("modal_dialog_error")
-        )
-        self.add_field(self.error_label)
-        self.add_field(DialogFieldLabel(""))
+        self.set_title_label("Enter AWS instance details")
         self.name_field = DialogFieldText(
             "Name:",
             label_min=16,

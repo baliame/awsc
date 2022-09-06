@@ -1,3 +1,6 @@
+"""
+Controls related to SSH keys.
+"""
 import re
 from pathlib import Path
 
@@ -9,7 +12,12 @@ from .termui.dialog import DialogControl, DialogFieldText
 from .termui.list_control import ListEntry
 
 
+# TODO: Implement usage frequency.
 class SSHList(OpenableListControl):
+    """
+    Lister control for available SSH keys.
+    """
+
     prefix = "ssh"
     title = "SSH Keys"
 
@@ -23,8 +31,6 @@ class SSHList(OpenableListControl):
             **kwargs,
         )
 
-        self.add_hotkey("d", self.set_default_ssh_key, "Set as default")
-        self.add_hotkey("e", self.set_default_ssh_username, "Set default username")
         if selector_cb is None:
             self.add_hotkey("KEY_ENTER", self.select_ssh_key, "Select ssh key")
         self.add_column("usage frequency", 12)
@@ -34,6 +40,14 @@ class SSHList(OpenableListControl):
         self.reload()
 
     def reload(self, move=True):
+        """
+        Reloads the list of available SSH keys.
+
+        Parameters
+        ----------
+        move : bool
+            If True, moves the selection cursor to the default SSH key.
+        """
         self.entries = []
         idx = 0
         defa = 0
@@ -66,6 +80,14 @@ class SSHList(OpenableListControl):
             self.selected = defa
 
     def list_ssh_keys(self):
+        """
+        Fetches a list of available SSH keys from ~/.ssh. Only files beginning with `id_` or with the .pem extension are used.
+
+        Returns
+        -------
+        list(str)
+            A list of filenames in ~/.ssh matching the pattern.
+        """
         ssh_dir = Path.home() / ".ssh"
         ret = []
         for child in ssh_dir.iterdir():
@@ -74,21 +96,32 @@ class SSHList(OpenableListControl):
                 ret.append(filename)
         return ret
 
+    @OpenableListControl.Autohotkey("d", "Set as default", True)
     def set_default_ssh_key(self, _):
+        """
+        Hotkey callback for setting the default SSH key.
+        """
         if self.selection is not None:
             Common.Configuration["default_ssh_key"] = self.selection.name
             Common.Configuration.write_config()
             for entry in self.entries:
                 if entry.name != Common.Configuration["default_ssh_key"]:
-                    entry.columns["default"] = " "
+                    entry["default"] = " "
                 else:
-                    entry.columns["default"] = "✓"
+                    entry["default"] = "✓"
 
     def select_ssh_key(self, _):
+        """
+        Hotkey callback for setting the active SSH key.
+        """
         if self.selection is not None:
             Common.Session.ssh_key = self.selection.name
 
+    @OpenableListControl.Autohotkey("e", "Set default username", True)
     def set_default_ssh_username(self, _):
+        """
+        Hotkey callback for associating a default username with an SSH key.
+        """
         SSHDefaultUsernameDialog(
             self.parent,
             CenterAnchor(0, 0),
@@ -99,7 +132,21 @@ class SSHList(OpenableListControl):
         )
 
 
+# TODO: Replace with SingleNameDialog?
 class SSHDefaultUsernameDialog(DialogControl):
+    """
+    Dialog for entering the default username for an SSH key.
+
+    Attributes
+    ----------
+    username_textfield : awsc.termui.dialog.DialogFieldText
+        Textfield for entering the default username.
+    caller : awsc.termui.control.Control
+        The parent control controlling this dialog.
+    key_name : str
+        The SSH key to associate the username with.
+    """
+
     def __init__(self, *args, key_name="", caller=None, **kwargs):
         self.key_name = key_name
         kwargs["ok_action"] = self.accept_and_close
@@ -123,17 +170,7 @@ class SSHDefaultUsernameDialog(DialogControl):
         self.username_textfield = DialogFieldText(
             "SSH username",
             text=def_text,
-            color=Common.color(
-                "ec2_ssh_modal_dialog_textfield", "modal_dialog_textfield"
-            ),
-            selected_color=Common.color(
-                "ec2_ssh_modal_dialog_textfield_selected",
-                "modal_dialog_textfield_selected",
-            ),
-            label_color=Common.color(
-                "ec2_ssh_modal_dialog_textfield_label", "modal_dialog_textfield_label"
-            ),
-            label_min=16,
+            **Common.textfield_colors("ec2_ssh"),
         )
         self.add_field(self.username_textfield)
         self.highlighted = 1 if def_text != "" else 0
@@ -146,6 +183,9 @@ class SSHDefaultUsernameDialog(DialogControl):
         return super().input(key)
 
     def accept_and_close(self):
+        """
+        Affirmative action callback. Sets the ssh key default username.
+        """
         Common.Configuration["default_ssh_usernames"][
             self.key_name
         ] = self.username_textfield.text
@@ -155,4 +195,7 @@ class SSHDefaultUsernameDialog(DialogControl):
         self.close()
 
     def close(self):
+        """
+        Negative action callback. Closes the dialog.
+        """
         self.parent.remove_block(self)

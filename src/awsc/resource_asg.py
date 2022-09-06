@@ -1,18 +1,124 @@
+"""
+AWS Autoscaling Group resource controls.
+"""
 from .base_control import Describer, ResourceLister
 from .common import Common, SessionAwareDialog
-from .termui.alignment import CenterAnchor, Dimension
 from .termui.control import Border
 from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldText
 from .termui.ui import ControlCodes
 
 
+def _asg_determine_launch_info(asg):
+    """
+    Column callback for determining the name of the launch configuration or launch template associated with an autoscaling group.
+
+    Parameters
+    ----------
+    asg : dict
+        Partial raw JSON response from the AWS API, one autoscaling group object.
+
+    Returns
+    -------
+    str
+        The name of the launch configuration or launch template associated with the ASG, or empty if not found.
+    """
+    if "LaunchConfigurationName" in asg and bool(asg["LaunchConfigurationName"]):
+        return asg["LaunchConfigurationName"]
+    if "LaunchTemplate" in asg:
+        return asg["LaunchTemplate"]["LaunchTemplateName"]
+    return ""
+
+
+def _asg_determine_instance_count(asg):
+    """
+    Column callback for determining the number of healthy and total instances in an autoscaling group.
+
+    Parameters
+    ----------
+    asg : dict
+        Partial raw JSON response from the AWS API, one autoscaling group object.
+
+    Returns
+    -------
+    str
+        The number of healthy and total instances in the group in the format of healthy/total.
+    """
+    healthy = len([h for h in asg["Instances"] if h["HealthStatus"] == "Healthy"])
+    total = len(asg["Instances"])
+    return f"{healthy}/{total}"
+
+
+class ASGDescriber(Describer):
+    """
+    Describer control for Autoscaling Group resources.
+    """
+
+    prefix = "asg_browser"
+    title = "Autoscaling Group"
+
+    def __init__(self, *args, **kwargs):
+        self.resource_key = "autoscaling"
+        self.describe_method = "describe_auto_scaling_groups"
+        self.describe_kwarg_name = "AutoScalingGroupNames"
+        self.describe_kwarg_is_list = True
+        self.object_path = ".AutoScalingGroups[0]"
+        super().__init__(*args, **kwargs)
+
+
 class ASGResourceLister(ResourceLister):
+    """
+    Lister control for Autoscaling Group resources.
+
+    Attributes
+    ----------
+    launch_config : awsc.termui.list_control.ListEntry
+        List ASGs in the context of this launch configuration.
+    """
+
     prefix = "asg_list"
     title = "Autoscaling Groups"
     command_palette = ["asg", "autoscaling"]
 
+    resource_type = "autoscaling group"
+    main_provider = "autoscaling"
+    category = "Autoscaling"
+    subcategory = "Autoscaling Group"
+    list_method = "describe_auto_scaling_groups"
+    item_path = ".AutoScalingGroups"
+    columns = {
+        "name": {
+            "path": ".AutoScalingGroupName",
+            "size": 30,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "template": {
+            "path": _asg_determine_launch_info,
+            "size": 30,
+            "weight": 1,
+        },
+        "current": {
+            "path": _asg_determine_instance_count,
+            "size": 10,
+            "weight": 2,
+        },
+        "min": {"path": ".MinSize", "size": 10, "weight": 3},
+        "desired": {"path": ".DesiredCapacity", "size": 10, "weight": 4},
+        "max": {"path": ".MaxSize", "size": 10, "weight": 5},
+        "launch config": {"path": ".LaunchConfigurationName", "hidden": True},
+        "arn": {"path": ".AutoScalingGroupARN", "hidden": True},
+    }
+
+    describe_command = ASGDescriber.opener
+    open_command = "i"
+    primary_key = "name"
+
     def title_info(self):
-        return self.title_info_data
+        return (
+            None
+            if self.launch_config is None
+            else f"LaunchConfiguration: {self.launch_config['name']}"
+        )
 
     def matches(self, list_entry, *args):
         if self.launch_config is not None:
@@ -20,80 +126,39 @@ class ASGResourceLister(ResourceLister):
                 return False
         return super().matches(list_entry, *args)
 
-    def __init__(self, *args, **kwargs):
-        from .resource_ec2 import EC2ResourceLister
-
-        self.resource_key = "autoscaling"
-        self.list_method = "describe_auto_scaling_groups"
-        self.title_info_data = None
-        self.launch_config = None
-        if "lc" in kwargs:
-            launch_config = kwargs["lc"]
-            self.title_info_data = f"LaunchConfiguration: {launch_config['name']}"
-            self.launch_config = launch_config
-
-        self.item_path = ".AutoScalingGroups"
-        self.column_paths = {
-            "name": ".AutoScalingGroupName",
-            "launch config/template": self.determine_launch_info,
-            "current": self.determine_instance_count,
-            "min": ".MinSize",
-            "desired": ".DesiredCapacity",
-            "max": ".MaxSize",
-        }
-        self.hidden_columns = {
-            "launch config": ".LaunchConfigurationName",
-            "arn": ".AutoScalingGroupARN",
-        }
-        self.imported_column_sizes = {
-            "name": 30,
-            "launch config/template": 30,
-            "current": 10,
-            "min": 10,
-            "desired": 10,
-            "max": 10,
-        }
-        self.describe_command = ASGDescriber.opener
-        self.open_command = EC2ResourceLister.opener
-        self.open_selection_arg = "asg"
-        self.imported_column_order = [
-            "name",
-            "launch config/template",
-            "current",
-            "min",
-            "desired",
-            "max",
-        ]
-
-        self.sort_column = "name"
-        self.primary_key = "name"
+    def __init__(self, *args, lc=None, **kwargs):
+        self.launch_config = lc
         super().__init__(*args, **kwargs)
-        self.add_hotkey(ControlCodes.S, self.scale_group, "Scale")
 
-    def determine_launch_info(self, asg):
-        if "LaunchConfigurationName" in asg and bool(asg["LaunchConfigurationName"]):
-            return asg["LaunchConfigurationName"]
-        if "LaunchTemplate" in asg:
-            return asg["LaunchTemplate"]["LaunchTemplateName"]
-        return ""
-
-    def determine_instance_count(self, asg):
-        healthy = len([h for h in asg["Instances"] if h["HealthStatus"] == "Healthy"])
-        total = len(asg["Instances"])
-        return f"{healthy}/{total}"
-
+    @ResourceLister.Autohotkey(ControlCodes.S, tooltip="Scale", is_validated=True)
     def scale_group(self, _):
-        if self.selection is not None:
-            ASGScaleDialog(
-                self.parent,
-                CenterAnchor(0, 0),
-                Dimension("80%|40", "20"),
-                caller=self,
-                weight=-500,
-            )
+        """
+        Hotkey callback for resize action on autoscaling group.
+        """
+        ASGScaleDialog.opener(
+            caller=self,
+        )
 
 
 class ASGScaleDialog(SessionAwareDialog):
+    """
+    Dialog for scaling autoscaling groups.
+
+    Attributes
+    ----------
+    asg_entry : awsc.termui.list_control.ListEntry
+        The autoscaling group being scaled.
+    error_label : awsc.termui.dialog.DialogFieldLabel
+        An error display field, for displaying validation errors.
+    desired_capacity_field : awsc.termui.dialog.DialogFieldText
+        Textfield for inputting the new desired capacity of the group.
+    adjust_limits_field : awsc.termui.dialog.DialogFieldCheckbox
+        If checked, desired capacity may exceed bounds set by min/max size, as those will be automatically expanded to fit the new desired
+        capacity.
+    caller : awsc.termui.control.Control
+        The parent control opening this dialog.
+    """
+
     def __init__(self, *args, caller=None, **kwargs):
         kwargs["border"] = Border(
             Common.border("default"),
@@ -105,10 +170,6 @@ class ASGScaleDialog(SessionAwareDialog):
         )
         self.asg_entry = caller.selection
         super().__init__(caller=caller, *args, **kwargs)
-        self.error_label = DialogFieldLabel(
-            "", default_color=Common.color("modal_dialog_error")
-        )
-        self.add_field(self.error_label)
         self.desired_capacity_field = DialogFieldText(
             "Desired capacity:",
             text=str(self.asg_entry["desired"]),
@@ -161,16 +222,3 @@ class ASGScaleDialog(SessionAwareDialog):
         if self.caller is not None:
             self.caller.refresh_data()
         super().close()
-
-
-class ASGDescriber(Describer):
-    prefix = "asg_browser"
-    title = "Autoscaling Group"
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "autoscaling"
-        self.describe_method = "describe_auto_scaling_groups"
-        self.describe_kwarg_name = "AutoScalingGroupNames"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".AutoScalingGroups[0]"
-        super().__init__(*args, **kwargs)

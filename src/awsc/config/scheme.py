@@ -1,8 +1,32 @@
+"""
+Module for the color scheme configuration object.
+"""
 import yaml
 
 
 class Scheme:
+    """
+    Color scheme holder class.
+
+    Attributes
+    ----------
+    config : awsc.config.config.Configuration
+        The parent configuration object instance.
+    style_file : pathlib.Path
+        The path to the color scheme yaml file.
+    style : dict
+        Holds the color scheme and border style. Refer to the contents of style_file for more information on structure.
+    """
+
     def __init__(self, config):
+        """
+        Initializes a Scheme object.
+
+        Parameters
+        ----------
+        config : awsc.config.config.Configuration
+            The parent configuration object instance.
+        """
         self.style_file = config.path / "style.yaml"
         self.config = config
         if not self.style_file.exists():
@@ -11,6 +35,11 @@ class Scheme:
             self.parse_config()
 
     def backup_and_reset(self):
+        """
+        Restores the color scheme to default, creating a backup in the process.
+
+        Sometimes, this is necessary as some keys may be added to the scheme during development.
+        """
         print(
             "Restoring style scheme to defaults. Creating backup of pre-restore scheme."
         )
@@ -19,6 +48,9 @@ class Scheme:
         self.create_default_config()
 
     def create_default_config(self):
+        """
+        Creates the default first time style scheme, if style.yaml doesn't exist. This will overwrite style.yaml.
+        """
         print("Creating first time style scheme...")
         self.style = {
             "colors": {
@@ -471,8 +503,24 @@ class Scheme:
             file.write(yaml.dump(self.style))
 
     def __getitem__(self, item):
+        """
+        Pass-through to return the named item of the style dict.
+
+        Parameters
+        ----------
+        item : str
+            The key of style to return.
+
+        Returns
+        -------
+        dict
+            The value of style at item.
+        """
         return self.style[item]
 
     def parse_config(self):
+        """
+        Parses the scheme configuration file. This will replace the contents of style.
+        """
         with self.style_file.open("r", encoding="utf-8") as file:
             self.style = yaml.safe_load(file.read())

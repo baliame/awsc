@@ -1,65 +1,15 @@
+"""
+Module for ELBv2 Target Group resources.
+"""
 from .base_control import Describer, ResourceLister
 from .common import Common
 
 
-class TargetGroupResourceLister(ResourceLister):
-    prefix = "target_group_list"
-    title = "Target Groups"
-    command_palette = ["tg", "targetgroup"]
-
-    def title_info(self):
-        if self.rule is not None:
-            return self.rule["arn"]
-        return None
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elbv2"
-        self.list_method = "describe_target_groups"
-        self.item_path = ".TargetGroups"
-        if "rule_entry" in kwargs:
-            self.rule = kwargs["rule_entry"]
-            arns = []
-            raw = self.rule.controller_data
-            try:
-                arns = [
-                    i["TargetGroupArn"]
-                    for i in raw["Actions"][-1]["ForwardConfig"]["TargetGroups"]
-                ]
-                self.list_kwargs = {"TargetGroupArns": arns}
-            except KeyError:
-                self.rule = None
-                Common.Session.set_message(
-                    "Rule is not configured for forwarding.",
-                    Common.color("message_error"),
-                )
-        else:
-            self.rule = None
-        self.column_paths = {
-            "name": ".TargetGroupName",
-            "protocol": ".Protocol",
-            "port": ".Port",
-            "target type": ".TargetType",
-        }
-        self.imported_column_sizes = {
-            "name": 30,
-            "protocol": 10,
-            "port": 10,
-            "target type": 10,
-        }
-        self.hidden_columns = {
-            "arn": ".TargetGroupArn",
-        }
-        self.describe_command = TargetGroupDescriber.opener
-        # self.open_command = ListenerActionResourceLister.opener
-        # self.open_selection_arg = 'listener'
-
-        self.imported_column_order = ["name", "protocol", "port", "target type"]
-        self.sort_column = "name"
-        self.primary_key = "arn"
-        super().__init__(*args, **kwargs)
-
-
 class TargetGroupDescriber(Describer):
+    """
+    Describer control for ELBv2 Target Groups.
+    """
+
     prefix = "tg_browser"
     title = "Target Group"
 
@@ -80,3 +30,56 @@ class TargetGroupDescriber(Describer):
 
     def title_info(self):
         return self.name
+
+
+class TargetGroupResourceLister(ResourceLister):
+    """
+    Lister control for ELBv2 Target Groups.
+    """
+
+    prefix = "target_group_list"
+    title = "Target Groups"
+    command_palette = ["tg", "targetgroup"]
+
+    resource_type = "target group"
+    main_provider = "elbv2"
+    category = "ELB v2"
+    subcategory = "Target Group"
+    list_method = "describe_target_groups"
+    item_path = ".TargetGroups"
+    columns = {
+        "name": {
+            "path": ".TargetGroupName",
+            "size": 30,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "protocol": {"path": ".Protocol", "size": 10, "weight": 1},
+        "port": {"path": ".Port", "size": 10, "weight": 2},
+        "target type": {"path": ".TargetType", "size": 10, "weight": 3},
+        "arn": {"path": ".TargetGroupArn", "hidden": True},
+    }
+    describe_command = TargetGroupDescriber.opener
+    primary_key = "arn"
+
+    def title_info(self):
+        return self.rule["arn"] if self.rule is not None else None
+
+    def __init__(self, *args, rule_entry=None, **kwargs):
+        self.rule = rule_entry
+        if rule_entry is not None:
+            arns = []
+            raw = self.rule.controller_data
+            try:
+                arns = [
+                    i["TargetGroupArn"]
+                    for i in raw["Actions"][-1]["ForwardConfig"]["TargetGroups"]
+                ]
+                self.list_kwargs = {"TargetGroupArns": arns}
+            except KeyError:
+                self.rule = None
+                Common.Session.set_message(
+                    "Rule is not configured for forwarding.",
+                    Common.color("message_error"),
+                )
+        super().__init__(*args, **kwargs)

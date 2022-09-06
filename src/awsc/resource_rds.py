@@ -1,62 +1,19 @@
+"""
+Module for RDS-related resources.
+"""
 import subprocess
 
-from .base_control import Describer, ResourceLister
+from .base_control import Describer, ResourceLister, tag_finder_generator
 from .common import Common, SessionAwareDialog
 from .termui.control import Border
 from .termui.dialog import DialogFieldText
 
 
-class RDSResourceLister(ResourceLister):
-    prefix = "rds_list"
-    title = "RDS Instances"
-    command_palette = ["rds"]
-
-    def title_info(self):
-        return self.title_info_data
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "rds"
-        self.list_method = "describe_db_instances"
-        self.title_info_data = None
-        self.item_path = ".DBInstances"
-        self.column_paths = {
-            "instance id": ".DBInstanceIdentifier",
-            "host": ".Endpoint.Address",
-            "engine": ".Engine",
-            "type": ".DBInstanceClass",
-            "vpc": ".DBSubnetGroup.VpcId",
-        }
-        self.hidden_columns = {
-            "public_access": ".PubliclyAccessible",
-            "db_name": ".DBName",
-            "name": self.tag_finder_generator("Name", taglist_key="TagList"),
-        }
-        self.imported_column_sizes = {
-            "instance id": 11,
-            "host": 45,
-            "engine": 10,
-            "type": 10,
-            "vpc": 15,
-        }
-        self.describe_command = RDSDescriber.opener
-        self.imported_column_order = ["instance id", "host", "engine", "type", "vpc"]
-        self.sort_column = "instance id"
-        self.primary_key = "instance id"
-        super().__init__(*args, **kwargs)
-        self.add_hotkey("s", self.db_client, "Open command line")
-
-    def db_client(self, _):
-        if self.selection is not None:
-            if self.selection["public_access"] != "True":
-                Common.Session.set_message(
-                    "No public IP associated with instance",
-                    Common.color("message_error"),
-                )
-            else:
-                RDSClientDialog.opener(instance_entry=self.selection, caller=self)
-
-
 class RDSDescriber(Describer):
+    """
+    Describer control for RDS databases.
+    """
+
     prefix = "rds_browser"
     title = "RDS Instance"
 
@@ -68,7 +25,95 @@ class RDSDescriber(Describer):
         super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
+class RDSResourceLister(ResourceLister):
+    """
+    Lister control for RDS databases.
+    """
+
+    prefix = "rds_list"
+    title = "RDS Instances"
+    command_palette = ["rds"]
+
+    resource_type = "database instance"
+    main_provider = "rds"
+    category = "RDS"
+    subcategory = "Database Instances"
+    list_method = "describe_db_instances"
+    item_path = ".DBInstances"
+    columns = {
+        "instance id": {
+            "path": ".DBInstanceIdentifier",
+            "size": 11,
+            "weight": 0,
+            "sort_weight": 1,
+        },
+        "host": {
+            "path": ".Endpoint.Address",
+            "size": 45,
+            "weight": 1,
+            "sort_weight": 0,
+        },
+        "engine": {
+            "path": ".Engine",
+            "size": 10,
+            "weight": 2,
+        },
+        "type": {
+            "path": ".DBInstanceClass",
+            "size": 10,
+            "weight": 3,
+        },
+        "vpc": {
+            "path": ".DBSubnetGroup.VpcId",
+            "size": 15,
+            "weight": 4,
+        },
+        "public_access": {"path": ".PubliclyAccessible", "hidden": True},
+        "db_name": {"path": ".PubliclyAccessible", "hidden": True},
+        "name": {
+            "path": tag_finder_generator("Name", taglist_key="TagList"),
+            "hidden": True,
+        },
+    }
+    describe_command = RDSDescriber.opener
+    primary_key = "instance id"
+
+    @ResourceLister.Autohotkey("s", "Open command line", True)
+    def db_client(self, _):
+        """
+        Attempts to open a command line session to connect to the RDS database.
+        """
+        if self.selection["public_access"] != "True":
+            Common.Session.set_message(
+                "No public IP associated with instance",
+                Common.color("message_error"),
+            )
+        else:
+            RDSClientDialog.opener(instance_entry=self.selection, caller=self)
+
+
 class RDSClientDialog(SessionAwareDialog):
+    """
+    Dialog for opening a command line session to connect to the RDS database.
+
+    Attributes
+    ----------
+    instance_id : str
+        The ID of the RDS instance we're connecting to.
+    db_name : str
+        The name of the default database.
+    ip : str
+        The hostname of the database.
+    username_textfield : awsc.termui.dialog.DialogFieldText
+        The username for logging into the database.
+    password_textfield : awsc.termui.dialog.DialogFieldText
+        The password for logging into the database.
+    database_textfield : str
+        Optionally, connect to a different database within the instance.
+    caller : awsc.termui.control.Control
+        The parent control controlling this dialog.
+    """
+
     line_size = 15
 
     def __init__(
@@ -99,6 +144,7 @@ class RDSClientDialog(SessionAwareDialog):
         self.db_name = instance_entry["db_name"]
         self.ip = instance_entry["host"]
         self.engine = instance_entry["engine"]
+        self.set_title_label("Connect to RDS instance")
         self.username_textfield = DialogFieldText(
             "Username",
             text="",

@@ -1,41 +1,14 @@
+"""
+Module for database subnet groups.
+"""
 from .base_control import Describer, ResourceLister
 
 
-class DBSubnetGroupResourceLister(ResourceLister):
-    prefix = "db_subnet_group_list"
-    title = "DB Subnet Groups"
-    command_palette = ["dsg", "dbsubnetgroup"]
-
-    def __init__(self, *args, **kwargs):
-        from .resource_subnet import SubnetResourceLister
-
-        self.resource_key = "rds"
-        self.list_method = "describe_db_subnet_groups"
-        self.item_path = ".DBSubnetGroups"
-        self.column_paths = {
-            "name": ".DBSubnetGroupName",
-            "vpc": ".VpcId",
-            "status": ".SubnetGroupStatus",
-        }
-        self.hidden_columns = {
-            "arn": ".DBSubnetGroupArn",
-        }
-        self.imported_column_sizes = {
-            "name": 30,
-            "vpc": 30,
-            "status": 30,
-        }
-        self.describe_command = DBSubnetGroupDescriber.opener
-        self.open_command = SubnetResourceLister.opener
-        self.open_selection_arg = "db_subnet_group"
-        self.primary_key = "name"
-
-        self.imported_column_order = ["name", "vpc", "status"]
-        self.sort_column = "name"
-        super().__init__(*args, **kwargs)
-
-
 class DBSubnetGroupDescriber(Describer):
+    """
+    Describer control for database subnets.
+    """
+
     prefix = "subnet_browser"
     title = "Subnet"
 
@@ -46,3 +19,32 @@ class DBSubnetGroupDescriber(Describer):
         self.describe_kwarg_is_list = True
         self.object_path = ".DBSubnetGroups[0]"
         super().__init__(*args, **kwargs)
+
+
+class DBSubnetGroupResourceLister(ResourceLister):
+    """
+    Lister control for database subnets.
+    """
+
+    prefix = "db_subnet_group_list"
+    title = "DB Subnet Groups"
+    command_palette = ["dsg", "dbsubnetgroup"]
+
+    resource_type = "db subnet group"
+    main_provider = "rds"
+    category = "RDS"
+    subcategory = "DB Subnet Groups"
+    list_method = "describe_db_subnet_groups"
+    item_path = ".DBSubnetGroups"
+    columns = {
+        "vpc": {"path": ".VpcId", "size": 30, "weight": 0, "sort_weight": 0},
+        "name": {
+            "path": ".DBSubnetGroupName",
+            "size": 30,
+            "weight": 1,
+            "sort_weight": 1,
+        },
+        "status": {"path": ".SubnetGroupStatus", "size": 30, "weight": 2},
+    }
+    describe_command = DBSubnetGroupDescriber.opener
+    open_command = "t"

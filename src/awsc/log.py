@@ -1,5 +1,9 @@
+"""
+Module for logging-related controls.
+"""
 import datetime
 import json
+from operator import attrgetter
 
 from .base_control import GenericDescriber, OpenableListControl, datetime_hack
 from .common import Common
@@ -7,14 +11,16 @@ from .termui.list_control import ListEntry
 
 
 class LogViewer(GenericDescriber):
-    def __init__(self, parent, alignment, dimensions, *args, log_line, **kwargs):
-        columns = log_line.columns.copy()
+    """
+    Browser control for viewing log entries.
+    """
+
+    def __init__(self, *args, selection, **kwargs):
+        columns = selection.copy()
         columns["context"] = json.loads(columns["context"])
         content = json.dumps(columns, default=datetime_hack, indent=2, sort_keys=True)
         super().__init__(
-            parent,
-            alignment,
-            dimensions,
+            *args,
             describing="logs",
             content=content,
             **kwargs,
@@ -22,6 +28,10 @@ class LogViewer(GenericDescriber):
 
 
 class LogLister(OpenableListControl):
+    """
+    Lister control for log entries.
+    """
+
     prefix = "log"
     title = "Logs"
     describer = LogViewer.opener
@@ -47,6 +57,9 @@ class LogLister(OpenableListControl):
         self.logholder.attach(self)
 
     def add_raw_entry(self, entry):
+        """
+        Inserts a new raw entry. Callback for the logholder for pushing entries into the lister.
+        """
         self.add_entry(
             ListEntry(
                 entry["summary"],
@@ -72,8 +85,11 @@ class LogLister(OpenableListControl):
         )
 
     def sort(self):
-        self.entries.sort(reverse=True, key=lambda x: x.columns["raw_timestamp"])
+        self.entries.sort(reverse=True, key=attrgetter("raw_timestamp"))
         self._cache = None
 
     def on_close(self):
+        """
+        Cleanup hook. Detaches the control from the log storage.
+        """
         self.logholder.detach()

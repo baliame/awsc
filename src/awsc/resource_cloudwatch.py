@@ -1,76 +1,37 @@
+"""
+Module for cloudwatch resources.
+"""
 import datetime
 
 from .base_control import ResourceLister
 from .common import BaseChart, Common
 
 
-class MetricLister(ResourceLister):
-    prefix = "metric_list"
-    title = "Metrics"
-
-    def title_info(self):
-        if self.dimension is not None:
-            return f"{self.dimension[0]}={self.dimension[1]}"
-        return None
-
-    def __init__(
-        self, *args, metric_namespace=None, metric_name=None, dimension=None, **kwargs
-    ):
-        self.resource_key = "cloudwatch"
-        self.list_method = "list_metrics"
-        self.item_path = ".Metrics"
-        self.column_paths = {
-            "namespace": ".Namespace",
-            "name": ".MetricName",
-        }
-        self.imported_column_sizes = {
-            "namespace": 16,
-            "name": 64,
-        }
-        self.hidden_columns = {
-            "dimension": self.add_dimension,
-        }
-        self.dimension = dimension
-        self.list_kwargs = {}
-        if metric_namespace is not None:
-            self.list_kwargs["Namespace"] = metric_namespace
-        if metric_name is not None:
-            self.list_kwargs["MetricName"] = metric_name
-        if dimension is not None:
-            self.list_kwargs["Dimensions"] = [
-                {"Name": dimension[0], "Value": dimension[1]}
-            ]
-        self.primary_key = "name"
-        self.sort_column = "name"
-        self.open_command = MetricViewer.opener
-        self.open_selection_arg = "metric"
-        super().__init__(*args, **kwargs)
-
-    def add_dimension(self, entry):
-        if self.dimension is not None:
-            return f"{self.dimension[0]}={self.dimension[1]}"
-        return ""
-
-
 class MetricViewer(BaseChart):
+    """
+    Metric display control. Displays the selected metric as a bar graph.
+    """
+
     prefix = "metric_view"
     title = "Metrics"
 
     def title_info(self):
         return f"{self.metric_dimension['Value']} {self.metric_name}"
 
-    def __init__(self, *args, metric=None, **kwargs):
+    def __init__(self, *args, caller, metric=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.metric_name = metric["name"]
         self.metric_namespace = metric["namespace"]
-        dim_parts = metric["dimension"].split("=")
         self.metric_dimension = {
-            "Name": dim_parts[0],
-            "Value": "=".join(dim_parts[1:]),
+            "Name": caller.dimension[0],
+            "Value": caller.dimension[1],
         }
         self.load_data()
 
     def load_data(self):
+        """
+        Loads time series into the bar graph based on the metric name, namespace and dimension provided.
+        """
         api_kwargs = {
             "MetricDataQueries": (
                 [
@@ -106,3 +67,39 @@ class MetricViewer(BaseChart):
                 timestamp = data["MetricDataResults"][0]["Timestamps"][idx]
                 value = data["MetricDataResults"][0]["Values"][idx]
                 self.add_datapoint(timestamp, value)
+
+
+class MetricLister(ResourceLister):
+    """
+    Lister resource for Cloudwatch Metrics.
+    """
+
+    prefix = "metric_list"
+    title = "Metrics"
+
+    resource_type = "metric"
+    main_provider = "cloudwatch"
+    category = "Cloudwatch"
+    subcategory = "Metrics"
+    list_method = "list_metrics"
+    item_path = ".Metrics"
+    columns = {
+        "namespace": {"path": ".Namespace", "size": 16, "weight": 0, "sort_weight": 0},
+        "name": {"path": ".MetricName", "size": 64, "weight": 1, "sort_weight": 1},
+    }
+    open_command = MetricViewer.opener
+    open_selection_arg = "metric"
+
+    def title_info(self):
+        return f"{self.dimension[0]}={self.dimension[1]}"
+
+    def __init__(
+        self, *args, dimension, metric_namespace=None, metric_name=None, **kwargs
+    ):
+        self.dimension = dimension
+        self.list_kwargs = {}
+        if metric_namespace is not None:
+            self.list_kwargs["Namespace"] = metric_namespace
+        if metric_name is not None:
+            self.list_kwargs["MetricName"] = metric_name
+        super().__init__(*args, **kwargs)

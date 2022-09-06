@@ -1,83 +1,29 @@
+"""
+Module for Elastic Beanstalk-related resources.
+"""
+
 from .base_control import (
-    DeleteResourceDialog,
     Describer,
+    FieldValue,
+    ForceFlag,
     ResourceLister,
+    ResourceRefByClass,
+    ResourceRefByCommand,
+    SelectionAttribute,
     SingleRelationLister,
     SingleSelectorDialog,
+    TemplateDict,
 )
 from .common import Common
 from .termui.dialog import DialogFieldCheckbox
 from .termui.ui import ControlCodes
 
 
-class EBApplicationResourceLister(ResourceLister):
-    prefix = "eb_application_list"
-    title = "Beanstalk Applications"
-    command_palette = ["ebapplication", "ebapp", "elasticbeanstalkapplication"]
-
-    def delete_application(self, _):
-        DeleteResourceDialog.opener(
-            caller=self,
-            resource_type="application",
-            resource_identifier=self.selection["name"],
-            callback=self.do_delete,
-            can_force=True,
-        )
-
-    def do_delete(self, force, **kwargs):
-        api_kwargs = {
-            "ApplicationName": self.selection["name"],
-            "TerminateEnvByForce": force,
-        }
-        Common.generic_api_call(
-            "elasticbeanstalk",
-            "delete_application",
-            api_kwargs,
-            "Delete application",
-            "Elastic Beanstalk",
-            subcategory="Application",
-            success_template="Deleting application {0}",
-            resource=self.selection["name"],
-        )
-        self.refresh_data()
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.list_method = "describe_applications"
-        self.item_path = ".Applications"
-        self.column_paths = {
-            "name": ".ApplicationName",
-            "description": ".Description",
-        }
-        self.imported_column_sizes = {
-            "name": 20,
-            "description": 50,
-        }
-        self.hidden_columns = {
-            "arn": ".ApplicationArn",
-        }
-        self.describe_command = EBApplicationDescriber.opener
-        self.open_command = EBEnvironmentLister.opener
-        self.open_selection_arg = "app"
-
-        self.additional_commands = {
-            "v": {
-                "command": EBApplicationVersionResourceLister.opener,
-                "selection_arg": "application",
-                "tooltip": "View Versions",
-            }
-        }
-
-        self.imported_column_order = ["name", "description"]
-        self.sort_column = "name"
-        self.primary_key = "name"
-        super().__init__(*args, **kwargs)
-        self.add_hotkey(
-            ControlCodes.D, self.delete_application, "Delete application", True
-        )
-
-
 class EBApplicationDescriber(Describer):
+    """
+    Describer control for Beanstalk Application resources.
+    """
+
     prefix = "eb_application_browser"
     title = "Beanstalk Application"
 
@@ -90,75 +36,52 @@ class EBApplicationDescriber(Describer):
         super().__init__(*args, **kwargs)
 
 
-class EBApplicationVersionResourceLister(ResourceLister):
-    prefix = "eb_application_version_list"
-    title = "Beanstalk Application Versions"
-    command_palette = [
-        "ebapplicationversion",
-        "ebappversion",
-        "elasticbeanstalkapplicationversion",
-    ]
+class EBApplicationResourceLister(ResourceLister):
+    """
+    Lister control for Beanstalk Application resources.
+    """
 
-    def delete_application_version(self, _):
-        DeleteResourceDialog.opener(
-            caller=self,
-            resource_type="application version",
-            resource_identifier=self.selection["name"],
-            callback=self.do_delete,
+    prefix = "eb_application_list"
+    title = "Beanstalk Applications"
+    command_palette = ["ebapplication", "ebapp", "elasticbeanstalkapplication"]
+
+    resource_type = "application"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Application"
+    list_method = "describe_applications"
+    item_path = ".Applications"
+    columns = {
+        "name": {"path": ".ApplicationName", "size": 20, "weight": 0, "sort_weight": 0},
+        "description": {"path": ".Description", "size": 50, "weight": 1},
+        "arn": {"path": ".ApplicationArn", "hidden": True},
+    }
+    describe_command = EBApplicationDescriber.opener
+    open_command = ResourceRefByCommand("elasticbeanstalkenvironment")
+    open_selection_arg = "app"
+
+    @ResourceLister.Autohotkey(ControlCodes.D, "Delete application", True)
+    def delete_application(self, *args, **kwargs):
+        """
+        Hotkey definition for deleting an application.
+        """
+        self.confirm_template(
+            "delete_application",
+            TemplateDict(
+                {
+                    "ApplicationName": SelectionAttribute("name"),
+                    "TerminateEnvByForce": ForceFlag(),
+                }
+            ),
             can_force=True,
-        )
-
-    def do_delete(self, **kwargs):
-        api_kwargs = {
-            "ApplicationName": self.selection["application"],
-            "VersionLabel": self.selection["version"],
-        }
-        Common.generic_api_call(
-            "elasticbeanstalk",
-            "delete_application_version",
-            api_kwargs,
-            "Delete appversion",
-            "Elastic Beanstalk",
-            subcategory="Application",
-            success_template="Deleting application version {0}",
-            resource=self.selection["version"],
-        )
-        self.refresh_data()
-
-    def __init__(self, *args, application=None, **kwargs):
-        self.application = application
-        self.resource_key = "elasticbeanstalk"
-        self.list_method = "describe_application_versions"
-        if application is not None:
-            self.list_kwargs = {"ApplicationName": self.application["name"]}
-        self.item_path = ".ApplicationVersions"
-        self.column_paths = {
-            "application": ".ApplicationName",
-            "version": ".VersionLabel",
-            "status": ".Status",
-            "description": ".Description",
-        }
-        self.imported_column_sizes = {
-            "name": 20,
-            "version": 20,
-            "status": 10,
-            "description": 50,
-        }
-        self.hidden_columns = {
-            "name": ".VersionLabel",
-        }
-        self.describe_command = EBApplicationVersionDescriber.opener
-
-        self.imported_column_order = ["name", "version", "status", "description"]
-        self.sort_column = "name"
-        self.primary_key = "name"
-        super().__init__(*args, **kwargs)
-        self.add_hotkey(
-            ControlCodes.D, self.delete_application_version, "Delete appversion", True
-        )
+        )(self.selection)
 
 
 class EBApplicationVersionDescriber(Describer):
+    """
+    Describer control for Beanstalk Application Version resources.
+    """
+
     prefix = "eb_application_version_browser"
     title = "Beanstalk Application Version"
 
@@ -172,17 +95,139 @@ class EBApplicationVersionDescriber(Describer):
         super().__init__(*args, entry=entry, **kwargs)
 
 
+@ResourceLister.Autocommand("EBApplicationLister", "v", "View Versions", "application")
+class EBApplicationVersionResourceLister(ResourceLister):
+    """
+    Lister control for Beanstalk Application Version resources.
+    """
+
+    prefix = "eb_application_version_list"
+    title = "Beanstalk Application Versions"
+    command_palette = [
+        "ebapplicationversion",
+        "ebappversion",
+        "elasticbeanstalkapplicationversion",
+    ]
+
+    resource_type = "appversion"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Appversion"
+    list_method = "describe_application_versions"
+    item_path = ".ApplicationVersions"
+    columns = {
+        "application": {
+            "path": ".ApplicationName",
+            "size": 20,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "version": {"path": ".VersionLabel", "size": 20, "weight": 1, "sort_weight": 1},
+        "status": {"path": ".Status", "size": 20, "weight": 2},
+        "description": {"path": ".Description", "size": 50, "weight": 3},
+        "name": {"path": ".VersionLabel", "hidden": True},
+    }
+    describe_command = EBApplicationVersionDescriber.opener
+
+    def __init__(self, *args, application=None, **kwargs):
+        self.application = application
+        if application is not None:
+            self.list_kwargs = {"ApplicationName": self.application["name"]}
+        super().__init__(*args, **kwargs)
+        self.confirm_template(
+            "delete_application_version",
+            TemplateDict(
+                {
+                    "ApplicationName": SelectionAttribute("name"),
+                    "VersionLabel": SelectionAttribute("version"),
+                }
+            ),
+            can_force=True,
+            hotkey=ControlCodes.D,
+            hotkey_tooltip="Delete appversion",
+        )
+
+
+class EBEnvironmentDescriber(Describer):
+    """
+    Describer control for Beanstalk Environment resources.
+    """
+
+    prefix = "eb_environment_browser"
+    title = "Beanstalk Environment"
+
+    def __init__(self, *args, **kwargs):
+        self.resource_key = "elasticbeanstalk"
+        self.describe_method = "describe_environments"
+        self.describe_kwarg_name = "EnvironmentNames"
+        self.describe_kwarg_is_list = True
+        self.object_path = ".Environments[0]"
+        super().__init__(*args, **kwargs)
+
+
+@ResourceLister.Autocommand("EBEnvironmentLister", "h", "Environment health", "entry")
+class EBEnvironmentHealthDescriber(Describer):
+    """
+    Describer control for Beanstalk Environment resource health state.
+    """
+
+    prefix = "eb_environment_health_browser"
+    title = "Beanstalk Environment Health"
+
+    def __init__(self, *args, **kwargs):
+        self.resource_key = "elasticbeanstalk"
+        self.describe_method = "describe_environment_health"
+        self.describe_kwarg_name = "EnvironmentName"
+        self.describe_kwarg_is_list = True
+        self.object_path = "."
+        super().__init__(*args, **kwargs)
+
+
 class EBEnvironmentLister(ResourceLister):
+    """
+    Lister control for Beanstalk Environment resources.
+    """
+
     prefix = "eb_environment_list"
     title = "Beanstalk Environments"
     command_palette = ["ebenvironment", "ebenv", "elasticbeanstalkenvironment"]
 
+    resource_type = "environment"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Environment"
+    list_method = "describe_environments"
+    item_path = ".Environments"
+    columns = {
+        "name": {"path": ".EnvironmentName", "size": 20, "weight": 0, "sort_weight": 1},
+        "id": {"path": ".EnvironmentId", "size": 20, "weight": 1},
+        "application": {
+            "path": ".ApplicationName",
+            "size": 20,
+            "weight": 2,
+            "sort_weight": 0,
+        },
+        "status": {"path": ".Status", "size": 15, "weight": 3, "sort_weight": 0},
+        "health": {"path": ".Health", "size": 7, "weight": 4, "sort_weight": 0},
+        "tier": {"path": ".Tier.Name", "size": 10, "weight": 5, "sort_weight": 0},
+        "arn": {"path": ".EnvironmentArn", "hidden": True},
+    }
+    describe_command = EBEnvironmentDescriber.opener
+
+    @ResourceLister.Autohotkey(ControlCodes.D, "Terminate environment", True, True)
     def delete_environment(self, _):
-        DeleteResourceDialog.opener(
-            caller=self,
-            resource_type="environment",
-            resource_identifier=self.selection["name"],
-            callback=self.do_delete,
+        """
+        Hotkey callback for deleting an environment.
+        """
+        self.confirm_template(
+            "terminate_environment",
+            TemplateDict(
+                {
+                    "EnvironmentName": SelectionAttribute("name"),
+                    "ForceTerminate": ForceFlag(),
+                    "TerminateResources": FieldValue("terminate_resources_field"),
+                }
+            ),
             can_force=True,
             extra_fields={
                 "terminate_resources_field": DialogFieldCheckbox(
@@ -192,79 +237,45 @@ class EBEnvironmentLister(ResourceLister):
                     selected_color=Common.color("modal_dialog_textfield_selected"),
                 )
             },
-        )
+        )(self.selection)
 
-    def do_delete(self, force, terminate_resources_field, **kwargs):
-        api_kwargs = {
-            "EnvironmentName": self.selection["name"],
-            "ForceTerminate": force,
-            "TerminateResources": terminate_resources_field.checked,
-        }
-        Common.generic_api_call(
-            "elasticbeanstalk",
-            "terminate_environment",
-            api_kwargs,
-            "Terminate environment",
-            "Elastic Beanstalk",
-            subcategory="Environment",
-            success_template="Terminating environment {0}",
-            resource=self.selection["name"],
-        )
-        self.refresh_data()
-
+    @ResourceLister.Autohotkey(ControlCodes.E, "Delete envconfig", True, True)
     def delete_environment_config(self, _):
-        DeleteResourceDialog.opener(
-            caller=self,
+        """
+        Hotkey callback for deleting an environment configuration.
+        """
+        self.confirm_template(
+            "delete_environment_config",
+            TemplateDict(
+                {
+                    "EnvironmentName": SelectionAttribute("name"),
+                    "ApplicationName": SelectionAttribute("application"),
+                }
+            ),
             resource_type="environment configuration",
-            resource_identifier=self.selection["name"],
-            callback=self.do_delete_config,
-        )
+        )(self.selection)
 
-    def do_delete_config(self, force, terminate_resources_field, **kwargs):
-        api_kwargs = {
-            "EnvironmentName": self.selection["name"],
-            "ApplicationName": self.selection["application"],
-        }
-        Common.generic_api_call(
-            "elasticbeanstalk",
-            "delete_environment_configuration",
-            api_kwargs,
-            "Delete envconfig",
-            "Elastic Beanstalk",
-            subcategory="Environment",
-            success_template="Deleting environment {0} configuration",
-            resource=self.selection["name"],
-        )
-        self.refresh_data()
-
+    @ResourceLister.Autohotkey(ControlCodes.B, "Rebuild environment", True, True)
     def rebuild_environment(self, _):
-        DeleteResourceDialog.opener(
-            caller=self,
-            resource_type="environment",
-            resource_identifier=self.selection["name"],
-            callback=self.do_rebuild,
-            action_name="Rebuild",
-        )
-
-    def do_rebuild(self, **kwargs):
-        api_kwargs = {
-            "EnvironmentName": self.selection["name"],
-        }
-        Common.generic_api_call(
-            "elasticbeanstalk",
+        """
+        Hotkey callback for rebuilding an environment configuration.
+        """
+        self.confirm_template(
             "rebuild_environment",
-            api_kwargs,
-            "Rebuild environment",
-            "Elastic Beanstalk",
-            subcategory="Environment",
-            success_template="Rebuilding environment {0}",
-            resource=self.selection["name"],
-        )
-        self.refresh_data()
+            TemplateDict(
+                {
+                    "EnvironmentName": SelectionAttribute("name"),
+                }
+            ),
+            action_name="Rebuild",
+        )(self.selection)
 
+    @ResourceLister.Autohotkey(ControlCodes.S, "Swap CNames", True, True)
     def swap_cnames(self, _):
-        SingleSelectorDialog(
-            self.parent,
+        """
+        Hotkey callback for swapping environment cnames.
+        """
+        SingleSelectorDialog.opener(
             f"Swap CNames of environment '{self.selection['name']}' with other environment",
             "environment",
             "swap",
@@ -274,6 +285,9 @@ class EBEnvironmentLister(ResourceLister):
         )
 
     def do_swap(self, other_env):
+        """
+        Action callback for environment cname swap dialog.
+        """
         if other_env == self.selection["name"]:
             Common.Session.error(
                 "Source and destination environments are the same.",
@@ -299,166 +313,76 @@ class EBEnvironmentLister(ResourceLister):
         self.refresh_data()
 
     def __init__(self, *args, app=None, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.list_method = "describe_environments"
-        self.item_path = ".Environments"
-        self.app = app
+        self.app = app["name"]
         if app is not None:
-            self.list_kwargs = {"ApplicationName": self.app}
-        self.column_paths = {
-            "name": ".EnvironmentName",
-            "id": ".EnvironmentId",
-            "application": ".ApplicationName",
-            "status": ".Status",
-            "health": ".Health",
-            "tier": ".Tier.Name",
-        }
-        self.imported_column_sizes = {
-            "name": 20,
-            "id": 20,
-            "application": 20,
-            "status": 15,
-            "health": 7,
-            "tier": 10,
-        }
-        self.hidden_columns = {
-            "arn": ".EnvironmentArn",
-        }
-        self.describe_command = EBEnvironmentDescriber.opener
-        # self.open_command = EBEnvironmentLister.opener
-        # self.open_selection_arg = 'lb'
-
-        self.imported_column_order = [
-            "name",
-            "id",
-            "tier",
-            "status",
-            "health",
-            "application",
-        ]
-        self.sort_column = "name"
-        self.primary_key = "name"
-        self.additional_commands = {
-            "v": {
-                "command": EBEnvironmentResourceLister.opener,
-                "selection_arg": "environment",
-                "tooltip": "View env resources",
-            },
-            "i": {
-                "command": EBInstanceHealthLister.opener,
-                "selection_arg": "environment",
-                "tooltip": "View instance healths",
-            },
-            "h": {
-                "command": EBEnvironmentHealthDescriber.opener,
-                "selection_arg": "entry",
-                "tooltip": "View env health",
-            },
-        }
+            self.list_kwargs["ApplicationName"] = self.app
         super().__init__(*args, **kwargs)
-        if self.selector_cb is None:
-            self.add_hotkey(
-                ControlCodes.B, self.rebuild_environment, "Rebuild environment", True
-            )
-            self.add_hotkey(ControlCodes.S, self.swap_cnames, "Swap CNames", True)
-            self.add_hotkey(
-                ControlCodes.D, self.delete_environment, "Terminate environment", True
-            )
-            self.add_hotkey(
-                ControlCodes.E,
-                self.delete_environment_config,
-                "Delete env config",
-                True,
-            )
 
     def title_info(self):
         return self.app
 
 
-class EBEnvironmentDescriber(Describer):
-    prefix = "eb_environment_browser"
-    title = "Beanstalk Environment"
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_environments"
-        self.describe_kwarg_name = "EnvironmentNames"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Environments[0]"
-        super().__init__(*args, **kwargs)
-
-
-class EBEnvironmentHealthDescriber(Describer):
-    prefix = "eb_environment_health_browser"
-    title = "Beanstalk Environment Health"
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_environment_health"
-        self.describe_kwarg_name = "EnvironmentName"
-        self.describe_kwarg_is_list = True
-        self.object_path = "."
-        super().__init__(*args, **kwargs)
-
-
+@ResourceLister.Autocommand("EBEnvironmentLister", "v", "View resources", "selection")
 class EBEnvironmentResourceLister(SingleRelationLister):
+    """
+    Lister control for Beanstalk Environment related resources.
+    """
+
     prefix = "eb_environment_resources"
     title = "Beanstalk Environment resources"
 
+    resource_type = "beanstalk environment"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Environment"
+    describe_method = "describe_environment_resources"
+    describe_kwargs = TemplateDict({"EnvironmentName": SelectionAttribute("name")})
+    object_path = ".EnvironmentResources"
+    resource_descriptors = [
+        {
+            "base_path": "[.AutoscalingGroups[].Name]",
+            "type": "Auto Scaling Group",
+            "describer": ResourceRefByClass("ASGDescriber"),
+        },
+        {
+            "base_path": "[.Instances[].Id]",
+            "type": "EC2 Instance",
+            "describer": ResourceRefByClass("EC2Describer"),
+        },
+        {
+            "base_path": "[.LaunchConfigurations[].Name]",
+            "type": "Launch Configuration",
+            "describer": ResourceRefByClass("LCDescriber"),
+        },
+        {
+            "base_path": "[.LaunchTemplates[].Name]",
+            "type": "Launch Templates",
+        },
+        {
+            "base_path": "[.LoadBalancers[].Name]",
+            "type": "Load Balancer",
+            "describer": ResourceRefByClass("LBDescriber"),
+        },
+        {
+            "base_path": "[.Triggers[].Name]",
+            "type": "Trigger",
+        },
+        {
+            "base_path": "[.Queues[].URL]",
+            "type": "SQS Queue",
+            "describer": ResourceRefByClass("SQSDescriber"),
+        },
+    ]
+
     def title_info(self):
-        return self.environment["name"]
-
-    def __init__(self, *args, environment=None, **kwargs):
-        from .resource_asg import ASGDescriber
-        from .resource_ec2 import EC2Describer
-        from .resource_lb import LBDescriber
-        from .resource_lc import LCDescriber
-        from .resource_sqs import SQSDescriber
-
-        self.resource_key = "elasticbeanstalk"
-        self.environment = environment
-        self.describe_method = "describe_environment_resources"
-        self.describe_kwargs = {"EnvironmentName": self.environment["name"]}
-        self.object_path = ".EnvironmentResources"
-        self.resource_descriptors = [
-            {
-                "base_path": "[.AutoscalingGroups[].Name]",
-                "type": "Auto Scaling Group",
-                "describer": ASGDescriber.opener,
-            },
-            {
-                "base_path": "[.Instances[].Id]",
-                "type": "EC2 Instance",
-                "describer": EC2Describer.opener,
-            },
-            {
-                "base_path": "[.LaunchConfigurations[].Name]",
-                "type": "Launch Configuration",
-                "describer": LCDescriber.opener,
-            },
-            {
-                "base_path": "[.LaunchTemplates[].Name]",
-                "type": "Launch Templates",
-            },
-            {
-                "base_path": "[.LoadBalancers[].Name]",
-                "type": "Load Balancer",
-                "describer": LBDescriber.opener,
-            },
-            {
-                "base_path": "[.Triggers[].Name]",
-                "type": "Trigger",
-            },
-            {
-                "base_path": "[.Queues[].URL]",
-                "type": "SQS Queue",
-                "describer": SQSDescriber.opener,
-            },
-        ]
-        super().__init__(*args, **kwargs)
+        return f"Environment: {self.parent_selection['name']}"
 
 
 class EBPlatformBranchLister(ResourceLister):
+    """
+    Lister control for Beanstalk Platform Branch resources.
+    """
+
     prefix = "eb_platform_version_list"
     title = "Beanstalk Platform Branches"
     command_palette = [
@@ -467,125 +391,37 @@ class EBPlatformBranchLister(ResourceLister):
         "elasticbeanstalkplatformbranch",
     ]
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.list_method = "list_platform_branches"
-        self.item_path = ".PlatformBranchSummaryList"
-        self.column_paths = {
-            "platform": ".PlatformName",
-            "branch": ".BranchName",
-            "lifecycle": ".LifecycleState",
-            "order": ".BranchOrder",
-        }
-        self.imported_column_sizes = {
-            "platform": 20,
-            "branch": 20,
-            "lifecycle": 20,
-            "order": 10,
-        }
-        self.hidden_columns = {
-            "name": ".BranchName",
-        }
-        self.describe_command = EBPlatformVersionDescriber.opener
-
-        self.imported_column_order = [
-            "branch",
-            "platform",
-            "lifecycle",
-            "order",
-        ]
-        self.sort_column = "branch"
-        self.primary_key = "name"
-        self.additional_commands = {
-            "v": {
-                "command": EBPlatformVersionLister.opener,
-                "selection_arg": "branch",
-                "tooltip": "View Versions",
-            }
-        }
-        super().__init__(*args, **kwargs)
-
-
-class EBPlatformBranchDescriber(Describer):
-    prefix = "eb_platform_branch_browser"
-    title = "Beanstalk Platform Branch"
-
-    def __init__(self, *args, entry_key="arn", **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_platform_version"
-        self.describe_kwarg_name = "PlatformArn"
-        self.object_path = ".PlatformDescription"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
-
-
-class EBPlatformVersionLister(ResourceLister):
-    prefix = "eb_platform_version_list"
-    title = "Beanstalk Platform Versions"
-    command_palette = [
-        "platformversion",
-        "ebplatformversion",
-        "elasticbeanstalkplatformversion",
-    ]
-
-    def title_info(self):
-        if self.branch is not None:
-            return f"Branch: {self.branch['name']}"
-        return None
-
-    def __init__(self, *args, branch=None, **kwargs):
-        self.branch = branch
-        self.resource_key = "elasticbeanstalk"
-        self.list_method = "list_platform_versions"
-        if self.branch is not None:
-            self.list_kwargs = {
-                "Filters": [
-                    {
-                        "Type": "PlatformBranchName",
-                        "Operator": "=",
-                        "Values": [self.branch["name"]],
-                    }
-                ]
-            }
-        self.item_path = ".PlatformSummaryList"
-        self.column_paths = {
-            "owner": ".PlatformOwner",
-            "os": ".OperatingSystemName",
-            "os version": ".OperatingSystemVersion",
-            "status": ".PlatformStatus",
-            "category": ".PlatformCategory",
-            "version": ".PlatformVersion",
-            "lifecycle": ".PlatformLifecycleState",
-        }
-        self.imported_column_sizes = {
-            "owner": 10,
-            "os": 20,
-            "os version": 10,
-            "status": 10,
-            "category": 10,
-            "version": 10,
-            "lifecycle": 10,
-        }
-        self.hidden_columns = {
-            "name": ".PlatformArn",
-            "arn": ".PlatformArn",
-        }
-        self.describe_command = EBPlatformVersionDescriber.opener
-
-        self.imported_column_order = [
-            "owner",
-            "os",
-            "os version",
-            "category",
-            "version",
-            "status",
-            "lifecycle",
-        ]
-        self.sort_column = "name"
-        self.primary_key = "name"
-        super().__init__(*args, **kwargs)
+    resource_type = "platform branch"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Platform Branch"
+    list_method = "list_platform_branches"
+    item_path = ".PlatformBranchSummaryList"
+    columns = {
+        "platform": {
+            "path": ".PlatformName",
+            "size": 20,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "branch": {"path": ".BranchName", "size": 20, "weight": 1, "sort_weight": 1},
+        "lifecycle": {
+            "path": ".LifecycleState",
+            "size": 20,
+            "weight": 2,
+        },
+        "order": {"path": ".BranchOrder", "size": 10, "weight": 3},
+        "name": {"path": ".BranchName", "hidden": True},
+    }
+    describe_command = ResourceRefByCommand("elasticbeanstalkplatformversion")
+    describe_selection_arg = "branch"
 
 
 class EBPlatformVersionDescriber(Describer):
+    """
+    Describer control for Beanstalk Platform Versions.
+    """
+
     prefix = "eb_platform_version_browser"
     title = "Beanstalk Platform Version"
 
@@ -597,67 +433,83 @@ class EBPlatformVersionDescriber(Describer):
         super().__init__(*args, entry_key=entry_key, **kwargs)
 
 
-class EBInstanceHealthLister(ResourceLister):
-    prefix = "eb_instance_health_list"
-    title = "Beanstalk Instance Health"
+class EBPlatformVersionLister(ResourceLister):
+    """
+    Lister control for Beanstalk Platform Versions.
+    """
 
-    def __init__(self, *args, environment=None, **kwargs):
-        from .resource_ec2 import EC2Describer
+    prefix = "eb_platform_version_list"
+    title = "Beanstalk Platform Versions"
+    command_palette = [
+        "platformversion",
+        "ebplatformversion",
+        "elasticbeanstalkplatformversion",
+    ]
 
-        self.environment = environment
-        self.resource_key = "elasticbeanstalk"
-        self.list_method = "describe_instances_health"
-        self.list_kwargs = {"EnvironmentName": environment["name"]}
-        self.item_path = ".InstanceHealthList"
-        self.column_paths = {
-            "instance id": ".InstanceId",
-            "status": ".HealthStatus",
-            "color": ".Color",
-            "az": ".AvailabilityZone",
-            "type": ".InstanceType",
-        }
-        self.imported_column_sizes = {
-            "instance id": 20,
-            "az": 20,
-            "type": 20,
-            "color": 20,
-            "status": 20,
-        }
-        self.hidden_columns = {
-            "name": ".InstanceId",
-        }
-        self.describe_command = EBInstanceHealthDescriber.opener
-        self.additional_commands = {
-            "v": {
-                "command": EC2Describer.opener,
-                "selection_arg": "entry",
-                "tooltip": "Describe EC2 Instance",
+    resource_type = "platform version"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Platform Version"
+    list_method = "list_platform_versions"
+    item_path = ".PlatformSummaryList"
+    columns = {
+        "owner": {
+            "path": ".PlatformOwner",
+            "size": 10,
+            "weight": 0,
+            "sort_weight": 2,
+        },
+        "os": {
+            "path": ".OperatingSystemName",
+            "size": 20,
+            "weight": 1,
+            "sort_weight": 0,
+        },
+        "os version": {
+            "path": ".OperatingSystemVersion",
+            "size": 10,
+            "weight": 2,
+            "sort_weight": 1,
+        },
+        "status": {"path": ".PlatformStatus", "size": 10, "weight": 3},
+        "category": {"path": ".PlatformCategory", "size": 10, "weight": 4},
+        "version": {"path": ".PlatformVersion", "size": 10, "weight": 5},
+        "lifecycle": {"path": ".PlatformLifecycleState", "size": 10, "weight": 6},
+        "name": {"path": ".PlatformArn", "hidden": True},
+        "arn": {"path": ".PlatformArn", "hidden": True},
+    }
+    describe_command = EBPlatformVersionDescriber.opener
+
+    def title_info(self):
+        return f"Branch: {self.branch['name']}" if self.branch is not None else None
+
+    def __init__(self, *args, branch=None, **kwargs):
+        self.branch = branch
+        if branch is not None:
+            self.list_kwargs = {
+                "Filters": [
+                    {
+                        "Type": "PlatformBranchName",
+                        "Operator": "=",
+                        "Values": [branch["name"]],
+                    }
+                ]
             }
-        }
-
-        self.imported_column_order = [
-            "instance id",
-            "az",
-            "type",
-            "color",
-            "status",
-        ]
-        self.sort_column = "name"
-        self.primary_key = "name"
         super().__init__(*args, **kwargs)
 
 
 class EBInstanceHealthDescriber(Describer):
+    """
+    Describer control for instance health.
+    """
+
     prefix = "eb_instance_health_browser"
     title = "Beanstalk Instance"
 
     def __init__(
         self,
-        parent,
-        alignment,
-        dimensions,
-        entry,
         *args,
+        entry,
         entry_key="instance id",
         caller=None,
         **kwargs,
@@ -667,11 +519,46 @@ class EBInstanceHealthDescriber(Describer):
         self.describe_kwargs = {"EnvironmentName": caller.environment["name"]}
         self.object_path = f".InstanceList[] | select(.InstanceId=={entry[entry_key]})"
         super().__init__(
-            parent,
-            alignment,
-            dimensions,
             *args,
             entry=entry,
             entry_key=entry_key,
             **kwargs,
         )
+
+
+@ResourceLister.Autocommand(
+    "EBEnvironmentLister", "i", "View instance healths", "environment"
+)
+class EBInstanceHealthLister(ResourceLister):
+    """
+    Lister control for instance healths in Beanstalk Environments.
+    """
+
+    prefix = "eb_instance_health_list"
+    title = "Beanstalk Instance Health"
+
+    resource_type = "instance health"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Instance Health"
+    list_method = "describe_instances_health"
+    item_path = ".InstanceHealthList"
+    columns = {
+        "instance id": {
+            "path": ".InstanceId",
+            "size": 20,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "az": {"path": ".AvailabilityZone", "size": 20, "weight": 1},
+        "type": {"path": ".InstanceType", "size": 20, "weight": 2},
+        "status": {"path": ".HealthStatus", "size": 20, "weight": 3},
+        "color": {"path": ".Color", "size": 20, "weight": 4},
+        "name": {"path": ".InstanceId", "hidden": True},
+    }
+    describe_command = EBInstanceHealthDescriber.opener
+
+    def __init__(self, *args, environment=None, **kwargs):
+        self.environment = environment
+        self.list_kwargs = {"EnvironmentName": environment["name"]}
+        super().__init__(*args, **kwargs)

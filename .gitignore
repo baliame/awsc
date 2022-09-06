@@ -1,5 +1,14 @@
 log.log
 build
 dist
+doc
+.mypy_cache
+src/_static
+src/_templates
+src/generated
+src/index.rst
+*.log
+*.rst
+*.rst.*
 *.egg-info
 __pycache__
