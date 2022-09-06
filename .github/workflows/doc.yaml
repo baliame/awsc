@@ -15,7 +15,7 @@ jobs:
         cache: 'pip'
     - run: pip install -r requirements.txt
     - run: pip install -e .
-    - run: pip install -U sphinx
+    - run: pip install -U sphinx numpydoc sphinx-rtd-theme
     - run: ./doc.sh
     - uses: cpina/github-action-push-to-another-repository@main
       env:
