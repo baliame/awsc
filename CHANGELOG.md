@@ -1,3 +1,22 @@
+# 0.4.0
+
+## Developer changes
+
+* Documentation has been added to the full satisfaction of pylint.
+* Automatic documentation page generation with sphinx.
+* Hotkeying and command assignment has been largely refactored.
+* Common use-cases such as single resource selection and confirmation windows have been moved to templates to reduce redundant code.
+* In-app logging is now available.
+* Massive refactoring efforts around ResourceListers. Simple resources can now be defined in subclasses without requiring an override of the class initializer.
+* Broke out IAM to separate modules for readability.
+* Overall, large code quality improvement. Finalized list of pylint notices that we don't care about.
+
+## User changes
+
+* Added IAM and SQS.
+* Finished Elastic Beanstalk.
+* Added create and edit commands to some existing resources.
+
 # 0.3.2
 
 * Fix EC2 launch dialog

@@ -45,3 +45,7 @@ You can configure a default context, region and ssh key in their relevant screen
 ## Version history
 
 Refer to the [changelog](CHANGELOG.md) for release notes on versions.
+
+## Documentation
+
+Documentation for the package is available [here](https://baliame.github.io/awsc).
