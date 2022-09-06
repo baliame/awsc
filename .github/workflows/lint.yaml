@@ -10,5 +10,5 @@ jobs:
       uses: baliame/python-linter@master
       with:
         source: "src"
-        mypy-options: "--ignore-missing-imports --show-error-codes"
+        mypy-options: "--ignore-missing-imports --show-error-codes --install-types"
         isort-options: "--profile black"
