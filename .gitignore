@@ -12,3 +12,4 @@ src/index.rst
 *.rst.*
 *.egg-info
 __pycache__
+release.sh
