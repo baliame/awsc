@@ -300,12 +300,13 @@ class S3Describer(Describer):
     prefix = "s3_browser"
     title = "S3 Bucket"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "rds"
-        self.describe_method = "get_bucket_policy"
-        self.describe_kwarg_name = "Bucket"
-        self.object_path = "."
-        super().__init__(*args, **kwargs)
+    resource_type = "bucket"
+    main_provider = "s3"
+    category = "S3"
+    subcategory = "Bucket"
+    describe_method = "get_bucket_policy"
+    describe_kwarg_name = "Bucket"
+    object_path = "."
 
 
 def _s3_determine_location(self, entry):

@@ -14,13 +14,15 @@ class SGDescriber(Describer):
     prefix = "sg_browser"
     title = "Security Group"
 
-    def __init__(self, *args, entry_key="group id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_security_groups"
-        self.describe_kwarg_name = "GroupIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".SecurityGroups[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "security group"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Security Group"
+    describe_method = "describe_security_groups"
+    describe_kwarg_name = "GroupIds"
+    describe_kwarg_is_list = True
+    object_path = ".SecurityGroups[0]"
+    default_entry_key = "group id"
 
 
 class SGRelated(MultiLister):

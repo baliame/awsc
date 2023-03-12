@@ -16,6 +16,7 @@ from .base_control import (
     tagged_column_generator,
 )
 from .common import Common, SessionAwareDialog
+from .dashboard import KeyValueDashboardBlock
 from .termui.control import Border
 from .termui.dialog import DialogFieldCheckbox, DialogFieldText
 from .termui.ui import ControlCodes
@@ -103,13 +104,15 @@ class EC2Describer(Describer):
     prefix = "ec2_browser"
     title = "EC2 Instance"
 
-    def __init__(self, *args, entry_key="instance id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_instances"
-        self.describe_kwarg_name = "InstanceIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Reservations[0].Instances[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "instance"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Instance"
+    describe_method = "describe_instances"
+    describe_kwarg_name = "InstanceIds"
+    describe_kwarg_is_list = True
+    object_path = ".Reservations[0].Instances[0]"
+    default_entry_key = "instance id"
 
 
 @ResourceLister.Autocommand("ASGResourceLister", "i", "View instances", "asg")
@@ -177,11 +180,11 @@ class EC2ResourceLister(ResourceLister):
                 "Filters": [
                     {
                         "Name": "tag:aws:autoscaling:groupName",
-                        "Values": [kwargs["asg"]["name"]],
+                        "Values": [asg["name"]],
                     }
                 ]
             }
-            self.title_info_data = f"ASG: {kwargs['asg']['name']}"
+            self.title_info_data = f"ASG: {asg['name']}"
         super().__init__(*args, **kwargs)
 
     @ResourceLister.Autohotkey(ControlCodes.A, "Create AMI", True)
@@ -616,3 +619,94 @@ class EC2LaunchDialog(SessionAwareDialog):
         if self.caller is not None:
             self.caller.refresh_data()
         super().close()
+
+
+class EC2DashboardBlock(KeyValueDashboardBlock):
+    """
+    Dashboard block for EC2 health.
+    """
+
+    description = "EC2 health overview"
+
+    labels = {
+        "total": "Total instances",
+        "running": "Running instances",
+        "stopped": "Stopped instances",
+        "terminated": "Terminated instances",
+        "transitioning": "Transitioning instances",
+        "impaired": "Impaired instances",
+        "healthy%": "of instances healthy",
+        "impaired%": "of instances impaired",
+    }
+    inverted = ["healthy%", "impaired%"]
+    suffixes = {"healthy%": "%", "impaired%": "%"}
+    thresholds = {
+        "healthy%": [
+            "dashboard_block_negative",
+            75,
+            "dashboard_block_neutral",
+            100,
+            "dashboard_block_positive",
+        ],
+        "impaired%": [
+            "dashboard_block_positive",
+            1,
+            "dashboard_block_neutral",
+            25,
+            "dashboard_block_negative",
+        ],
+    }
+    order = [
+        "total",
+        "running",
+        "stopped",
+        "terminated",
+        "transitioning",
+        "healthy%",
+        "impaired%",
+        "impaired",
+    ]
+
+    def __init__(self, *args, **kwargs):
+        self.instance_health_data = {}
+        super().__init__(*args, **kwargs)
+
+    def refresh_data(self):
+        resp = Common.generic_api_call(
+            "ec2",
+            "describe_instance_status",
+            {"IncludeAllInstances": True},
+            "Describe instance statuses",
+            "EC2",
+            subcategory="Instance",
+        )
+        if resp["Success"]:
+            ihd = resp["Response"]["InstanceStatuses"]
+            info = {}
+            info["total"] = len(ihd)
+            info["running"] = 0
+            info["transitioning"] = 0
+            info["stopped"] = 0
+            info["terminated"] = 0
+            info["impaired"] = 0
+            for inst in ihd:
+                state = inst["InstanceState"]["Name"]
+                if state in ("running", "stopped", "terminated"):
+                    info[state] += 1
+                else:
+                    info["transitioning"] += 1
+                if (
+                    inst["InstanceStatus"]["Status"] == "impaired"
+                    or inst["SystemStatus"]["Status"] == "impaired"
+                ):
+                    info["impaired"] += 1
+            info["impaired%"] = int((info["impaired"] / info["total"]) * 100)
+            info["healthy%"] = 100 - info["impaired%"]
+            with self.mutex:
+                self.status = self.STATUS_READY
+                self.info = info
+                self.instance_health_data = ihd
+
+        else:
+            with self.mutex:
+                self.status = self.STATUS_ERROR

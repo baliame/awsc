@@ -149,13 +149,17 @@ class InlinePolicyDescriber(Describer):
     prefix = "user_inline_policy_browser"
     title = "Inline Policy"
 
+    resource_type = "inline policy"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "Inline Policies"
+    object_path = "."
+
     def __init__(self, *args, caller=None, datatype="", data=None, **kwargs):
-        self.resource_key = "iam"
         self.describe_method = f"get_{datatype}_policy"
         self.arg = f"{datatype.capitalize()}Name"
         self.describe_kwarg_name = "PolicyName"
         self.describe_kwargs = {self.arg: data["name"]}
-        self.object_path = "."
         super().__init__(*args, caller=caller, **kwargs)
 
 

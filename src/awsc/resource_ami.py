@@ -12,13 +12,15 @@ class AMIDescriber(Describer):
     prefix = "ami_browser"
     title = "Amazon Machine Image"
 
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_images"
-        self.describe_kwarg_name = "ImageIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Images[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "AMI"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "AMI"
+    describe_method = "describe_images"
+    describe_kwarg_name = "ImageIds"
+    describe_kwarg_is_list = True
+    object_path = ".Images[0]"
+    default_entry_key = "id"
 
 
 class AMIResourceLister(ResourceLister):

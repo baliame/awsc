@@ -29,17 +29,15 @@ class EBSDescriber(Describer):
     prefix = "ebs_browser"
     title = "EBS Volume"
 
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_volumes"
-        self.describe_kwarg_name = "VolumeIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Volumes[0]"
-        super().__init__(
-            *args,
-            entry_key=entry_key,
-            **kwargs,
-        )
+    resource_type = "ebs volume"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "EBS Volume"
+    describe_method = "describe_volumes"
+    describe_kwarg_name = "VolumeIds"
+    describe_kwarg_is_list = True
+    object_path = ".Volumes[0]"
+    default_entry_key = "id"
 
 
 class EBSResourceLister(ResourceLister):

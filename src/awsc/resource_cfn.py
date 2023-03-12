@@ -24,6 +24,14 @@ class CFNDescriber(Describer):
     prefix = "cfn_browser"
     title = "CloudFormation Stack"
 
+    resource_type = "stack"
+    main_provider = "cloudformation"
+    category = "Cloudformation"
+    subcategory = "Stack"
+    describe_method = "describe_stacks"
+    describe_kwarg_name = "StackName"
+    object_path = ".Stacks[0]"
+
     def populate_entry(self, *args, **kwargs):
         super().populate_entry(*args, **kwargs)
         try:
@@ -31,13 +39,6 @@ class CFNDescriber(Describer):
             self.entry_id = arn.resource_id_first
         except ValueError:
             return
-
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "cloudformation"
-        self.describe_method = "describe_stacks"
-        self.describe_kwarg_name = "StackName"
-        self.object_path = ".Stacks[0]"
-        super().__init__(*args, **kwargs)
 
 
 # TODO: Refactor

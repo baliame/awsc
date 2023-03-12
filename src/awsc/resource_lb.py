@@ -12,13 +12,14 @@ class LBDescriber(Describer):
     prefix = "lb_browser"
     title = "Load Balancer"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elbv2"
-        self.describe_method = "describe_load_balancers"
-        self.describe_kwarg_name = "Names"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".LoadBalancers[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "load balancer"
+    main_provider = "elbv2"
+    category = "ELB v2"
+    subcategory = "Load Balancer"
+    describe_method = "describe_load_balancers"
+    describe_kwarg_name = "Names"
+    describe_kwarg_is_list = True
+    object_path = ".LoadBalancers[0]"
 
 
 def _elbv2_determine_scheme(result, *args):

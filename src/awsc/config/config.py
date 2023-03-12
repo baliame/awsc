@@ -1,6 +1,7 @@
 """
 Module for the configuration parser object.
 """
+import sys
 from pathlib import Path
 
 import yaml
@@ -8,7 +9,7 @@ import yaml
 from .scheme import Scheme
 from .storage import Keystore
 
-LAST_CONFIG_VERSION = 12
+LAST_CONFIG_VERSION = 19
 
 
 class Config:
@@ -40,20 +41,27 @@ class Config:
         path : str
             The configuration parent path, if not default. Defaults to ~/.config/awsc.
         """
-        print("Initializing AWSC configuration...")
+        print("Initializing AWSC configuration...", file=sys.stderr)
         self.version_updaters = {
-            1: self.update_1,
-            2: self.update_2,
-            3: self.update_3,
-            4: self.update_4,
-            5: self.update_5,
-            6: self.update_6,
-            7: self.update_7,
-            8: self.update_8,
-            9: self.update_9,
-            10: self.update_10,
-            11: self.update_11,
-            12: self.update_12,
+            1: self._update_1,
+            2: self._update_2,
+            3: self._update_3,
+            4: self._update_4,
+            5: self._update_5,
+            6: self._update_6,
+            7: self._update_7,
+            8: self._update_8,
+            9: self._update_9,
+            10: self._update_10,
+            11: self._update_11,
+            12: self._update_12,
+            13: self._update_13,
+            14: self._update_14,
+            15: self._update_15,
+            16: self._update_16,
+            17: self._update_17,
+            18: self._update_18,
+            19: self._update_19,
         }
         if path is None:
             path = Path.home() / ".config" / "awsc"
@@ -80,7 +88,7 @@ class Config:
         self.keystore.unlock()
         self.update_version()
 
-    def update_1(self):
+    def _update_1(self):
         """
         Version 1 configuration update.
 
@@ -88,7 +96,7 @@ class Config:
         """
         self.config["default_region"] = "us-east-1"
 
-    def update_2(self):
+    def _update_2(self):
         """
         Version 2 configuration update.
 
@@ -96,7 +104,7 @@ class Config:
         """
         self.scheme.backup_and_reset()
 
-    def update_3(self):
+    def _update_3(self):
         """
         Version 3 configuration update.
 
@@ -104,7 +112,7 @@ class Config:
         """
         self.scheme.backup_and_reset()
 
-    def update_4(self):
+    def _update_4(self):
         """
         Version 4 configuration update.
 
@@ -116,7 +124,7 @@ class Config:
             "resources_by_context": {},
         }
 
-    def update_5(self):
+    def _update_5(self):
         """
         Version 5 configuration update.
 
@@ -124,7 +132,7 @@ class Config:
         """
         self.scheme.backup_and_reset()
 
-    def update_6(self):
+    def _update_6(self):
         """
         Version 6 configuration update.
 
@@ -132,7 +140,7 @@ class Config:
         """
         self.config["default_ssh_key"] = "id_rsa"
 
-    def update_7(self):
+    def _update_7(self):
         """
         Version 7 configuration update.
 
@@ -141,7 +149,7 @@ class Config:
         self.scheme.backup_and_reset()
         self.config["default_ssh_usernames"] = {}
 
-    def update_8(self):
+    def _update_8(self):
         """
         Version 8 configuration update.
 
@@ -149,7 +157,7 @@ class Config:
         """
         self.config["editor_command"] = "nano {0}"
 
-    def update_9(self):
+    def _update_9(self):
         """
         Version 9 configuration update.
 
@@ -157,7 +165,7 @@ class Config:
         """
         self.config["keypair_associations"] = {}
 
-    def update_10(self):
+    def _update_10(self):
         """
         Version 10 configuration update.
 
@@ -165,7 +173,7 @@ class Config:
         """
         self.scheme.backup_and_reset()
 
-    def update_11(self):
+    def _update_11(self):
         """
         Version 11 configuration update.
 
@@ -173,7 +181,7 @@ class Config:
         """
         self.scheme.backup_and_reset()
 
-    def update_12(self):
+    def _update_12(self):
         """
         Version 12 configuration update.
 
@@ -183,6 +191,74 @@ class Config:
             "max_lines": -1,
             "max_age": 2419200,
         }
+
+    def _update_13(self):
+        """
+        Version 13 configuration update.
+
+        Do not call.
+        """
+        self.config["default_dashboard_layout"] = [
+            ["Blank", "Blank"],
+            ["Blank", "Blank"],
+        ]
+        self.config["dashboard_layouts"] = {}
+        self.scheme.backup_and_reset()
+
+    def _update_14(self):
+        """
+        Version 14 configuration update.
+
+        Do not call.
+        """
+        self.config["contexts"]["localstack"] = {
+            "endpoint_url": "https://localhost.localstack.cloud"
+        }
+
+    def _update_15(self):
+        """
+        Version 15 configuration update.
+
+        Do not call.
+        """
+        self.config["contexts"]["localstack"]["account_id"] = "localhost"
+
+    def _update_16(self):
+        """
+        Version 16 configuration update.
+
+        Do not call.
+        """
+        self.config["contexts"]["localstack"][
+            "endpoint_url"
+        ] = "https://localhost.localstack.cloud:4566"
+
+    def _update_17(self):
+        """
+        Version 17 configuration update.
+
+        Do not call.
+        """
+        for context in self.config["contexts"].keys():
+            self.config["contexts"][context]["mfa_device"] = ""
+
+    def _update_18(self):
+        """
+        Version 18 configuration update.
+
+        Do not call.
+        """
+        error_path = Path.home() / ".config" / "awsc" / "error.log"
+        self.config["error_log"] = str(error_path)
+
+    def _update_19(self):
+        """
+        Version 19 configuration update.
+
+        Do not call.
+        """
+        for context in self.config["contexts"].keys():
+            self.config["contexts"][context]["role"] = ""
 
     def update_version(self):
         """
@@ -206,9 +282,15 @@ class Config:
         Writes the generated configuration to the configuration file in config_path.
         """
         print("Creating first time configuration...")
+        error_path = Path.home() / ".config" / "awsc" / "error.log"
         self.config = {
             "version": LAST_CONFIG_VERSION,
-            "contexts": {},
+            "contexts": {
+                "localstack": {
+                    "endpoint_url": "https://localhost.localstack.cloud:4566",
+                    "account_id": "localhost",
+                }
+            },
             "default_context": "",
             "default_region": "us-east-1",
             "default_ssh_key": "id_rsa",
@@ -224,6 +306,9 @@ class Config:
                 "resources": {},
                 "keys": {},
             },
+            "default_dashboard_layout": [["Blank", "Blank"], ["Blank", "Blank"]],
+            "dashboard_layouts": {},
+            "error_log": str(error_path),
         }
 
         self.write_config()
@@ -234,6 +319,9 @@ class Config:
         """
         with self.config_path.open("w", encoding="utf-8") as file:
             file.write(yaml.dump(self.config))
+
+    def __contains__(self, item):
+        return item in self.config
 
     def __getitem__(self, item):
         """
@@ -271,7 +359,7 @@ class Config:
         with self.config_path.open("r", encoding="utf-8") as file:
             self.config = yaml.safe_load(file.read())
 
-    def add_or_edit_context(self, name, acctid, access, secret):
+    def add_or_edit_context(self, name, acctid, access, secret, mfa_device=""):
         """
         Upserts a context into the configuration.
 
@@ -288,10 +376,35 @@ class Config:
         """
         self.config["contexts"][name] = {
             "account_id": acctid,
+            "mfa_device": mfa_device,
+            "role": "",
         }
         if self.config["default_context"] == "":
             self.config["default_context"] = name
         self.keystore.set_key(name, access, secret)
+        self.write_config()
+
+    def add_or_edit_role_context(self, name, acctid, source, role, mfa_device=""):
+        """
+        Upserts a context into the configuration.
+
+        Parameters
+        ----------
+        name : str
+            The name of the context. If it already exists, it will be overwritten.
+        acctid : str
+            The account number of the context, usually acquired through Common.Session.whoami()
+        access : str
+            The access key which belongs to the account.
+        secret : str
+            The secret key which belongs to the account.
+        """
+        self.config["contexts"][name] = {
+            "account_id": acctid,
+            "mfa_device": mfa_device,
+            "role": role,
+        }
+        self.keystore.set_ref(name, source)
         self.write_config()
 
     def delete_context(self, name):
@@ -306,6 +419,6 @@ class Config:
         del self.config["contexts"][name]
         if self.config["default_context"] == name:
             if len(self.config["contexts"]):
-                self.config["default_context"] = self.config["contexts"].keys()[0]
+                self.config["default_context"] = list(self.config["contexts"].keys())[0]
         self.keystore.delete_key(name)
         self.write_config()

@@ -18,13 +18,15 @@ class KeyPairDescriber(Describer):
     prefix = "keypair_browser"
     title = "EC2 Keypair"
 
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_key_pairs"
-        self.describe_kwarg_name = "KeyPairIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".KeyPairs[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "keypair"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Keypair"
+    describe_method = "describe_key_pairs"
+    describe_kwarg_name = "KeyPairIds"
+    describe_kwarg_is_list = True
+    object_path = ".KeyPairs[0]"
+    default_entry_key = "id"
 
 
 def _keypair_determine_association(entry):

@@ -12,13 +12,14 @@ class InstanceClassDescriber(Describer):
     prefix = "instance_class_browser"
     title = "Instance Class"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_instance_types"
-        self.describe_kwarg_name = "InstanceTypes"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".InstanceTypes[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "instance class"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Instance Class"
+    describe_method = "describe_instance_types"
+    describe_kwarg_name = "InstanceTypes"
+    describe_kwarg_is_list = True
+    object_path = ".InstanceTypes[0]"
 
 
 class InstanceClassResourceLister(ResourceLister):

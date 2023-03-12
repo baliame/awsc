@@ -144,13 +144,15 @@ class RouteTableDescriber(Describer):
     prefix = "route_table_browser"
     title = "Route Table"
 
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_route_tables"
-        self.describe_kwarg_name = "RouteTableIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".RouteTables[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "route table"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Route Table"
+    describe_method = "describe_route_tables"
+    describe_kwarg_name = "RouteTableIds"
+    describe_kwarg_is_list = True
+    object_path = ".RouteTables[0]"
+    default_entry_key = "id"
 
 
 def _route_table_determine_subnet_association(self, result, *args):

@@ -1,15 +1,21 @@
 """
 Main module for the awsc application.
 """
+import argparse
+import configparser
 import os
 import sys
+from pathlib import Path
+
+import boto3
 
 # pylint: disable=unused-import # We use this import to enumerate all resource listers.
 from . import resources
 from .aws import AWS
 from .commander import Commander, Filterer
-from .common import Common, DefaultAnchor, DefaultDimension, default_border
+from .common import Common, DefaultAnchor, DefaultDimension
 from .context import ContextList
+from .dashboard import Dashboard
 from .log import LogLister
 from .meta import CommanderOptionsLister
 from .region import RegionList
@@ -72,17 +78,24 @@ def main(*args, **kwargs):
     # stderr hack
     old_stderr = None
     try:
+        Common.initialize()
+
         if os.fstat(0) == os.fstat(1):
             # pylint: disable=consider-using-with # With would be extremely roundabout here.
-            log_file_handle = open("error.log", "w", buffering=1, encoding="utf-8")
-
+            log_file_handle = open(
+                Common.Configuration["error_log"], "w", buffering=1, encoding="utf-8"
+            )
             old_stderr = sys.stderr
             sys.stderr = log_file_handle
-
-        Common.initialize()
         Common.Session.service_provider = AWS()
         Common.post_initialize()
-        Common.Session.replace_frame(ContextList.opener())
+        if Common.Session.context == "":
+            Common.Session.replace_frame(ContextList.opener())
+        else:
+            if Common.Session.context_data["mfa_device"] != "":
+                Common.Session.replace_frame(ContextList.opener())
+            else:
+                Common.Session.replace_frame(Dashboard.opener())
 
         Common.Session.info_display.commander_hook = open_commander
         Common.Session.info_display.filterer_hook = open_filterer
@@ -100,3 +113,76 @@ def main(*args, **kwargs):
         if old_stderr is not None:
             sys.stderr.close()
             sys.stderr = old_stderr
+
+
+def cred_helper(*args, **kwargs):
+    parser = argparse.ArgumentParser(
+        prog="AWSC Credentials Helper",
+        description="Allows access to awsc credentials keystore for use with aws cli",
+    )
+    parser.add_argument("context")
+    args = parser.parse_args()
+    Common.initialize()
+    conf = Common.Configuration
+    if args.context not in conf.keystore:
+        print(f"Keypair {args.context} not found.", file=sys.stderr)
+    keypair = conf.keystore[args.context]
+    sts = boto3.client(
+        "sts",
+        aws_access_key_id=keypair["access"],
+        aws_secret_access_key=keypair["secret"],
+    )
+    context = conf["contexts"][args.context]
+    if context["mfa_device"] != "":
+        mfa_code = input(f"Enter MFA code for device {context['mfa_device']}: ")
+        resp = sts.get_session_token(
+            DurationSeconds=86400,
+            SerialNumber=context["mfa_device"],
+            TokenCode=mfa_code,
+        )
+    else:
+        resp = sts.get_session_token(DurationSeconds=86400)
+
+    aws_creds = Path.home() / ".aws" / "credentials"
+    try:
+        with aws_creds.open("r", encoding="utf-8") as file:
+            creds = file.read()
+    except OSError as error:
+        if error.errno == 2:  # FNF
+            creds = ""
+        else:
+            print(
+                f"Failed to open ~/.aws/credentials: {str(error)}",
+                file=sys.stderr,
+            )
+            return
+
+    parser = configparser.ConfigParser(default_section="__default")
+    parser.read_string(creds)
+    if parser.has_section(args.context):
+        parser.remove_section(args.context)
+    parser.add_section(args.context)
+
+    token = resp["Credentials"]["SessionToken"]
+    expiration = resp["Credentials"]["Expiration"]
+    parser.set(args.context, "aws_session_token", token)
+    parser.set(args.context, "aws_security_token", token)
+    parser.set(
+        args.context,
+        "expiration",
+        expiration.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+    parser.set(
+        args.context,
+        "aws_access_key_id",
+        resp["Credentials"]["AccessKeyId"],
+    )
+    parser.set(
+        args.context,
+        "aws_secret_access_key",
+        resp["Credentials"]["SecretAccessKey"],
+    )
+
+    with aws_creds.open("w", encoding="utf-8") as file:
+        parser.write(file)
+    print(f"Wrote short term token to profile {args.context}", file=sys.stderr)

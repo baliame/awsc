@@ -52,6 +52,11 @@ class Block:
         self.dimensions = dimensions
         self.tag = tag
         Commons.UIInstance.dirty = True
+        self.on_become_frame_hooks = []
+
+    def on_become_frame(self):
+        for hook in self.on_become_frame_hooks:
+            hook[0](**hook[1])
 
     def reparent(self):
         """

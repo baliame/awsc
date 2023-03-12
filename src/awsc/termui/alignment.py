@@ -12,6 +12,7 @@ class Dimension:
     * Directly, as a number of characters. (eg. 20)
     * As a percentage of space available in the current block. (eg. 100%)
     * As a difference of any amount of the above values (eg. 100%-5, 100%-20%, 5-2, 100%-2-1)
+    * As a sum of any amount of the above values (eg. 50%+1)
     * As the highest character count of any number of above operations (eg. 50%|60%-5|20)
 
     Attributes
@@ -82,23 +83,37 @@ class Dimension:
                 for i in range(1, len(test)):
                     val -= Dimension._v(test[i], space)
                 return val
+            test = value.split("+")
+            if len(test) > 1:
+                val = Dimension._v(test[0], space)
+                for i in range(1, len(test)):
+                    val += Dimension._v(test[i], space)
+                return val
             if value[-1] == "%":
-                return int(space * float(value[:-1]) / 100) - 1
+                return max(int(space * float(value[:-1]) / 100) - 1, 0)
         return int(value)
 
-    def __call__(self):
+    def __call__(self, parent=None):
         """
         Evaluates the dimension into a width-height pair.
+
+        Parameters
+        ----------
+        parent : awsc.termui.block.Block, optional
+            The parent dimensions to use for reference. Uses the available space screen if None.
 
         Returns
         -------
         tuple(int, int)
             A tuple in the form of (width, height) as evaluated values.
         """
-        dim = Commons.UIInstance.dim
+        dim = Commons.UIInstance.dim if parent is None else parent.dimensions
         width = Dimension._v(self.width, dim[0])
         height = Dimension._v(self.height, dim[1])
         return (width, height)
+
+    def __str__(self):
+        return f"Dim[{self.width}, {self.height}]"
 
 
 class AbstractAnchor:
@@ -139,6 +154,9 @@ class AbstractAnchor:
             The (x, y) coordinates of the top left corner of the block.
         """
         return (0, 0)
+
+    def __str__(self):
+        return "@[0, 0]"
 
 
 class TopLeftAnchor(AbstractAnchor):
@@ -207,6 +225,24 @@ class TopLeftAnchor(AbstractAnchor):
             The (x, y) coordinates of the top left corner of the block.
         """
         return self.anchor(parent)
+
+    def __str__(self):
+        return f"@[{self.left}, {self.top}]"
+
+
+class TopLeftDimensionAnchor(TopLeftAnchor):
+    """
+    A TopLeft anchor that allows dimension specifications for each axis. If not needed, use TopLeftAnchor for better performance.
+    """
+
+    def anchor(self, parent):
+        dim = Dimension(self.left, self.top)
+        relative = dim(parent)
+        parent_anchor = parent.alignment.topleft(parent.dimensions, parent.parent)
+        return (parent_anchor[0] + relative[0], parent_anchor[1] + relative[1])
+
+    def __str__(self):
+        return f"@Dim[{self.left}, {self.top}]"
 
 
 class BottomLeftAnchor(AbstractAnchor):
@@ -278,6 +314,9 @@ class BottomLeftAnchor(AbstractAnchor):
         anchor = self.anchor(parent)
         return (anchor[0], anchor[1] - dim[1] + 1)
 
+    def __str__(self):
+        return f"@[{self.left}, {self.bottom}]BL"
+
 
 class TopRightAnchor(AbstractAnchor):
     """
@@ -347,6 +386,9 @@ class TopRightAnchor(AbstractAnchor):
         """
         anchor = self.anchor(parent)
         return (anchor[0] - dim[0] + 1, anchor[1])
+
+    def __str__(self):
+        return f"@[{self.right}, {self.top}]TR"
 
 
 class CenterAnchor(AbstractAnchor):
@@ -421,3 +463,6 @@ class CenterAnchor(AbstractAnchor):
         """
         anchor = self.anchor(parent)
         return (anchor[0] - int(dim[0] / 2), anchor[1] - int(dim[1] / 2))
+
+    def __str__(self):
+        return f"@[{self.xoffset}, {self.yoffset}]C"

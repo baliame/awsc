@@ -22,12 +22,13 @@ class RoleDescriber(Describer):
     prefix = "role_browser"
     title = "Role"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "iam"
-        self.describe_method = "get_role"
-        self.describe_kwarg_name = "RoleName"
-        self.object_path = ".Role"
-        super().__init__(*args, **kwargs)
+    resource_type = "role"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "Role"
+    describe_method = "get_role"
+    describe_kwarg_name = "RoleName"
+    object_path = ".Role"
 
 
 @ResourceLister.Autocommand(

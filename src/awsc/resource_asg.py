@@ -1,7 +1,7 @@
 """
 AWS Autoscaling Group resource controls.
 """
-from .base_control import Describer, ResourceLister
+from .base_control import Describer, ResourceLister, SelectionAttribute, TemplateDict
 from .common import Common, SessionAwareDialog
 from .termui.control import Border
 from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldText
@@ -56,13 +56,14 @@ class ASGDescriber(Describer):
     prefix = "asg_browser"
     title = "Autoscaling Group"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "autoscaling"
-        self.describe_method = "describe_auto_scaling_groups"
-        self.describe_kwarg_name = "AutoScalingGroupNames"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".AutoScalingGroups[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "autoscaling group"
+    main_provider = "autoscaling"
+    category = "Autoscaling"
+    subcategory = "Autoscaling Group"
+    describe_method = "describe_auto_scaling_groups"
+    describe_kwarg_name = "AutoScalingGroupNames"
+    describe_kwarg_is_list = True
+    object_path = ".AutoScalingGroups[0]"
 
 
 class ASGResourceLister(ResourceLister):
@@ -138,6 +139,32 @@ class ASGResourceLister(ResourceLister):
         ASGScaleDialog.opener(
             caller=self,
         )
+
+    @ResourceLister.Autohotkey(ControlCodes.T, tooltip="Rollout", is_validated=True)
+    def rollout(self, _):
+        self.confirm_template(
+            "start_instance_refresh",
+            TemplateDict(
+                {
+                    "AutoScalingGroupName": SelectionAttribute("name"),
+                }
+            ),
+            action_name="Rollout",
+        )(self.selection)
+
+    @ResourceLister.Autohotkey(
+        ControlCodes.Z, tooltip="Cancel Rollout", is_validated=True
+    )
+    def cancel_rollout(self, _):
+        self.confirm_template(
+            "cancel_instance_refresh",
+            TemplateDict(
+                {
+                    "AutoScalingGroupName": SelectionAttribute("name"),
+                }
+            ),
+            action_name="Cancel rollout for",
+        )(self.selection)
 
 
 class ASGScaleDialog(SessionAwareDialog):

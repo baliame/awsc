@@ -24,6 +24,45 @@ DefaultAnchor = TopLeftAnchor(0, 11)
 DefaultDimension = Dimension("100%", "100%-14")
 
 
+def default_args():
+    """
+    Generates the default args for opening a new Block at the top level. Convenience function.
+
+    Returns
+    -------
+    list
+        Pass this as the first *argument of a Block subclass constructor.
+    """
+    return [Common.Session.ui.top_block, DefaultAnchor, DefaultDimension]
+
+
+def default_kwargs(prefix):
+    """
+    Generates the default kwargs for opening a new Control at the top level. Convenience function.
+
+    Arguments
+    ---------
+    prefix : str
+        The prefix for the color scheme of this Control.
+
+    Returns
+    -------
+    dict
+        Pass this as the **keyword arguments of a Control subclass constructor.
+    """
+    return {
+        "weight": 0,
+        "color": Common.color(f"{prefix}_generic", "generic"),
+        "selection_color": Common.color(f"{prefix}_selection", "selection"),
+        "filtered_color": Common.color(f"{prefix}_filtered", "selection"),
+        "title_color": Common.color(f"{prefix}_heading", "column_title"),
+        "update_color": Common.color(f"{prefix}_updated", "highlight"),
+        "update_selection_color": Common.color(
+            f"{prefix}_updated", "highlight_selection"
+        ),
+    }
+
+
 def datetime_hack(x):
     """
     JSON dumper hack, as the base implementation of datetime doesn't understand how to convert it to JSON.
@@ -76,7 +115,7 @@ class BaseChart(BarGraph):
             color=Common.color("generic"),
             **kwargs,
         )
-        ret.border = default_border(cls.prefix, cls.title, ret.title_info())
+        ret.border = Common.default_border(cls.prefix, cls.title, ret.title_info())
         return [ret]
 
     def title_info(self):
@@ -122,10 +161,10 @@ class SessionAwareDialog(DialogControl):
     def __init__(self, *args, caller, **kwargs):
         caller.dialog_mode = True
         self.caller = caller
-        Common.Session.extend_frame(self)
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
         super().__init__(*args, **kwargs)
+        Common.Session.extend_frame(self)
         self.title_label = DialogFieldLabel("TITLE")
         self.add_field(self.title_label)
         self.add_field(DialogFieldLabel(""))
@@ -254,6 +293,11 @@ class Common:
         parser = configparser.ConfigParser(default_section="__default")
         parser.read_string(creds)
         for section in parser.sections():
+            if "aws_security_token" in parser[section]:
+                print(
+                    f"Skipping credentials {section} as they are security token authenticated"
+                )
+                continue
             if "aws_access_key_id" not in parser[section]:
                 print(
                     f"aws_access_key_id missing for credential {section}, skipping",
@@ -286,8 +330,13 @@ class Common:
                     credentials_section=section,
                 )
                 continue
+            mfa_device = (
+                ""
+                if "aws_mfa_device" not in parser[section]
+                else parser[section]["aws_mfa_device"]
+            )
             cls.Configuration.add_or_edit_context(
-                section, whoami["Account"], access, secret
+                section, whoami["Account"], access, secret, mfa_device=mfa_device
             )
             print(
                 f"Added {section} context from aws credentials file",
@@ -568,6 +617,7 @@ class Common:
         subcategory=None,
         success_template=None,
         resource=None,
+        keys=None,
         **kwargs,
     ):
         """
@@ -599,9 +649,9 @@ class Common:
               the AWS error response. The error response contains the key "Error", which is a dict with the keys "Code" and "Message".
         """
         try:
-            response = getattr(cls.Session.service_provider(service), method)(
-                **api_kwargs
-            )
+            response = getattr(
+                cls.Session.service_provider(service, keys=keys), method
+            )(**api_kwargs)
             if success_template is not None:
                 cls.success(
                     success_template.format(
@@ -708,34 +758,33 @@ class Common:
 
         return fn
 
+    @classmethod
+    def default_border(cls, prefix, title, title_info=None):
+        """
+        Generates the default border object for the specified prefix, title and title_info.
 
-# TODO: Should be a classmethod of Common.
-def default_border(prefix, title, title_info=None):
-    """
-    Generates the default border object for the specified prefix, title and title_info.
+        Parameters
+        ----------
+        prefix : str
+            The color scheme prefix for the control which is requesting a border.
+        title : str
+            The title for the control.
+        title_info : str
+            The title information for the control.
 
-    Parameters
-    ----------
-    prefix : str
-        The color scheme prefix for the control which is requesting a border.
-    title : str
-        The title for the control.
-    title_info : str
-        The title information for the control.
-
-    Returns
-    -------
-    awsc.termui.control.Border
-        The generated default border.
-    """
-    return Border(
-        Common.border("resource_list", "default"),
-        Common.color(f"{prefix}_border", "generic_border"),
-        title,
-        Common.color(f"{prefix}_border_title", "border_title"),
-        title_info,
-        Common.color(f"{prefix}_border_title_info", "border_title_info"),
-    )
+        Returns
+        -------
+        awsc.termui.control.Border
+            The generated default border.
+        """
+        return Border(
+            cls.border("resource_list", "default"),
+            cls.color(f"{prefix}_border", "generic_border"),
+            title,
+            cls.color(f"{prefix}_border_title", "border_title"),
+            title_info,
+            cls.color(f"{prefix}_border_title_info", "border_title_info"),
+        )
 
 
 class LogHolder:

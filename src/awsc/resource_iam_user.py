@@ -2,6 +2,8 @@
 Module for IAM user resources.
 """
 
+import pyperclip
+
 from .base_control import (
     DeleteResourceDialog,
     Describer,
@@ -25,12 +27,13 @@ class UserDescriber(Describer):
     prefix = "user_browser"
     title = "User"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "iam"
-        self.describe_method = "get_user"
-        self.describe_kwarg_name = "UserName"
-        self.object_path = ".User"
-        super().__init__(*args, **kwargs)
+    resource_type = "user"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "User"
+    describe_method = "get_user"
+    describe_kwarg_name = "UserName"
+    object_path = ".User"
 
 
 @ResourceLister.Autocommand("GroupLister", "u", "List group users", "group")
@@ -305,3 +308,61 @@ class LoginProfileDescriber(Describer):
         )
         if resp["Success"]:
             Common.Session.pop_frame()
+
+
+class MFADeviceLister(ResourceLister):
+    prefix = "mfa_list"
+    title = "MFA Devices"
+    command_palette = ["mfa"]
+
+    resource_type = "mfa device"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "MFA Device"
+    list_method = "list_mfa_devices"
+    item_path = ".MFADevices"
+    columns = {
+        "username": {
+            "path": ".UserName",
+            "size": 25,
+            "weight": 0,
+        },
+        "serial number": {
+            "path": ".SerialNumber",
+            "size": 100,
+            "weight": 1,
+            "sort_weight": 0,
+        },
+        "enable date": {
+            "path": ".EnableDate",
+            "size": 20,
+            "weight": 2,
+        },
+        "name": {
+            "path": ".SerialNumber",
+            "hidden": True,
+        },
+    }
+
+    @ResourceLister.Autohotkey("r", "Copy Serial Number", True)
+    def copy_sn(self, *args):
+        """
+        Copies the serial number of the selection to the clipboard if available.
+        """
+        pyperclip.copy(self.selection["serial number"])
+        Common.Session.set_message(
+            "Copied resource serial number to clipboard",
+            Common.color("message_success"),
+        )
+
+    # @ResourceLister.Autohotkey(ControlCodes.D, 'Deactivate MFA device', True)
+    # def
+    @ResourceLister.Autohotkey(ControlCodes.A, "Associate", True)
+    def associate(self, *args):
+        """
+        Associates the MFA devices with the currently enabled context.
+        """
+        Common.Configuration["contexts"][Common.Session.context][
+            "mfa_device"
+        ] = self.selection["serial number"]
+        Common.Configuration.write_config()

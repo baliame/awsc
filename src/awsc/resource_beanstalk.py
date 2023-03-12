@@ -3,9 +3,14 @@ Module for Elastic Beanstalk-related resources.
 """
 
 from .base_control import (
+    AttributeResolver,
     Describer,
+    DescriberEntryAttribute,
+    DescriberKwarg,
     FieldValue,
     ForceFlag,
+    FString,
+    IndexResolver,
     ResourceLister,
     ResourceRefByClass,
     ResourceRefByCommand,
@@ -27,13 +32,14 @@ class EBApplicationDescriber(Describer):
     prefix = "eb_application_browser"
     title = "Beanstalk Application"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_applications"
-        self.describe_kwarg_name = "ApplicationNames"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Applications[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "application"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Application"
+    describe_method = "describe_applications"
+    describe_kwarg_name = "ApplicationNames"
+    describe_kwarg_is_list = True
+    object_path = ".Applications[0]"
 
 
 class EBApplicationResourceLister(ResourceLister):
@@ -85,14 +91,17 @@ class EBApplicationVersionDescriber(Describer):
     prefix = "eb_application_version_browser"
     title = "Beanstalk Application Version"
 
-    def __init__(self, *args, entry, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_application_versions"
-        self.describe_kwarg_name = "VersionLabels"
-        self.describe_kwarg_is_list = True
-        self.describe_kwargs = {"ApplicationName": entry["application"]}
-        self.object_path = ".Applications[0]"
-        super().__init__(*args, entry=entry, **kwargs)
+    resource_type = "appversion"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Appversion"
+    describe_method = "describe_application_versions"
+    describe_kwarg_name = "VersionLabels"
+    describe_kwarg_is_list = True
+    describe_kwargs_override = {
+        "ApplicationName": DescriberEntryAttribute("application")
+    }
+    object_path = ".Applications[0]"
 
 
 @ResourceLister.Autocommand("EBApplicationLister", "v", "View Versions", "application")
@@ -156,13 +165,15 @@ class EBEnvironmentDescriber(Describer):
     prefix = "eb_environment_browser"
     title = "Beanstalk Environment"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_environments"
-        self.describe_kwarg_name = "EnvironmentNames"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Environments[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "environment"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Environment"
+    describe_method = "describe_environments"
+    describe_kwarg_name = "EnvironmentNames"
+    describe_kwarg_is_list = True
+    object_path = ".Environments[0]"
+    default_entry_key = "arn"
 
 
 @ResourceLister.Autocommand("EBEnvironmentLister", "h", "Environment health", "entry")
@@ -174,13 +185,14 @@ class EBEnvironmentHealthDescriber(Describer):
     prefix = "eb_environment_health_browser"
     title = "Beanstalk Environment Health"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_environment_health"
-        self.describe_kwarg_name = "EnvironmentName"
-        self.describe_kwarg_is_list = True
-        self.object_path = "."
-        super().__init__(*args, **kwargs)
+    resource_type = "environment"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Environment Health"
+    describe_method = "describe_environment_health"
+    describe_kwarg_name = "EnvironmentName"
+    describe_kwarg_is_list = True
+    object_path = "."
 
 
 class EBEnvironmentLister(ResourceLister):
@@ -425,12 +437,13 @@ class EBPlatformVersionDescriber(Describer):
     prefix = "eb_platform_version_browser"
     title = "Beanstalk Platform Version"
 
-    def __init__(self, *args, entry_key="arn", **kwargs):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_platform_version"
-        self.describe_kwarg_name = "PlatformArn"
-        self.object_path = ".PlatformDescription"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "platform version"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Platform Version"
+    describe_method = "describe_platform_version"
+    describe_kwarg_name = "PlatformArn"
+    object_path = ".PlatformDescription"
 
 
 class EBPlatformVersionLister(ResourceLister):
@@ -506,24 +519,20 @@ class EBInstanceHealthDescriber(Describer):
     prefix = "eb_instance_health_browser"
     title = "Beanstalk Instance"
 
-    def __init__(
-        self,
-        *args,
-        entry,
-        entry_key="instance id",
-        caller=None,
-        **kwargs,
-    ):
-        self.resource_key = "elasticbeanstalk"
-        self.describe_method = "describe_instances_health"
-        self.describe_kwargs = {"EnvironmentName": caller.environment["name"]}
-        self.object_path = f".InstanceList[] | select(.InstanceId=={entry[entry_key]})"
-        super().__init__(
-            *args,
-            entry=entry,
-            entry_key=entry_key,
-            **kwargs,
+    resource_type = "instance health"
+    main_provider = "elasticbeanstalk"
+    category = "Elastic Beanstalk"
+    subcategory = "Instance Health"
+    describe_method = "describe_instances_health"
+    describe_kwarg_name = "VersionLabels"
+    describe_kwargs_override = {
+        "EnvironmentName": DescriberKwarg(
+            "caller",
+            resolver=AttributeResolver("environment", resolver=IndexResolver("name")),
         )
+    }
+    object_path = FString(".InstanceList[] | select(.InstanceId=={entry_id}))")
+    default_entry_key = "instance id"
 
 
 @ResourceLister.Autocommand(

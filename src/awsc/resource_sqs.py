@@ -30,13 +30,15 @@ class SQSDescriber(Describer):
     prefix = "sqs_browser"
     title = "Queue"
 
-    def __init__(self, *args, entry_key="url", **kwargs):
-        self.resource_key = "sqs"
-        self.describe_method = "get_queue_attributes"
-        self.describe_kwarg_name = "QueueUrl"
-        self.describe_kwargs = {"AttributeNames": ["All"]}
-        self.object_path = "."
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "queue"
+    main_provider = "sqs"
+    category = "SQS"
+    subcategory = "Queue"
+    describe_method = "get_queue_attributes"
+    describe_kwarg_name = "QueueUrl"
+    object_path = "."
+    describe_kwargs_override = {"AttributeNames": ["All"]}
+    default_entry_key = "url"
 
 
 class SQSLister(ResourceLister):

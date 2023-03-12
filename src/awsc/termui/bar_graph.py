@@ -185,7 +185,7 @@ class BarGraph(HotkeyControl):
             else:
                 self.max_point = max(self.max_point, datapoint)
                 if self._data_points_behaviour == BarGraph.DPB_ZeroOrLessToMax:
-                    self.min_point = min(self.min_point, min(0, datapoint))
+                    self.min_point = min(self.min_point, 0, datapoint)
                 elif self._data_points_behaviour == BarGraph.DPB_ZeroToMax:
                     self.min_point = 0
                 elif self._data_points_behaviour == BarGraph.DPB_MinToMax:
@@ -225,6 +225,11 @@ class BarGraph(HotkeyControl):
     def paint(self):
         super().paint()
         corners = self.corners
+        if len(self.datapoints) == 0:
+            Commons.UIInstance.print_centered(
+                "No datapoints loaded", self.corners, color=self.color, bold=True
+            )
+            return
         wspace = corners[0][1] - corners[0][0] + 1 - (0 if self.border is None else 2)
         hspace = corners[1][1] - corners[1][0] + 1 - (0 if self.border is None else 2)
         x0 = corners[0][0] + (0 if self.border is None else 1)

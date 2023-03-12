@@ -12,13 +12,14 @@ class LCDescriber(Describer):
     prefix = "lc_browser"
     title = "Launch Configuration"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "autoscaling"
-        self.describe_method = "describe_launch_configurations"
-        self.describe_kwarg_name = "LaunchConfigurationNames"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".LaunchConfigurations[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "launch configuration"
+    main_provider = "autoscaling"
+    category = "Autoscaling"
+    subcategory = "Launch Configuration"
+    describe_method = "describe_launch_configurations"
+    describe_kwarg_name = "LaunchConfigurationNames"
+    describe_kwarg_is_list = True
+    object_path = ".LaunchConfigurations[0]"
 
 
 class LCResourceLister(ResourceLister):

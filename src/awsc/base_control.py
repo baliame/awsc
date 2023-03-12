@@ -7,18 +7,17 @@ import json
 import threading
 import traceback
 from operator import attrgetter
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List
 
 import pyperclip
 from botocore import exceptions as botoerror
 
 from .common import (
     Common,
-    DefaultAnchor,
-    DefaultDimension,
     SessionAwareDialog,
     datetime_hack,
-    default_border,
+    default_args,
+    default_kwargs,
 )
 from .hotkey import HotkeyDisplay
 from .termui.alignment import CenterAnchor, Dimension
@@ -28,6 +27,147 @@ from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldTex
 from .termui.list_control import ListControl, ListEntry
 from .termui.text_browser import TextBrowser
 from .termui.ui import ControlCodes
+
+
+def generic_confirm_template(
+    method,
+    template,
+    *args,
+    provider,
+    category,
+    subcategory,
+    resource_type,
+    summary=None,
+    custom_callback=None,
+    refresh=True,
+    resource_identifier=None,
+    undoable=False,
+    can_force=False,
+    extra_fields=None,
+    action_name="Delete",
+    success_template=None,
+    from_what=None,
+    from_what_name=None,
+    **kwargs,
+):
+    """
+    Creates a confirmation sequence.
+
+    Returns a function that, when called, begins the confirmation process. The returned function requires no arguments, but takes any
+    amount for legacy reasons.
+
+    Parameters
+    ----------
+    method : str
+        The name of the method to call for the provider when the action is confirmed.
+    template : TemplateDict
+        A TemplateDict which describes the keyword arguments to pass to method.
+    custom_callback : Callable, optional
+        A replacement callback for handling the confirmation.
+    refresh : bool, default: True
+        Whether to call refresh_data() after executing the action.
+    category : str
+        API call category, for logging purposes. Usually a pretty printed name for the AWS service that
+        is being used.
+    subcategory : str
+        API call subcategory, for logging purposes. Usually the type of the AWS resource being managed.
+    provider : str
+        The name of the boto3 provider which contains the definition of the method.
+    resource_type : str
+        The name of the type of resource being managed.
+    resource_identifier : str, optional
+        Templatable via SelectionAttribute. Override for resource identifier if something other than the
+        primary key of the current resource should be used.
+    undoable : bool, default: False
+        Cosmetic, to display a warning about data loss if not set to true.
+    can_force : bool, default: False
+        Adds an additional force checkbox to the confirmation dialog if set. The value of this checkbox
+        is passed as "force" to the callback, and can be represented by a ForceFlag object in the template.
+    summary : str, optional
+        A short description of the action being performed for logging purposes. Defaults to a concatenation
+        of action name and resource type (eg. 'Delete EC2 instance')
+    extra_fields : dict, optional
+        A map of additional fields to add to the confirmation dialog, where the key is the name of the field,
+        and the value is a DialogField instance. These fields are then passed as keyword arguments to the
+        callback, where the argument name is the key of the field in the dict. The value of extra fields can
+        also be referred to via a FieldValue object in the template.
+    action_name : str, default: "Delete"
+        The name of the action being performed if the dialog is confirmed. Defaults to 'Delete' as that is both
+        the original purpose of confirmation dialogs and the most common action requiring a confirmation.
+    success_template : str, optional:
+        A formattable string that will be displayed as a message if the operation succeeds. The format method
+        will be called on the string, where index 0, and the named field 'resource' will be available as
+        arguments containing the resource primary key. All keyword arguments passed to the method will also
+        be passed as-is to this invocation of format. Attempts to construct a grammatically correct but not
+        particularly pleasing to read message if omitted.
+    from_what : str, optional
+        The from_what option of a DeleteResourceDialog.
+    from_what_name : str, optional
+        Templatable via SelectionAttribute. The from_what_name option of a DeleteResourceDialog.
+
+    Returns
+    -------
+    callable
+        A function that, when called, begins the confirmation process.
+    """
+
+    def fn(self, *args):
+        nonlocal category, subcategory, resource_type, provider, summary, extra_fields, success_template
+
+        summary = summary or f"{action_name} {resource_type}"
+        if extra_fields is None:
+            extra_fields = {}
+        success_template = (
+            success_template
+            or f"Performing action '{action_name.lower()} {resource_type}' on resource {'{0}'}..."
+        )
+
+        rid = ""
+        if resource_identifier is not None:
+            rid = resource_identifier
+            if hasattr(rid, "resolve") and callable(rid.resolve):
+                # Cannot insert field values at this time.
+                rid = rid.resolve(self.selection, **kwargs)
+        elif hasattr(self, "primary_key") and self.primary_key is not None:
+            rid = self.selection[self.primary_key]
+
+        def callback(**cb_kwargs):
+            if custom_callback is not None:
+                custom_callback(**cb_kwargs)
+            else:
+                Common.generic_api_call(
+                    provider,
+                    method,
+                    template.resolve(self.selection, **kwargs, **cb_kwargs),
+                    summary,
+                    category,
+                    subcategory=subcategory,
+                    success_template=success_template,
+                    resource=rid,
+                    **cb_kwargs,
+                )
+            if refresh:
+                self.refresh_data()
+
+        fwn = from_what_name
+        if fwn is not None and hasattr(fwn, "resolve") and callable(fwn.resolve):
+            # Cannot insert field values at this time.
+            fwn = fwn.resolve(self.selection, **kwargs)
+
+        DeleteResourceDialog.opener(
+            caller=self,
+            resource_type=resource_type,
+            resource_identifier=rid,
+            callback=callback,
+            can_force=can_force,
+            extra_fields=extra_fields,
+            action_name=action_name,
+            from_what=from_what,
+            from_what_name=fwn,
+            **kwargs,
+        )
+
+    return fn
 
 
 class RegistryHelper:
@@ -163,7 +303,7 @@ class OpenableListControl(ListControl):
 
     prefix = "CHANGEME"
     title = "CHANGEME"
-    describer: Union[None, Callable[[], None]] = None
+    describer: None | Callable[[], None] = None
 
     @classmethod
     def opener(cls, **kwargs):
@@ -176,14 +316,8 @@ class OpenableListControl(ListControl):
         list(awsc.base_control.OpenableListControl, awsc.info.HotkeyDisplay)
             A new instance of this class, and its associated hotkey display.
         """
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            **kwargs,
-        )
-        instance.border = default_border(cls.prefix, cls.title, None)
+        instance = cls(*default_args(), weight=0, **kwargs)
+        instance.border = Common.default_border(cls.prefix, cls.title, None)
         return [instance, instance.hotkey_display]
 
     @classmethod
@@ -358,7 +492,9 @@ class ResourceListerBase(ListControl):
 
         except StopLoadingData:
             pass
-        except Exception as error:  # pylint: disable=broad-except # Purpose of this function is extremely generic, needs a catch-all
+        except (
+            Exception
+        ) as error:  # pylint: disable=broad-except # Purpose of this function is extremely generic, needs a catch-all
             self.thread_share[
                 "thread_error"
             ] = f"Refresh thread execution failed: {type(error).__name__}: {str(error)}"
@@ -1150,13 +1286,13 @@ class ResourceLister(ResourceListerBase):
     list_kwargs: Dict[str, Any] = {}
     item_path = ".ChangeMe"
     columns: Dict[str, Dict[str, Any]] = {}
-    primary_key: Union[str, None] = "name"
+    primary_key: str | None = "name"
 
     describe_selection_arg = "entry"
-    describe_command: Union[None, Callable, str] = None
+    describe_command: None | Callable | str = None
     describe_kwargs: Dict[str, Any] = {}
     open_selection_arg = "entry"
-    open_command: Union[None, Callable, str] = None
+    open_command: None | Callable | str = None
     open_kwargs: Dict[str, Any] = {}
 
     additional_commands: Dict[str, Dict[str, Any]] = {}
@@ -1229,29 +1365,7 @@ class ResourceLister(ResourceListerBase):
     def autohotkey_condition(self, hotkey):
         return self.selector_cb is None
 
-    def confirm_template(
-        self,
-        method,
-        template,
-        custom_callback=None,
-        refresh=True,
-        category=None,
-        subcategory=None,
-        provider=None,
-        resource_type=None,
-        resource_identifier=None,
-        undoable=False,
-        can_force=False,
-        summary=None,
-        extra_fields=None,
-        action_name="Delete",
-        success_template=None,
-        hotkey=None,
-        hotkey_tooltip=None,
-        from_what=None,
-        from_what_name=None,
-        **kwargs,
-    ):
+    def confirm_template(self, *args, hotkey=None, hotkey_tooltip=None, **kwargs):
         """
         Creates a confirmation sequence.
 
@@ -1259,62 +1373,16 @@ class ResourceLister(ResourceListerBase):
         when called, begins the confirmation process. The returned function requires no arguments, but takes any
         amount for legacy reasons.
 
+        Args and kwargs correspond to the parameters of generic_confirm_template.
+
         Parameters
         ----------
-        method : str
-            The name of the method to call for the provider when the action is confirmed.
-        template : TemplateDict
-            A TemplateDict which describes the keyword arguments to pass to method.
-        custom_callback : Callable, optional
-            A replacement callback for handling the confirmation.
-        refresh : bool, default: True
-            Whether to call refresh_data() after executing the action.
-        category : str, optional
-            API call category, for logging purposes. Usually a pretty printed name for the AWS service that
-            is being used. Defaults to the category set on the class.
-        subcategory : str, optional
-            API call subcategory, for logging purposes. Usually the type of the AWS resource being managed.
-            Defaults to the subcategory set on the class.
-        provider : str, optional
-            The name of the boto3 provider which contains the definition of the method. Defaults to the
-            main_provider set on the class.
-        resource_type : str, optional
-            The name of the type of resource being managed. Defaults to the resource_type set on the class.
-        resource_identifier : str, optional
-            Templatable via SelectionAttribute. Override for resource identifier if something other than the
-            primary key of the current resource should be used.
-        undoable : bool, default: False
-            Cosmetic, to display a warning about data loss if not set to true.
-        can_force : bool, default: False
-            Adds an additional force checkbox to the confirmation dialog if set. The value of this checkbox
-            is passed as "force" to the callback, and can be represented by a ForceFlag object in the template.
-        summary : str, optional
-            A short description of the action being performed for logging purposes. Defaults to a concatenation
-            of action name and resource type (eg. 'Delete EC2 instance')
-        extra_fields : dict, optional
-            A map of additional fields to add to the confirmation dialog, where the key is the name of the field,
-            and the value is a DialogField instance. These fields are then passed as keyword arguments to the
-            callback, where the argument name is the key of the field in the dict. The value of extra fields can
-            also be referred to via a FieldValue object in the template.
-        action_name : str, default: "Delete"
-            The name of the action being performed if the dialog is confirmed. Defaults to 'Delete' as that is both
-            the original purpose of confirmation dialogs and the most common action requiring a confirmation.
-        success_template : str, optional:
-            A formattable string that will be displayed as a message if the operation succeeds. The format method
-            will be called on the string, where index 0, and the named field 'resource' will be available as
-            arguments containing the resource primary key. All keyword arguments passed to the method will also
-            be passed as-is to this invocation of format. Attempts to construct a grammatically correct but not
-            particularly pleasing to read message if omitted.
         hotkey : str, optional
             The hotkey for this action. This string should be a valid key for the add_hotkey function. If not
             provided, no hotkey will be added for this confirmation dialog.
         hotkey_tooltip : str, optional
             If set, passes a tooltip for the hotkey to be displayed on the hotkey display list. If omitted, the
             hotkey will be hidden from the hotkey display list.
-        from_what : str, optional
-            The from_what option of a DeleteResourceDialog.
-        from_what_name : str, optional
-            Templatable via SelectionAttribute. The from_what_name option of a DeleteResourceDialog.
 
         Returns
         -------
@@ -1322,64 +1390,23 @@ class ResourceLister(ResourceListerBase):
             A function that, when called, begins the confirmation process.
         """
 
+        kwargs["category"] = (
+            "category" in kwargs and kwargs["category"]
+        ) or self.category
+        kwargs["subcategory"] = (
+            "subcategory" in kwargs and kwargs["subcategory"]
+        ) or self.subcategory
+        kwargs["resource_type"] = (
+            "resource_type" in kwargs and kwargs["resource_type"]
+        ) or self.resource_type
+        kwargs["provider"] = (
+            "provider" in kwargs and kwargs["provider"]
+        ) or self.main_provider
+
+        generic = generic_confirm_template(*args, **kwargs)
+
         def fn(*args):
-            nonlocal category, subcategory, resource_type, provider, summary, extra_fields, success_template
-
-            category = category or self.category
-            subcategory = subcategory or self.subcategory
-            resource_type = resource_type or self.resource_type
-            provider = provider or self.main_provider
-            summary = summary or f"{action_name} {resource_type}"
-            if extra_fields is None:
-                extra_fields = {}
-            success_template = (
-                success_template
-                or f"Performing action '{action_name.lower()} {resource_type}' on resource {'{0}'}..."
-            )
-
-            rid = ""
-            if resource_identifier is not None:
-                rid = resource_identifier
-                if hasattr(rid, "resolve") and callable(rid.resolve):
-                    # Cannot insert field values at this time.
-                    rid = rid.resolve(self.selection, **kwargs)
-            elif self.primary_key is not None:
-                rid = self.selection[self.primary_key]
-
-            def callback(**cb_kwargs):
-                if custom_callback is not None:
-                    custom_callback(**cb_kwargs)
-                else:
-                    Common.generic_api_call(
-                        provider,
-                        method,
-                        template.resolve(self.selection, **kwargs, **cb_kwargs),
-                        summary,
-                        category,
-                        subcategory=subcategory,
-                        success_template=success_template,
-                        resource=rid,
-                        **cb_kwargs,
-                    )
-                if refresh:
-                    self.refresh_data()
-
-            fwn = from_what_name
-            if fwn is not None and hasattr(fwn, "resolve") and callable(fwn.resolve):
-                # Cannot insert field values at this time.
-                fwn = fwn.resolve(self.selection, **kwargs)
-
-            DeleteResourceDialog.opener(
-                caller=self,
-                resource_type=resource_type,
-                resource_identifier=rid,
-                callback=callback,
-                can_force=can_force,
-                extra_fields=extra_fields,
-                from_what=from_what,
-                from_what_name=fwn,
-                **kwargs,
-            )
+            return generic(self, *args)
 
         if hotkey is not None:
             self.add_hotkey(hotkey, fn, hotkey_tooltip, True)
@@ -1522,21 +1549,10 @@ class ResourceLister(ResourceListerBase):
         list(awsc.base_control.OpenableListControl, awsc.info.HotkeyDisplay)
             A new instance of this class, and its associated hotkey display.
         """
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            color=Common.color(f"{cls.prefix}_generic", "generic"),
-            selection_color=Common.color(f"{cls.prefix}_selection", "selection"),
-            title_color=Common.color(f"{cls.prefix}_heading", "column_title"),
-            update_color=Common.color(f"{cls.prefix}_updated", "highlight"),
-            update_selection_color=Common.color(
-                f"{cls.prefix}_updated", "highlight_selection"
-            ),
-            **kwargs,
+        instance = cls(*default_args(), **default_kwargs(cls.prefix), **kwargs)
+        instance.border = Common.default_border(
+            cls.prefix, cls.title, instance.title_info()
         )
-        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
         return [instance, instance.hotkey_display]
 
     @classmethod
@@ -1877,17 +1893,10 @@ class SingleRelationLister(ResourceListerBase):
         list(awsc.base_control.SingleRelationLister, awsc.info.HotkeyDisplay)
             A new instance of this class, and its associated hotkey display.
         """
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            color=Common.color(f"{cls.prefix}_generic", "generic"),
-            selection_color=Common.color(f"{cls.prefix}_selection", "selection"),
-            title_color=Common.color(f"{cls.prefix}_heading", "column_title"),
-            **kwargs,
+        instance = cls(*default_args(), **default_kwargs(cls.prefix), **kwargs)
+        instance.border = Common.default_border(
+            cls.prefix, cls.title, instance.title_info()
         )
-        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
         return [instance, instance.hotkey_display]
 
     def __init__(self, parent, alignment, dimensions, *args, selection, **kwargs):
@@ -2027,17 +2036,10 @@ class MultiLister(ResourceListerBase):
         list(awsc.base_control.MultiLister, awsc.info.HotkeyDisplay)
             A new instance of this class, and its associated hotkey display.
         """
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            color=Common.color(f"{cls.prefix}_generic", "generic"),
-            selection_color=Common.color(f"{cls.prefix}_selection", "selection"),
-            title_color=Common.color(f"{cls.prefix}_heading", "column_title"),
-            **kwargs,
+        instance = cls(*default_args(), **default_kwargs(cls.prefix), **kwargs)
+        instance.border = Common.default_border(
+            cls.prefix, cls.title, instance.title_info()
         )
-        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
         return [instance, instance.hotkey_display]
 
     def __init__(
@@ -2168,16 +2170,10 @@ class GenericDescriber(TextBrowser):
         list(awsc.base_control.GenericDescriber, awsc.info.HotkeyDisplay)
             A new instance of this class, and its associated hotkey display.
         """
-        instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            color=Common.color(f"{cls.prefix}_generic", "generic"),
-            filtered_color=Common.color(f"{cls.prefix}_filtered", "selection"),
-            **kwargs,
+        instance = cls(*default_args(), **default_kwargs(cls.prefix), **kwargs)
+        instance.border = Common.default_border(
+            cls.prefix, cls.title, instance.title_info()
         )
-        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
         return [instance, instance.hotkey_display]
 
     def title_info(self):
@@ -2222,6 +2218,82 @@ class GenericDescriber(TextBrowser):
             subcls.register()
 
 
+class DefaultResolver:
+    """
+    Resolver for resolving describer kwargs and entry attributes.
+
+    The default resolver returns the value unchanged.
+    """
+
+    def __call__(self, value):
+        return value
+
+
+class AttributeResolver:
+    """
+    Resolver for resolving describer kwargs and entry attributes.
+
+    Chainable resolver which returns an attribute of the passed value.
+    """
+
+    def __init__(self, attribute, resolver=DefaultResolver()):
+        self.attribute = attribute
+        self.resolver = resolver
+
+    def __call__(self, value):
+        return self.resolver(getattr(value, self.attribute))
+
+
+class IndexResolver:
+    """
+    Resolver for resolving describer kwargs and entry attributes.
+
+    Chainable resolver which returns an index of the passed value.
+    """
+
+    def __init__(self, index, resolver=DefaultResolver()):
+        self.index = index
+        self.resolver = resolver
+
+    def __call__(self, value):
+        return self.resolver(value[self.index])
+
+
+class DescriberKwarg:
+    """
+    Helper class for describe_kwargs_override.
+    """
+
+    def __init__(self, kwarg, resolver=DefaultResolver()):
+        self.kwarg = kwarg
+        self.resolver = resolver
+
+    def resolve(self, entry, **kwargs):
+        """
+        Resolves the runtime value of the describer kwarg based on values passed at init to the describer.
+        """
+        return self.resolver(kwargs[self.kwarg])
+
+
+class DescriberEntryAttribute(DescriberKwarg):
+    """
+    Helper class for describe_kwargs_override.
+    """
+
+    def __init__(self, attribute, resolver=DefaultResolver()):
+        super().__init__(
+            "entry", resolver=AttributeResolver(attribute, resolver=resolver)
+        )
+
+
+class FString:
+    def __init__(self, template):
+        self.template = template
+
+    def __call__(self, **kwargs):
+        return self.template.format(**kwargs)
+
+
 class Describer(TextBrowser):
     """
     Describers are AWS-aware text browsers. When provided with a resource ID, Describer subclasses contact the AWS API on a specified API endpoint, retrieve
@@ -2230,6 +2302,17 @@ class Describer(TextBrowser):
 
     prefix = "CHANGEME"
     title = "CHANGEME"
+
+    resource_type = "CHANGEME"
+    main_provider = "CHANGEME"
+    category = "CHANGEME"
+    subcategory = "CHANGEME"
+    describe_method = "CHANGEME"
+    describe_kwarg_name: str | None = None
+    describe_kwarg_is_list = False
+    describe_kwargs_override: Dict[str, Any] = {}
+    object_path: str | FString = ".ChangeMe"
+    default_entry_key = "name"
 
     @classmethod
     def opener(cls, **kwargs):
@@ -2243,17 +2326,15 @@ class Describer(TextBrowser):
             A new instance of this class, and its associated hotkey display.
         """
         instance = cls(
-            Common.Session.ui.top_block,
-            DefaultAnchor,
-            DefaultDimension,
-            weight=0,
-            color=Common.color(f"{cls.prefix}_generic", "generic"),
-            filtered_color=Common.color(f"{cls.prefix}_filtered", "selection"),
+            *default_args(),
+            **default_kwargs(cls.prefix),
             syntax_highlighting=True,
             scheme=Common.Configuration.scheme,
             **kwargs,
         )
-        instance.border = default_border(cls.prefix, cls.title, instance.title_info())
+        instance.border = Common.default_border(
+            cls.prefix, cls.title, instance.title_info()
+        )
         return [instance, instance.hotkey_display]
 
     def title_info(self):
@@ -2267,7 +2348,7 @@ class Describer(TextBrowser):
         """
         return self.entry_id
 
-    def populate_entry(self, *args, entry, entry_key, **kwargs):
+    def populate_entry(self, **kwargs):
         """
         Populates the entry fields of the Describer based on the entry and entry_key received.
 
@@ -2280,48 +2361,79 @@ class Describer(TextBrowser):
         entry_key : str
             The name of the primary key of the resource.
         """
-        if entry is None:
+        if kwargs["entry"] is None:
             self.entry = None
             self.entry_id = None
             return
-        self.entry = entry
-        self.entry_id = entry[entry_key]
+        self.entry = kwargs["entry"]
+        self.entry_id = kwargs["entry"][kwargs["entry_key"]]
 
-    def populate_describe_kwargs(self):
+    def populate_describe_kwargs(self, **kwargs):
         """
         Populates the describe kwargs dict, which is what will be sent to the AWS API when querying the resource.
         """
-        self.describe_kwargs[self.describe_kwarg_name] = (
-            [self.entry_id] if self.describe_kwarg_is_list else self.entry_id
-        )
+        if self.describe_kwarg_name is not None:
+            self.describe_kwargs[self.describe_kwarg_name] = (
+                [self.entry_id] if self.describe_kwarg_is_list else self.entry_id
+            )
+        for arg, arg_value in self.describe_kwargs_override.items():
+            if hasattr(arg_value, "resolve"):
+                self.describe_kwargs[arg] = arg_value.resolve(**kwargs)
+            else:
+                self.describe_kwargs[arg] = arg_value
+
+    def confirm_template(self, *args, hotkey=None, hotkey_tooltip=None, **kwargs):
+        """
+        Creates a confirmation sequence.
+
+        Can be used as a shorthand for registering a confirmation dialog as a hotkey. Returns a function that,
+        when called, begins the confirmation process. The returned function requires no arguments, but takes any
+        amount for legacy reasons.
+
+        Args and kwargs correspond to the parameters of generic_confirm_template.
+
+        Parameters
+        ----------
+        hotkey : str, optional
+            The hotkey for this action. This string should be a valid key for the add_hotkey function. If not
+            provided, no hotkey will be added for this confirmation dialog.
+        hotkey_tooltip : str, optional
+            If set, passes a tooltip for the hotkey to be displayed on the hotkey display list. If omitted, the
+            hotkey will be hidden from the hotkey display list.
+
+        Returns
+        -------
+        callable
+            A function that, when called, begins the confirmation process.
+        """
+
+        kwargs["category"] = kwargs["category"] or self.category
+        kwargs["subcategory"] = kwargs["subcategory"] or self.subcategory
+        kwargs["resource_type"] = kwargs["resource_type"] or self.resource_type
+        kwargs["provider"] = kwargs["provider"] or self.main_provider
+
+        generic = generic_confirm_template(*args, **kwargs)
+
+        def fn(*args):
+            return generic(self, *args)
+
+        if hotkey is not None:
+            self.add_hotkey(hotkey, fn, hotkey_tooltip, True)
+        return fn
 
     def __init__(
-        self, parent, alignment, dimensions, *args, entry, entry_key="name", **kwargs
+        self, parent, alignment, dimensions, *args, entry, entry_key=None, **kwargs
     ):
-        self.populate_entry(entry=entry, entry_key=entry_key)
+        if entry_key is None:
+            entry_key = self.default_entry_key
+        kwargs["entry"] = entry
+        kwargs["entry_key"] = entry_key
+        self.populate_entry(**kwargs)
+        kwargs["entry_id"] = self.entry_id
         super().__init__(parent, alignment, dimensions, *args, **kwargs)
-        if not hasattr(self, "resource_key"):
-            self.resource_key = ""
-            raise AttributeError("resource_key is undefined")
-        if not hasattr(self, "describe_method"):
-            self.describe_method = ""
-            raise AttributeError("describe_method is undefined")
-        if not hasattr(self, "describe_kwarg_name") and not hasattr(
-            self, "describe_kwargs"
-        ):
-            self.describe_kwarg_name = ""
-            raise AttributeError(
-                "describe_kwarg_name is undefined and describe_kwargs not set manually"
-            )
-        if not hasattr(self, "describe_kwarg_is_list"):
-            self.describe_kwarg_is_list = False
         if not hasattr(self, "describe_kwargs"):
             self.describe_kwargs = {}
-        if not hasattr(self, "object_path"):
-            self.object_path = ""
-            raise AttributeError("object_path is undefined")
-        if hasattr(self, "describe_kwarg_name"):
-            self.populate_describe_kwargs()
+        self.populate_describe_kwargs(**kwargs)
 
         self.add_hotkey(ControlCodes.R, self.refresh_data, "Refresh")
         self.hotkey_display = HotkeyDisplay.opener(caller=self)
@@ -2339,6 +2451,9 @@ class Describer(TextBrowser):
                     ),
                     command_spec["tooltip"],
                 )
+
+        if isinstance(self.object_path, FString):
+            self.object_path = self.object_path(**kwargs)
 
         self.refresh_data()
 
@@ -2378,14 +2493,14 @@ class Describer(TextBrowser):
         Data refresh callback. Fetches the info from the AWS API and refreshes the output.
         """
         try:
-            provider = Common.Session.service_provider(self.resource_key)
+            provider = Common.Session.service_provider(self.main_provider)
         except KeyError:
             Common.error(
                 "boto3 does not recognize provider",
                 "Invalid provider",
                 "Core",
                 subcategory="Describer",
-                api_provider=self.resource_key,
+                api_provider=self.main_provider,
                 classname=type(self).__name__,
             )
             return
@@ -2397,7 +2512,7 @@ class Describer(TextBrowser):
                 "List Resources",
                 "Core",
                 subcategory="Describer",
-                api_provider=self.resource_key,
+                api_provider=self.main_provider,
                 api_method=self.describe_method,
                 api_kwargs=self.describe_kwargs,
             )
@@ -2434,6 +2549,8 @@ class DeleteResourceDialog(SessionAwareDialog):
     Convenience dialog for requesting confirmation for an action. By default, this is tuned for delete actions but really, anything that requires a
     ok or cancel button can be put here.
     """
+
+    line_size = 20
 
     def __init__(
         self,
@@ -2477,11 +2594,8 @@ class DeleteResourceDialog(SessionAwareDialog):
         """
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
-        kwargs["border"] = Border(
-            Common.border("default"),
-            Common.color("modal_dialog_border"),
-            f"{resource_type} {action_name}",
-            Common.color("modal_dialog_border_title"),
+        kwargs["border"] = Common.default_border(
+            "modal_dialog", f"{action_name} {resource_type}"
         )
         super().__init__(*args, **kwargs)
         label = [
@@ -2525,7 +2639,7 @@ class DeleteResourceDialog(SessionAwareDialog):
             for field in extra_fields.keys():
                 self.highlighted += 1
                 self.add_field(extra_fields[field])
-                self.extra_fields[field] = extra_fields
+                self.extra_fields[field] = extra_fields[field]
         self.callback = callback
 
     def input(self, key):
@@ -2607,10 +2721,13 @@ class ListResourceDocumentEditor:
         update_method,
         entry_name_arg,
         update_document_arg,
+        entry_name_is_list=False,
         entry_key="name",
         entry_name_arg_update=None,
         as_json=True,
         message="Update successful",
+        ignored_fields=None,
+        static_fields=None,
     ):
         """
         Initializes a ListResourceDocumentEditor.
@@ -2629,6 +2746,8 @@ class ListResourceDocumentEditor:
             The name of the kwarg for the retrieve_method which must be passed the entry's key.
         update_document_arg : str
             The name of the kwarg for the update_method which receives the updated document.
+        entry_name_is_list : bool
+            If true, pass entry_name_arg to retrieve_method as a list.
         entry_key : str
             The field in the entry which contains the value for the entry name argument.
         entry_name_arg_update : str
@@ -2637,6 +2756,10 @@ class ListResourceDocumentEditor:
         as_json : bool or dict
             If true, each field is passed as a json object. If false, all list and map fields are converted to their
             representation via json.dumps before passing. For a ListResourceDocumentEditor, this only affects the root object.
+        ignored_fields : list
+            A list of fields to ignore (remove) from the retrieved data. Informational fields that cause compatibility issues.
+        static_fields : dict
+            A mapping of field name to field value for keyword arguments that have a static value in the API call.
         """
         self.provider = Common.Session.service_provider(provider)
         self.provider_name = provider
@@ -2647,16 +2770,22 @@ class ListResourceDocumentEditor:
             self.update = getattr(self.provider, update_method)
         self.retrieve_path = retrieve_path
         self.retrieve_entry_name_arg = entry_name_arg
+        self.retrieve_entry_name_is_list = entry_name_is_list
         self.update_document_arg = update_document_arg
         self.update_entry_name_arg = (
             entry_name_arg_update
             if entry_name_arg_update is not None
             else entry_name_arg
         )
+        if ignored_fields is not None:
+            self.ignored_fields = ignored_fields[:]
+        else:
+            self.ignored_fields = []
         self.entry_key = entry_key
         self.as_json = as_json
         self.update_method = update_method
         self.message = message
+        self.static_fields = static_fields if static_fields is not None else {}
 
     def retrieve_content(self, selection):
         """
@@ -2672,7 +2801,11 @@ class ListResourceDocumentEditor:
         str
             Return value of display_content on the fetched data.
         """
-        r_kwargs = {self.retrieve_entry_name_arg: selection[self.entry_key]}
+        r_kwargs = {
+            self.retrieve_entry_name_arg: [selection[self.entry_key]]
+            if self.retrieve_entry_name_is_list
+            else selection[self.entry_key]
+        }
         response = self.retrieve(**r_kwargs)
         return self.display_content(response)
 
@@ -2690,10 +2823,18 @@ class ListResourceDocumentEditor:
         str
             A prettified JSON, which the user will be editing.
         """
-        return json.dumps(
+        inner = (
             Common.Session.jq(self.retrieve_path)
             .input(text=json.dumps(response, default=datetime_hack))
-            .first(),
+            .first()
+        )
+        for field in self.ignored_fields:
+            if field in inner:
+                del inner[field]
+        for field, field_value in self.static_fields.items():
+            inner[field] = field_value
+        return json.dumps(
+            inner,
             sort_keys=True,
             indent=2,
         )
@@ -2710,12 +2851,16 @@ class ListResourceDocumentEditor:
             The data as edited by the user.
         """
         try:
-            u_kwargs = {
-                self.update_entry_name_arg: selection[self.entry_key],
-                self.update_document_arg: json.loads(newcontent)
-                if self.as_json
-                else newcontent,
-            }
+            u_kwargs = (
+                {
+                    self.update_entry_name_arg: selection[self.entry_key],
+                    self.update_document_arg: json.loads(newcontent)
+                    if self.as_json
+                    else newcontent,
+                }
+                if self.update_document_arg is not None
+                else json.loads(newcontent)
+            )
             self.update(**u_kwargs)
             Common.success(
                 self.message,
@@ -2736,7 +2881,7 @@ class ListResourceDocumentEditor:
             Common.clienterror(
                 error,
                 self.update_method,
-                self.provider.capitalize(),
+                self.provider_name.capitalize(),
                 api_kwargs=u_kwargs,
                 api_provider=self.provider_name,
                 api_method=self.update_method,
@@ -2745,7 +2890,7 @@ class ListResourceDocumentEditor:
             Common.error(
                 f"Parameter validation error: {str(error)}",
                 self.update_method,
-                self.provider.capitalize(),
+                self.provider_name.capitalize(),
                 api_kwargs=u_kwargs,
                 api_provider=self.provider_name,
                 api_method=self.update_method,
@@ -2756,10 +2901,17 @@ class ListResourceDocumentEditor:
         Executes the full editing workflow. Retrieves the data from AWS, presents it to the user to edit, then calls back to AWS to update the content.
         """
         content = self.retrieve_content(selection)
-        newcontent = Common.Session.textedit(content).strip(" \n\t")
+        newcontent = Common.Session.textedit(content)
         if content == newcontent:
             Common.Session.set_message("Input unchanged.", Common.color("message_info"))
-        self.update_content(selection, newcontent)
+            return
+        self.update_content(selection, newcontent.strip(" \n\t"))
+
+    def hotkey_callback(self, control):
+        """
+        This function can be passed as a hotkey callback to a ResourceLister.
+        """
+        self.edit(control.selection)
 
 
 class ListResourceDocumentCreator(ListResourceDocumentEditor):
@@ -2820,10 +2972,10 @@ class ListResourceDocumentCreator(ListResourceDocumentEditor):
             entry_name_arg_update=None,
             as_json=as_json,
             message=message,
+            static_fields=static_fields,
         )
         self.initial_document = initial_document
         self.golden = self.display_content(self.initial_document)
-        self.static_fields = static_fields if static_fields is not None else {}
         self.create_method = create_method
         self.provider_name = provider
 

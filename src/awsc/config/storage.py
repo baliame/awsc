@@ -1,6 +1,7 @@
 """
 Module for the encrypted key store object.
 """
+import datetime
 import getpass
 import hashlib
 import os
@@ -46,11 +47,10 @@ class Keystore:
         self.nonce = os.urandom(16)
         self.keys = {}
 
-    def unlock(self):
+    def do_unlock(self, password):
         """
-        Prompts the user to enter the password to access the key storage, and parses the keylist file.
+        Unlock keystore with a password.
         """
-        password = getpass.getpass("Enter encryption phrase for key database: ")
         sha = hashlib.sha256(password.encode("ascii"))
         if not self.nonce_file.exists():
             with self.nonce_file.open("wb") as file:
@@ -62,6 +62,16 @@ class Keystore:
 
         if self.keylist_file.exists():
             self.parse_keylist()
+
+    def unlock(self, silent=False):
+        """
+        Prompts the user to enter the password to access the key storage, and parses the keylist file.
+        """
+        password = getpass.getpass(
+            "Enter encryption phrase for key database: ",
+            stream=sys.stderr if silent else None,
+        )
+        self.do_unlock(password)
 
     def parse_keylist(self):
         """
@@ -77,6 +87,13 @@ class Keystore:
             unpadder = PKCS7(256).unpadder()
             yaml_decoded = unpadder.update(yaml_decoded) + unpadder.finalize()
             self.keys = yaml.safe_load(yaml_decoded.decode("UTF-8"))
+            changed = False
+            for key in self.keys:
+                if "temp" in self.keys[key]:
+                    changed = True
+                    self.keys[key].pop("temp")
+            if changed:
+                self.write_keylist()
         except ValueError:
             print("Incorrect password.")
             sys.exit(1)
@@ -95,7 +112,7 @@ class Keystore:
 
     def __getitem__(self, item):
         """
-        Returns the named keypair.
+        Returns the named keypair. Resolves references unless temporary credentials are available.
 
         Parameters
         ----------
@@ -107,7 +124,98 @@ class Keystore:
         dict
             A dict containing the access and secret keys.
         """
-        return self.keys[item]
+        while key := self.keys[item]:
+            if "temp" in key:
+                if (
+                    datetime.datetime.fromtimestamp(key["temp"]["expiry"])
+                    > datetime.datetime.now()
+                ):
+                    return key["temp"]
+            if "ref" in key:
+                item = key["ref"]
+                continue
+            return key
+
+    def force_resolve(self, item):
+        """
+        Returns the named keypair. Resolves references and ignored temporary credentials.
+
+        Parameters
+        ----------
+        item : str
+            Name of the keypair to fetch.
+
+        Returns
+        -------
+        dict
+            A dict containing the access and secret keys.
+        """
+        while key := self.keys[item]:
+            if "ref" in key:
+                item = key["ref"]
+                continue
+            if "temp" in key:
+                if (
+                    datetime.datetime.fromtimestamp(key["temp"]["expiry"])
+                    > datetime.datetime.now()
+                ):
+                    return key["temp"]
+            return key
+
+    def get_permanent_credentials(self, item):
+        """
+        Returns the permanent credentials associated with a context.
+
+        Parameters
+        ----------
+        item : str
+            Name of the key..
+
+        Returns
+        -------
+        dict
+            Gets the permanent credentials associated with a context.
+        """
+        while key := self.keys[item]:
+            if "ref" in key:
+                item = key["ref"]
+                continue
+            return key
+
+    def get_ref_name(self, item):
+        """
+        Returns the ref of the named keypair, as this property is not accessible through __getitem__.
+
+        Parameters
+        ----------
+        item: str
+            Name of the key with a reference.
+
+        Returns
+        -------
+        str | None
+            Name of the key being referenced, or None if none.
+        """
+        key = self.keys[item]
+        return key["ref"] if "ref" in key else None
+
+    def get_all_ref_targets(self):
+        """
+        Enumerates all ref targets into a list.
+
+        Returns
+        -------
+        set(str)
+            A list of keys which are targets of refs.
+        """
+        targets = set()
+        for key in self.keys:
+            if "ref" in key:
+                targets.add(key["ref"])
+        return targets
+
+    def __contains__(self, item):
+        return item in self.keys
 
     def set_key(self, name, access, secret):
         """
@@ -123,6 +231,34 @@ class Keystore:
             The secret key of the keypair.
         """
         self.keys[name] = {"access": access, "secret": secret}
+        self.write_keylist()
+
+    def set_ref(self, name, ref):
+        """
+        Upserts a reference key into the key storage and writes to disk.
+
+        Parameters
+        ----------
+        name : str
+            The name of the keypair.
+        ref : str
+            The target keypair being referenced.
+        """
+        self.keys[name] = {"ref": ref}
+        self.write_keylist()
+
+    def set_temp(self, name, data):
+        """
+        Sets temporary credentials for a reference key.
+
+        Parameters
+        ----------
+        name : str
+            The name of the keypair.
+        data : dict
+            The temporary data of the keypair.
+        """
+        self.keys[name]["temp"] = data
         self.write_keylist()
 
     def delete_key(self, name):

@@ -376,7 +376,7 @@ class HotkeyControl(Control):
 
         def __init__(self, key, tooltip=None, is_validated=False, condition=False):
             self.key = key
-            self.tooltip = None
+            self.tooltip = tooltip
             self.is_validated = is_validated
 
         def __call__(self, function):

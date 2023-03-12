@@ -22,13 +22,17 @@ class PolicyVersionDescriber(Describer):
     prefix = "policy_version_browser"
     title = "Policy Document"
 
+    resource_type = "policy version"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "PolicyVersion"
+    describe_method = "get_policy_version"
+    object_path = ".PolicyVersion"
+
     def title_info(self):
         return self.name
 
     def __init__(self, *args, policy="", **kwargs):
-        self.resource_key = "iam"
-        self.describe_method = "get_policy_version"
-        self.object_path = ".PolicyVersion"
         self.arn = Common.Session.jq(".Arn").input(text=policy).first()
         self.name = Common.Session.jq(".PolicyName").input(text=policy).first()
         version = Common.Session.jq(".DefaultVersionId").input(text=policy).first()
@@ -46,11 +50,16 @@ class PolicyDescriber(Describer):
     prefix = "policy_browser"
     title = "Policy"
 
-    def __init__(self, *args, entry_key="arn", **kwargs):
-        self.resource_key = "iam"
-        self.describe_method = "get_policy"
-        self.describe_kwarg_name = "PolicyArn"
-        self.object_path = ".Policy"
+    resource_type = "policy"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "Managed Policies"
+    describe_method = "get_policy"
+    describe_kwarg_name = "PolicyArn"
+    object_path = ".Policy"
+    default_entry_key = "arn"
+
+    def __init__(self, *args, **kwargs):
         self.additional_commands = {
             "d": {
                 "command": PolicyVersionDescriber.opener,
@@ -59,7 +68,7 @@ class PolicyDescriber(Describer):
                 "kwargs": {"entry": None},
             }
         }
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 @ResourceLister.Autocommand("UserLister", "m", "View policies", "user")

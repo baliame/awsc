@@ -13,13 +13,15 @@ class SubnetDescriber(Describer):
     prefix = "subnet_browser"
     title = "Subnet"
 
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_subnets"
-        self.describe_kwarg_name = "SubnetIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Subnets[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "subnet"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "Subnet"
+    describe_method = "describe_subnets"
+    describe_kwarg_name = "SubnetIds"
+    describe_kwarg_is_list = True
+    object_path = ".Subnets[0]"
+    default_entry_key = "id"
 
 
 def _subnet_determine_public(self, subnet, *args):

@@ -17,12 +17,14 @@ class RDSDescriber(Describer):
     prefix = "rds_browser"
     title = "RDS Instance"
 
-    def __init__(self, *args, entry_key="instance id", **kwargs):
-        self.resource_key = "rds"
-        self.describe_method = "describe_db_instances"
-        self.describe_kwarg_name = "DBInstanceIdentifier"
-        self.object_path = ".DBInstances[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "database instance"
+    main_provider = "rds"
+    category = "RDS"
+    subcategory = "Database Instance"
+    describe_method = "describe_route_tables"
+    describe_kwarg_name = "DBInstanceIdentifier"
+    object_path = ".DBInstances[0]"
+    default_entry_key = "instance id"
 
 
 class RDSResourceLister(ResourceLister):

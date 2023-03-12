@@ -13,20 +13,22 @@ class TargetGroupDescriber(Describer):
     prefix = "tg_browser"
     title = "Target Group"
 
-    def populate_entry(self, *args, entry, **kwargs):
-        super().populate_entry(*args, entry=entry, **kwargs)
+    resource_type = "target group"
+    main_provider = "elbv2"
+    category = "ELB v2"
+    subcategory = "Target Group"
+    describe_method = "describe_target_groups"
+    describe_kwarg_name = "TargetGroupArns"
+    describe_kwarg_is_list = True
+    object_path = ".TargetGroups[0]"
+    default_entry_key = "arn"
+
+    def populate_entry(self, **kwargs):
+        super().populate_entry(**kwargs)
         try:
-            self.name = entry["name"]
+            self.name = kwargs["entry"]["name"]
         except KeyError:
             self.name = self.entry_id
-
-    def __init__(self, *args, entry_key="arn", **kwargs):
-        self.resource_key = "elbv2"
-        self.describe_method = "describe_target_groups"
-        self.describe_kwarg_name = "TargetGroupArns"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".TargetGroups[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
 
     def title_info(self):
         return self.name

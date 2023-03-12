@@ -462,6 +462,34 @@ class Scheme:
                     "foreground": 64,
                     "background": 0,
                 },
+                "dashboard_block_loading": {
+                    "foreground": 33,
+                    "background": 0,
+                },
+                "dashboard_block_error": {
+                    "foreground": 124,
+                    "background": 0,
+                },
+                "dashboard_block_label": {
+                    "foreground": 220,
+                    "background": 0,
+                },
+                "dashboard_block_information": {
+                    "foreground": 75,
+                    "background": 0,
+                },
+                "dashboard_block_positive": {
+                    "foreground": 76,
+                    "background": 0,
+                },
+                "dashboard_block_neutral": {
+                    "foreground": 190,
+                    "background": 0,
+                },
+                "dashboard_block_negative": {
+                    "foreground": 209,
+                    "background": 0,
+                },
             },
             "borders": {
                 "default": {

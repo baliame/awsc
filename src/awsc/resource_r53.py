@@ -25,22 +25,24 @@ class R53RecordDescriber(Describer):
     prefix = "r53_record_browser"
     title = "Route53 Record"
 
-    def populate_entry(self, *args, entry, **kwargs):
-        super().populate_entry(*args, entry=entry, **kwargs)
-        self.record_type = entry["entry"]
-        self.record_name = entry["name"]
+    resource_type = "recordset"
+    main_provider = "route53"
+    category = "Route 53"
+    subcategory = "Recordsets"
+    describe_method = "list_resource_record_sets"
+    describe_kwarg_name = "HostedZoneId"
+    object_path = ".ResourceRecordSets[0]"
+    default_entry_key = "hosted_zone_id"
+
+    def populate_entry(self, **kwargs):
+        super().populate_entry(**kwargs)
+        self.record_type = kwargs["entry"]["entry"]
+        self.record_name = kwargs["entry"]["name"]
 
     def populate_describe_kwargs(self, *args, **kwargs):
         super().populate_describe_kwargs(*args, **kwargs)
         self.describe_kwargs["StartRecordType"] = self.record_type
         self.describe_kwargs["StartRecordName"] = self.record_name
-
-    def __init__(self, *args, entry_key="hosted_zone_id", **kwargs):
-        self.resource_key = "route53"
-        self.describe_method = "list_resource_record_sets"
-        self.describe_kwarg_name = "HostedZoneId"
-        self.object_path = ".ResourceRecordSets[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
 
     def title_info(self):
         return f"{self.record_type} {self.record_name}"

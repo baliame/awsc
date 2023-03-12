@@ -3,7 +3,6 @@ This module defines the UI handler class, which is where all the magic happens.
 """
 import shutil
 import signal
-import sys
 import tempfile
 import termios
 import threading
@@ -119,6 +118,8 @@ class UI:
         Whether the UI requires a repaint.
     restore : object
         Stores the state of the terminal to restore to upon shutdown. Required to return the user to a working terminal after exiting.
+    suspend_input_buffer : bool
+        Atomic for disabling input buffering during unraw operations.
     """
 
     def __init__(self):
@@ -146,6 +147,7 @@ class UI:
         self.input_buffer = []
         self.dirty = False
         self.restore = None
+        self.suspend_input_buffer = False
 
     @staticmethod
     def read_file(filename):
@@ -231,6 +233,32 @@ class UI:
             callback(str(objpath.resolve()), *args, **kwargs)
         return objpath
 
+    def print_centered(self, out, bounds, color=None, bold=False):
+        """
+        Naive center-printing function. Does not currently handle line breaks, so the text must fit into one line of the boundary.
+
+        Parameters
+        ----------
+        out : str
+            The string to print on the screen.
+        bounds : tuple(tuple(int, int), tuple(int, int))
+            The bounding box for printing the text.
+        color : awsc.termui.color.Color, optional
+            A callable which takes a string and returns a string. Used as a callback to color the output string.
+        bold : bool, default=False
+            If set, prints the text in bold.
+        """
+        center_row = int((bounds[1][1] - bounds[1][0]) / 2) - 2
+        center_col = int((bounds[0][1] - bounds[0][0]) / 2)
+        start_col = int(center_col - (len(out) / 2))
+        self.print(
+            out,
+            xy=(bounds[0][0] + start_col, bounds[1][0] + center_row),
+            color=color,
+            bounds=bounds,
+            bold=bold,
+        )
+
     def print(self, out, xy=None, color=None, wrap=False, bounds=None, bold=False):
         """
         Prints a text to a specified area of the screen buffer. Has no real effect if called outside the block paint hooks.
@@ -245,7 +273,7 @@ class UI:
             A callable which takes a string and returns a string. Used as a callback to color the output string.
         wrap : bool, default=False
             If set, text will wrap within the bounding box. Otherwise, the overflow on the row of the text is cut off.
-        bounds : tuple(int, int), optional
+        bounds : tuple(tuple(int, int), tuple(int, int)), optional
             The bounding box for printing the text. If omitted, the bounding box is the entire terminal.
         bold : bool, default=False
             If set, prints the text in bold.
@@ -405,8 +433,7 @@ class UI:
         would expect.
 
         KNOWN BUG: For some reason, a single keypress erroneously has its control character (^) consumed but the rest of the sequence is
-        output if a key is pressed roughly 1 second after the callback is executed. No amount of flushing fixes this. It is probably that
-        in some way, the input buffer loop is interfering with this and should be suspended while the unraw command is executing.
+        output if a key is pressed roughly 1 second after the callback is executed.
         It's annoying but not breaking anything, but does require attention at some point.
 
         Parameters
@@ -418,16 +445,22 @@ class UI:
         **kwargs : dict
             A map of keyword arguments to pass to the command.
         """
-        # termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
         # pylint: disable=protected-access
-        termios.tcsetattr(self.term._keyboard_fd, termios.TCSANOW, self.restore)
+        termios.tcflush(self.term._keyboard_fd, termios.TCIOFLUSH)
+        # pylint: disable=protected-access
+        termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
+        # pylint: disable=protected-access
+        # termios.tcsetattr(self.term._keyboard_fd, termios.TCSANOW, self.restore)
         # pylint: disable=protected-access
         self.term._line_buffered = True
         self.term.stream.write(self.term.normal_cursor)
         self.term.stream.flush()
         self.term.stream.write(self.term.exit_fullscreen)
         self.term.stream.flush()
-        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+        self.suspend_input_buffer = True
+        time.sleep(FRAMERATE * 10)
+        # pylint: disable=protected-access
+        termios.tcflush(self.term._keyboard_fd, termios.TCIOFLUSH)
         try:
             return cmd(*args, **kwargs)
         finally:
@@ -435,6 +468,7 @@ class UI:
             self.term.stream.flush()
             self.term.stream.write(self.term.hide_cursor)
             self.term.stream.flush()
+            self.suspend_input_buffer = False
             # pylint: disable=protected-access
             tty.setraw(self.term._keyboard_fd, termios.TCSANOW)
             # pylint: disable=protected-access
@@ -447,6 +481,9 @@ class UI:
         Actual handling of the inputs happens on the main loop thread.
         """
         while True:
+            if self.suspend_input_buffer:
+                time.sleep(FRAMERATE * 10)
+                continue
             key = self.term.inkey(None, FRAMERATE / 2)
             if key is not None and key != "":
                 with self.mutex:

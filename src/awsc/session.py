@@ -106,6 +106,7 @@ class Session:
                 "Region",
                 "UserId",
                 "Account",
+                "MFA",
                 "SSH Key",
                 "Default SSH username",
             ],
@@ -206,6 +207,8 @@ class Session:
             line_no += 1
             if line_no >= max_lines:
                 break
+        if line_no < max_lines:
+            lines[line_no] = text
         for i in range(max_lines):
             self._message_labels[i].texts = [(lines[i], color)]
         self.message_time = min(len(text) / 10.0, 5.0)
@@ -230,6 +233,9 @@ class Session:
         self.resource_main = new_frame[0]
         self.stack_frame = new_frame[:]
         self.ui.dirty = True
+        for elem in self.stack_frame:
+            if hasattr(elem, "on_become_frame"):
+                elem.on_become_frame()
 
     def push_frame(self, new_frame):
         """
@@ -248,6 +254,9 @@ class Session:
             if "KEY_ESCAPE" not in new_frame[0].tooltips:
                 new_frame[0].add_hotkey("KEY_ESCAPE", self.pop_frame, "Back")
         self.ui.dirty = True
+        for elem in self.stack_frame:
+            if hasattr(elem, "on_become_frame"):
+                elem.on_become_frame()
 
     def pop_frame(
         self, *args
@@ -276,6 +285,8 @@ class Session:
         """
         self.stack_frame.append(control)
         self.ui.dirty = True
+        if hasattr(control, "on_become_frame"):
+            control.on_become_frame()
 
     def remove_from_frame(self, control):
         """
@@ -320,12 +331,44 @@ class Session:
 
     @context.setter
     def context(self, value):
-        if self._context == value:
-            return
         self._context = value
         self.info_display["Context"] = value
+        data = self.context_data
+        auth = self.context_auth
+        self.info_display["MFA"] = (
+            "Disabled"
+            if data["mfa_device"] == ""
+            else ("Authenticated" if "session" in auth else "Unauthenticated")
+        )
         for elem in self.context_update_hooks:
             elem()
+
+    @property
+    def context_data(self):
+        """
+        Property. Directly accesses context data for convenience.
+        """
+        if self._context != "":
+            return self.config["contexts"][self._context]
+        return {}
+
+    @property
+    def context_auth(self):
+        """
+        Property. Directly accesses context keystore for convenience.
+        """
+        if self._context != "":
+            return self.config.keystore[self._context]
+        return {}
+
+    @property
+    def context_perm_auth(self):
+        """
+        Property. Directly accesses context keystore for convenience.
+        """
+        if self._context != "":
+            return self.config.keystore.get_permanent_credentials(self._context)
+        return {}
 
     @property
     def region(self):
@@ -414,3 +457,29 @@ class Session:
                 return temp.read()
         finally:
             os.unlink(temp.name)
+
+    def get_default_dashboard_layout(self):
+        """
+        Returns the default configured dashboard layout.
+
+        Returns
+        -------
+        list(list(str))
+            A list of rows of dashboard block class names.
+        """
+        if "default_dashboard_layout" in self.config:
+            return self.config["default_dashboard_layout"]
+        return [["Blank", "Blank"], ["Blank", "Blank"]]
+
+    def get_context_dashboard_layout(self):
+        """
+        Returns the configured dashboard layout for the currently selected context.
+
+        Returns
+        -------
+        list(list(str))
+            A list of rows of dashboard block class names.
+        """
+        if self.context in self.config["dashboard_layouts"]:
+            return self.config["dashboard_layouts"][self.context]
+        return self.get_default_dashboard_layout()

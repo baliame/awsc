@@ -81,18 +81,64 @@ class AWS:
             config = self.s3conf()
         else:
             config = self.conf()
+        if keys is None:
+            if Common.Session.context not in Common.Configuration.keystore:
+                return boto3.client(service)  # Let magic sort it out
+            keys = Common.Configuration.keystore[Common.Session.context]
+        access = keys["access"]
+        secret = keys["secret"]
+        endpoint = None
+        session = None
+        if "session" in keys:
+            session = keys["session"]
+        if "endpoint_url" in Common.Configuration["contexts"][Common.Session.context]:
+            endpoint = Common.Configuration["contexts"][Common.Session.context][
+                "endpoint_url"
+            ]
+        # print(f'Connecting to aws with keypair {access} / {secret} for context {Common.Session.context} on ')
         client = boto3.client(
             service,
-            aws_access_key_id=keys["access"]
-            if keys is not None
-            else Common.Configuration.keystore[Common.Session.context]["access"],
-            aws_secret_access_key=keys["secret"]
-            if keys is not None
-            else Common.Configuration.keystore[Common.Session.context]["secret"],
+            aws_access_key_id=access,
+            aws_secret_access_key=secret,
+            aws_session_token=session,
             config=config,
+            endpoint_url=endpoint,
         )
         # return AWSSubprocessWrapper(client)
         return client
+
+    # def assume_role(
+    #     self,
+    #     target_role,
+    #     security_token="",
+    #     mfa_device="",
+    #     token="",
+    #     session_name="awsc-session",
+    #     duration=3600,
+    #     keys=None,
+    # ):
+    #     if keys is None:
+    #         if Common.Session.context not in Common.Configuration.keystore:
+    #             access = None
+    #             secret = None
+    #         keys = Common.Configuration.keystore.force_resolve(Common.Session.context)
+    #     access = keys["access"]
+    #     secret = keys["secret"]
+    #     endpoint = None
+    #     if "endpoint_url" in Common.Configuration["contexts"][Common.Session.context]:
+    #         endpoint = Common.Configuration["contexts"][Common.Session.context][
+    #             "endpoint_url"
+    #         ]
+    #     if security_token == "" and mfa_device != "":
+    #
+    #         sts = boto3.client(
+    #             "sts",
+    #             aws_access_key_id=access,
+    #             aws_secret_access_key=secret,
+    #             config=self.conf(),
+    #             endpoint=endpoint,
+    #         )
+    #         sts.get_session_t
 
     def whoami(self, keys=None):
         """

@@ -24,12 +24,13 @@ class GroupDescriber(Describer):
     prefix = "group_browser"
     title = "Group"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "iam"
-        self.describe_method = "get_group"
-        self.describe_kwarg_name = "GroupName"
-        self.object_path = ".Group"
-        super().__init__(*args, **kwargs)
+    resource_type = "group"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "Group"
+    describe_method = "get_group"
+    describe_kwarg_name = "GroupName"
+    object_path = ".Group"
 
 
 @ResourceLister.Autocommand("UserLister", "g", "List groups for user", "user")

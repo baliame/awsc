@@ -20,13 +20,17 @@ class InstanceProfileDescriber(Describer):
     prefix = "instance_profile_browser"
     title = "Instance Profile"
 
+    resource_type = "instance profile"
+    main_provider = "iam"
+    category = "IAM"
+    subcategory = "Instance Profile"
+    describe_method = "get_instance_profile"
+    describe_kwarg_name = "InstanceProfileName"
+    object_path = ".InstanceProfile"
+
     def __init__(self, *args, entry, entry_key="name", **kwargs):
         from .arn import ARN
 
-        self.resource_key = "iam"
-        self.describe_method = "get_instance_profile"
-        self.describe_kwarg_name = "InstanceProfileName"
-        self.object_path = ".InstanceProfile"
         if entry_key == "id":  # id is an Arn from a single relation lister
             arn = ARN(entry["id"])
             entry_key = "name"

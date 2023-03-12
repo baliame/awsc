@@ -13,13 +13,15 @@ class ListenerActionDescriber(Describer):
     prefix = "listener_action_browser"
     title = "Listener Rule"
 
-    def __init__(self, *args, entry_key="arn", **kwargs):
-        self.resource_key = "elbv2"
-        self.describe_method = "describe_rules"
-        self.describe_kwarg_name = "RuleArns"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Rules[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "listener rule"
+    main_provider = "elbv2"
+    category = "ELB v2"
+    subcategory = "Listener Rules"
+    describe_method = "describe_rules"
+    describe_kwarg_name = "RuleArns"
+    describe_kwarg_is_list = True
+    object_path = ".Rules[0]"
+    default_entry_key = "arn"
 
 
 def _listener_action_determine_condition(result, *args):
@@ -164,13 +166,14 @@ class ListenerDescriber(Describer):
     prefix = "listener_browser"
     title = "Listener"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "elbv2"
-        self.describe_method = "describe_listeners"
-        self.describe_kwarg_name = "ListenerArns"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Listeners[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "listener"
+    main_provider = "elbv2"
+    category = "ELB v2"
+    subcategory = "Listener"
+    describe_method = "describe_listeners"
+    describe_kwarg_name = "ListenerArns"
+    describe_kwarg_is_list = True
+    object_path = ".Listeners[0]"
 
 
 def _listener_determine_ssl_policy(self, result, *args):

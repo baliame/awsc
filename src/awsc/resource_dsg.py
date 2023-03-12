@@ -9,16 +9,17 @@ class DBSubnetGroupDescriber(Describer):
     Describer control for database subnets.
     """
 
-    prefix = "subnet_browser"
-    title = "Subnet"
+    prefix = "db_subnet_group_browser"
+    title = "DB Subnet Group"
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "rds"
-        self.describe_method = "describe_db_subnet_groups"
-        self.describe_kwarg_name = "DBSubnetGroupName"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".DBSubnetGroups[0]"
-        super().__init__(*args, **kwargs)
+    resource_type = "db subnet group"
+    main_provider = "rds"
+    category = "RDS"
+    subcategory = "DB Subnet Groups"
+    describe_method = "describe_db_subnet_groups"
+    describe_kwarg_name = "DBSubnetGroupName"
+    describe_kwarg_is_list = True
+    object_path = ".DBSubnetGroups[0]"
 
 
 class DBSubnetGroupResourceLister(ResourceLister):

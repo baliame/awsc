@@ -12,13 +12,15 @@ class VPCDescriber(Describer):
     prefix = "vpc_browser"
     title = "VPC"
 
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "ec2"
-        self.describe_method = "describe_vpcs"
-        self.describe_kwarg_name = "VpcIds"
-        self.describe_kwarg_is_list = True
-        self.object_path = ".Vpcs[0]"
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "vpc"
+    main_provider = "ec2"
+    category = "EC2"
+    subcategory = "VPC"
+    describe_method = "describe_vpcs"
+    describe_kwarg_name = "VpcIds"
+    describe_kwarg_is_list = True
+    object_path = ".Vpcs[0]"
+    default_entry_key = "id"
 
 
 def _vpc_determine_default(self, vpc, *args):
