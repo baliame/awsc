@@ -1,6 +1,7 @@
 """
 Module for EC2 instance resources.
 """
+
 import subprocess
 from pathlib import Path
 
@@ -138,7 +139,7 @@ class EC2ResourceLister(ResourceLister):
             "weight": 0,
             "sort_weight": 1,
         },
-        **tagged_column_generator("name", "name", weight=1, sort_weight=0, size=30),
+        **tagged_column_generator("name", "Name", weight=1, sort_weight=0, size=30),
         "type": {
             "path": ".InstanceType",
             "size": 10,
@@ -314,7 +315,7 @@ class EC2ResourceLister(ResourceLister):
         keypair_call = Common.generic_api_call(
             "ec2",
             "describe_key_pairs",
-            {"KeyNames": self.selection["key name"]},
+            {"KeyNames": [self.selection["key name"]]},
             "Describe Key Pair",
             "EC2",
             subcategory="Key Pair",
@@ -344,7 +345,6 @@ class EC2ResourceLister(ResourceLister):
                 EC2SSHDialog.opener(
                     instance_entry=self.selection,
                     caller=self,
-                    weight=-500,
                 )
 
 

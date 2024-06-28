@@ -1,6 +1,7 @@
 """
 Module for EKS clusters.
 """
+
 import subprocess
 from pathlib import Path
 

@@ -1,6 +1,7 @@
 """
 Module for common storage and functions.
 """
+
 import configparser
 import json
 import sys

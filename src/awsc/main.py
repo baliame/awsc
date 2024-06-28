@@ -1,6 +1,7 @@
 """
 Main module for the awsc application.
 """
+
 import argparse
 import configparser
 import os

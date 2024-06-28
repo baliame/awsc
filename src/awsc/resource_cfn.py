@@ -1,6 +1,7 @@
 """
 Module for Cloudformation-related resources.
 """
+
 import datetime
 
 from .arn import ARN
@@ -344,7 +345,7 @@ class CFNRelated(MultiLister):
         return super().async_inner(*args, fn=fn, clear=clear, **kwargs)
 
 
-def _cfn_determine_created(cfn):
+def _cfn_determine_created(cfn, **kwargs):
     """
     Column callback for extracting when a stack was created.
     """
@@ -354,7 +355,7 @@ def _cfn_determine_created(cfn):
     )
 
 
-def _cfn_determine_updated(cfn):
+def _cfn_determine_updated(cfn, **kwargs):
     """
     Column callback for extracting when a stack was updated.
     """
@@ -398,7 +399,7 @@ class CFNResourceLister(ResourceLister):
     open_selection_arg = "compare_value"
 
 
-def _cfn_determine_parameter_value(param):
+def _cfn_determine_parameter_value(param, **kwargs):
     if param["ParameterValue"] == "*" * len(param["ParameterValue"]):
         return "<hidden>"
     return param["ParameterValue"]

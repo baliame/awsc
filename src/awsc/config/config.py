@@ -1,15 +1,17 @@
 """
 Module for the configuration parser object.
 """
+
 import sys
 from pathlib import Path
+from urllib import parse as urlparse
 
 import yaml
 
 from .scheme import Scheme
 from .storage import Keystore
 
-LAST_CONFIG_VERSION = 19
+LAST_CONFIG_VERSION = 20
 
 
 class Config:
@@ -62,6 +64,7 @@ class Config:
             17: self._update_17,
             18: self._update_18,
             19: self._update_19,
+            20: self._update_20,
         }
         if path is None:
             path = Path.home() / ".config" / "awsc"
@@ -260,6 +263,17 @@ class Config:
         for context in self.config["contexts"].keys():
             self.config["contexts"][context]["role"] = ""
 
+    def _update_20(self):
+        """
+        Version 20 configuration update.
+
+        Do not call.
+        """
+        for context in self.config["contexts"].keys():
+            if self.config["contexts"][context]["role"] != "":
+                # Unset ref and use blank keys instead. API will error out, which is the preferred behaviour if the role session expires.
+                self.keystore.set_key(context, "", "")
+
     def update_version(self):
         """
         Main configuration update sequence. Always called by initialize(), not required to call separately.
@@ -403,8 +417,33 @@ class Config:
             "account_id": acctid,
             "mfa_device": mfa_device,
             "role": role,
+            "source": source,
         }
-        self.keystore.set_ref(name, source)
+        # self.keystore.set_ref(name, source)
+        self.write_config()
+
+    def add_or_edit_sso_context(self, name, start_url, source, role, mfa_device=""):
+        """
+        Upserts a context into the configuration.
+
+        Parameters
+        ----------
+        name : str
+            The name of the context. If it already exists, it will be overwritten.
+        acctid : str
+            The account number of the context, usually acquired through Common.Session.whoami()
+        access : str
+            The access key which belongs to the account.
+        secret : str
+            The secret key which belongs to the account.
+        """
+        parsed_url = urlparse.urlparse(start_url)
+        domain = parsed_url.hostname.split(".")[0]
+        self.config["contexts"][name] = {
+            "account_id": f"SSO:{domain}",
+            "mfa_enabled": mfa_device,
+        }
+        # self.keystore.set_ref(name, source)
         self.write_config()
 
     def delete_context(self, name):

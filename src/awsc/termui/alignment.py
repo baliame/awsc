@@ -1,6 +1,7 @@
 """
 This module defines classes for aligning blocks on the terminal.
 """
+
 from .common import Commons
 
 

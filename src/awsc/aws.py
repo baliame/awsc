@@ -14,6 +14,10 @@ class AWS:
     Class which bridges the boto3 class model with the awsc configuration model.
     """
 
+    region_overrides = {"route53domains": "us-east-1"}
+
+    signature_version_overrides = {"s3": "s3v4"}
+
     def __init__(self):
         """
         Initializes an AWS object.
@@ -21,7 +25,7 @@ class AWS:
         Common.Session.context_update_hooks.append(self.idcaller)
         self.idcaller()
 
-    def conf(self):
+    def conf(self, svc=""):
         """
         Generates a boto3 configuration object from the current awsc session.
 
@@ -30,23 +34,19 @@ class AWS:
         botocore.config.Config
             The configuration object with the region and signature version set.
         """
-        return botoconf.Config(
-            region_name=Common.Session.region,
-            signature_version="v4",
+        region = (
+            Common.Session.region
+            if svc not in self.region_overrides
+            else self.region_overrides[svc]
         )
-
-    def s3conf(self):
-        """
-        Generates a boto3 configuration object for s3 from the current awsc session.
-
-        Returns
-        -------
-        botocore.config.Config
-            The configuration object with the region and signature version set.
-        """
+        signature_version = (
+            "v4"
+            if svc not in self.signature_version_overrides
+            else self.signature_version_overrides[svc]
+        )
         return botoconf.Config(
-            region_name=Common.Session.region,
-            signature_version="s3v4",
+            region_name=region,
+            signature_version=signature_version,
         )
 
     def env_session(self):
@@ -77,10 +77,7 @@ class AWS:
         object
             A boto3 client instance for the service.
         """
-        if service == "s3":
-            config = self.s3conf()
-        else:
-            config = self.conf()
+        config = self.conf(service)
         if keys is None:
             if Common.Session.context not in Common.Configuration.keystore:
                 return boto3.client(service)  # Let magic sort it out
@@ -95,7 +92,6 @@ class AWS:
             endpoint = Common.Configuration["contexts"][Common.Session.context][
                 "endpoint_url"
             ]
-        # print(f'Connecting to aws with keypair {access} / {secret} for context {Common.Session.context} on ')
         client = boto3.client(
             service,
             aws_access_key_id=access,
@@ -104,41 +100,7 @@ class AWS:
             config=config,
             endpoint_url=endpoint,
         )
-        # return AWSSubprocessWrapper(client)
         return client
-
-    # def assume_role(
-    #     self,
-    #     target_role,
-    #     security_token="",
-    #     mfa_device="",
-    #     token="",
-    #     session_name="awsc-session",
-    #     duration=3600,
-    #     keys=None,
-    # ):
-    #     if keys is None:
-    #         if Common.Session.context not in Common.Configuration.keystore:
-    #             access = None
-    #             secret = None
-    #         keys = Common.Configuration.keystore.force_resolve(Common.Session.context)
-    #     access = keys["access"]
-    #     secret = keys["secret"]
-    #     endpoint = None
-    #     if "endpoint_url" in Common.Configuration["contexts"][Common.Session.context]:
-    #         endpoint = Common.Configuration["contexts"][Common.Session.context][
-    #             "endpoint_url"
-    #         ]
-    #     if security_token == "" and mfa_device != "":
-    #
-    #         sts = boto3.client(
-    #             "sts",
-    #             aws_access_key_id=access,
-    #             aws_secret_access_key=secret,
-    #             config=self.conf(),
-    #             endpoint=endpoint,
-    #         )
-    #         sts.get_session_t
 
     def whoami(self, keys=None):
         """

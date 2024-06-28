@@ -1,6 +1,7 @@
 """
 Module for cloudwatch resources.
 """
+
 import datetime
 
 from .base_control import (
@@ -156,9 +157,9 @@ class AlarmLister(ResourceLister):
     columns = {
         "name": {"path": ".AlarmName", "size": 10, "weight": 0, "sort_weight": 0},
         "type": {
-            "path": lambda x: "Metric"
-            if "MetricName" in x or "Metrics" in x
-            else "Composite",
+            "path": lambda x: (
+                "Metric" if "MetricName" in x or "Metrics" in x else "Composite"
+            ),
             "size": 10,
             "weight": 1,
         },
@@ -194,12 +195,16 @@ class AlarmLister(ResourceLister):
         editor = ListResourceDocumentEditor(
             "cloudwatch",
             "describe_alarms",
-            ".CompositeAlarms[0]"
-            if self.selection["type"] == "Composite"
-            else ".MetricAlarms[0]",
-            "put_composite_alarm"
-            if self.selection["type"] == "Composite"
-            else "put_metric_alarm",
+            (
+                ".CompositeAlarms[0]"
+                if self.selection["type"] == "Composite"
+                else ".MetricAlarms[0]"
+            ),
+            (
+                "put_composite_alarm"
+                if self.selection["type"] == "Composite"
+                else "put_metric_alarm"
+            ),
             "AlarmNames",
             update_document_arg=None,
             entry_name_is_list=True,

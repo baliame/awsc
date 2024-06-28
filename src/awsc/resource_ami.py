@@ -1,6 +1,7 @@
 """
 EC2 AMI resource controls.
 """
+
 from .base_control import Describer, ResourceLister
 
 

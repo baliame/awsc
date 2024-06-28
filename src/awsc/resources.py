@@ -1,6 +1,7 @@
 """
 Module which imports all the resource controls and registers an init hook to register the controls with the session.
 """
+
 from .base_control import Describer, GenericDescriber, ResourceLister
 from .common import Common
 from .dashboard import Dashboard
@@ -25,6 +26,7 @@ from .resource_lb import *
 from .resource_lc import *
 from .resource_listener import *
 from .resource_r53 import *
+from .resource_r53domains import *
 from .resource_rds import *
 from .resource_routing import *
 from .resource_s3 import *

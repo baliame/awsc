@@ -1,6 +1,7 @@
 """
 Module for S3 resources.
 """
+
 import shutil
 from pathlib import Path
 
@@ -27,21 +28,21 @@ _s3_icons = {
 }
 
 
-def _s3_object_determine_path(self, entry, *args):
+def _s3_object_determine_path(entry, **kwargs):
     return entry["Key"] if "Key" in entry else entry["Prefix"]
 
 
-def _s3_object_determine_name(self, entry, *args):
+def _s3_object_determine_name(entry, **kwargs):
     if "Prefix" in entry:
         return entry["Prefix"].strip("/").split("/")[-1]
     return entry["Key"].split("/")[-1]
 
 
-def _s3_object_determine_is_dir(self, entry, *args):
+def _s3_object_determine_is_dir(entry, **kwargs):
     return "/" if "Prefix" in entry else ""
 
 
-def _s3_object_determine_size(self, entry, *args):
+def _s3_object_determine_size(entry, **kwargs):
     if "Prefix" in entry:
         return ""
     b_prefix = ["", "Ki", "Mi", "Gi", "Ti", "Ei"]
@@ -55,7 +56,7 @@ def _s3_object_determine_size(self, entry, *args):
     return f"{size:.2f} {b_prefix[b_idx]}B"
 
 
-def _s3_object_determine_icon(self, entry, *args):
+def _s3_object_determine_icon(entry, **kwargs):
     if "Prefix" in entry:
         return _s3_icons["folder"]
     ext = entry["Key"].split("/")[-1].split(".")[-1]
@@ -98,7 +99,7 @@ class S3ObjectLister(ResourceLister):
             "weight": 1,
             "sort_weight": 1,
         },
-        "gateway": {
+        "size": {
             "path": _s3_object_determine_size,
             "size": 30,
             "weight": 2,
@@ -309,15 +310,15 @@ class S3Describer(Describer):
     object_path = "."
 
 
-def _s3_determine_location(self, entry):
+def _s3_determine_location(entry, **kwargs):
     loc_resps = Common.generic_api_call(
         "s3",
         "get_bucket_location",
-        {"Bucket": entry["name"]},
+        {"Bucket": entry["Name"]},
         "Get Bucket Location",
         "S3",
         subcategory="Bucket",
-        resource=entry["name"],
+        resource=entry["Name"],
     )
     if loc_resps["Success"]:
         loc_resp = loc_resps["Response"]
@@ -334,26 +335,29 @@ class S3ResourceLister(ResourceLister):
     title = "S3 Buckets"
     command_palette = ["s3"]
 
-    def __init__(self, *args, **kwargs):
-        self.resource_key = "s3"
-        self.list_method = "list_buckets"
-        self.item_path = ".Buckets"
-        self.column_paths = {
-            "name": ".Name",
-            "location": _s3_determine_location,
-        }
-        self.imported_column_sizes = {
-            "name": 60,
-            "location": 20,
-        }
-        self.describe_command = S3Describer.opener
-        self.open_command = S3ObjectLister.opener
-        self.open_selection_arg = "bucket"
-        self.primary_key = "name"
-
-        self.imported_column_order = ["name", "location"]
-        self.sort_column = "name"
-        super().__init__(*args, **kwargs)
+    resource_type = "s3 bucket"
+    main_provider = "s3"
+    category = "S3"
+    subcategory = "Bucket"
+    list_method = "list_buckets"
+    item_path = ".Buckets"
+    columns = {
+        "name": {
+            "path": ".Name",
+            "size": 60,
+            "weight": 0,
+            "sort_weight": 0,
+        },
+        "location": {
+            "path": _s3_determine_location,
+            "size": 20,
+            "weight": 1,
+        },
+    }
+    describe_command = S3Describer.opener
+    open_command = S3ObjectLister.opener
+    open_selection_arg = "bucket"
+    primary_key = "name"
 
 
 class CancelDownload(Exception):

@@ -1,6 +1,7 @@
 """
 Module for meta controls.
 """
+
 from .base_control import OpenableListControl
 from .common import Common
 from .termui.list_control import ListEntry

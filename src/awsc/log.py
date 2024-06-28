@@ -1,6 +1,7 @@
 """
 Module for logging-related controls.
 """
+
 import datetime
 import json
 from operator import attrgetter
@@ -65,14 +66,16 @@ class LogLister(OpenableListControl):
                 entry["summary"],
                 **{
                     "category": entry["category"],
-                    "subcategory": entry["subcategory"]
-                    if "subcategory" in entry
-                    and entry["subcategory"] is not None
-                    and entry["subcategory"] != "null"
-                    else "<n/a>",
-                    "resource": entry["resource"]
-                    if entry["resource"] is not None
-                    else "",
+                    "subcategory": (
+                        entry["subcategory"]
+                        if "subcategory" in entry
+                        and entry["subcategory"] is not None
+                        and entry["subcategory"] != "null"
+                        else "<n/a>"
+                    ),
+                    "resource": (
+                        entry["resource"] if entry["resource"] is not None else ""
+                    ),
                     "type": entry["type"],
                     "timestamp": datetime.datetime.utcfromtimestamp(
                         entry["timestamp"]

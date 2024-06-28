@@ -1,6 +1,7 @@
 """
 Mdoule for controls related to load balanching.
 """
+
 from .base_control import Describer, ResourceLister, ResourceRefByClass
 
 
@@ -22,7 +23,7 @@ class LBDescriber(Describer):
     object_path = ".LoadBalancers[0]"
 
 
-def _elbv2_determine_scheme(result, *args):
+def _elbv2_determine_scheme(result, **kwargs):
     """
     Column callback for determining load balancer scheme.
     """

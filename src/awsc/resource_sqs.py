@@ -1,6 +1,7 @@
 """
 Module for SQS resources.
 """
+
 from typing import Dict
 
 from .base_control import (
@@ -14,12 +15,12 @@ from .common import Common
 from .termui.ui import ControlCodes
 
 
-def _sqs_determine_queue_arn(result):
-    return SQSLister.get_attrib_cache(result, "QueueArn")
+def _sqs_determine_queue_arn(result, caller, **kwargs):
+    return caller.get_attrib_cache(result, "QueueArn")
 
 
-def _sqs_determine_available_messages(result):
-    return SQSLister.get_attrib_cache(result, "ApproximateNumberOfMessages")
+def _sqs_determine_available_messages(result, caller, **kwargs):
+    return caller.get_attrib_cache(result, "ApproximateNumberOfMessages")
 
 
 class SQSDescriber(Describer):
@@ -137,7 +138,7 @@ class SQSLister(ResourceLister):
         )
         creator.edit()
 
-    @ResourceLister.Autohotkey(ControlCodes.P, "Purge Queue", True)
+    @ResourceLister.Autohotkey(ControlCodes.T, "Purge Queue", True)
     def purge(self, _):
         """
         Hotkey callback for purging a queue.

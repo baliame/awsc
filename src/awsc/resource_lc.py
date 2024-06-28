@@ -1,6 +1,7 @@
 """
 Module for Launch Configuration resources.
 """
+
 from .base_control import Describer, ResourceLister, ResourceRefByClass
 
 

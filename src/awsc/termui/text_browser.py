@@ -1,6 +1,7 @@
 """
 This module defines classes which allow viewing plain text or json data.
 """
+
 import pyperclip
 from pygments.lexers.data import JsonLexer
 from pygments.token import Token

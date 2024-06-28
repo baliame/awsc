@@ -1,6 +1,7 @@
 """
 Module for the color scheme configuration object.
 """
+
 import yaml
 
 

@@ -362,7 +362,7 @@ class MFADeviceLister(ResourceLister):
         """
         Associates the MFA devices with the currently enabled context.
         """
-        Common.Configuration["contexts"][Common.Session.context][
-            "mfa_device"
-        ] = self.selection["serial number"]
+        Common.Configuration["contexts"][Common.Session.context]["mfa_device"] = (
+            self.selection["serial number"]
+        )
         Common.Configuration.write_config()

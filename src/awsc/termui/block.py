@@ -1,6 +1,7 @@
 """
 This module defines blocks that allow segmenting the terminal screen.
 """
+
 from .common import Commons
 
 

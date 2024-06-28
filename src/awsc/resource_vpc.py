@@ -1,6 +1,7 @@
 """
 Module for VPC resources.
 """
+
 from .base_control import Describer, ResourceLister, tagged_column_generator
 
 
@@ -23,7 +24,7 @@ class VPCDescriber(Describer):
     default_entry_key = "id"
 
 
-def _vpc_determine_default(self, vpc, *args):
+def _vpc_determine_default(vpc, **kwargs):
     if vpc["IsDefault"]:
         return "✓"
     return ""

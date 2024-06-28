@@ -1,6 +1,7 @@
 """
 Module that contains the special control bars for the awsc UI.
 """
+
 from .termui.common import Commons
 from .termui.control import Control
 

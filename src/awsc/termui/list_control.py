@@ -1,6 +1,7 @@
 """
 This module defines list controls for displaying data in tables.
 """
+
 import datetime
 
 from .color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold

@@ -1,6 +1,7 @@
 """
 Module for the encrypted key store object.
 """
+
 import datetime
 import getpass
 import hashlib

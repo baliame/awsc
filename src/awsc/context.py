@@ -3,8 +3,12 @@ Module which contains AWS context-related resources.
 
 Contexts are keypairs able to access different AWS accounts.
 """
+
 import configparser
 import datetime
+import json
+import random
+import string
 import sys
 from pathlib import Path
 
@@ -13,7 +17,9 @@ from botocore import exceptions as botoerror
 from .base_control import (
     DeleteResourceDialog,
     DialogFieldResourceListSelector,
+    GenericDescriber,
     OpenableListControl,
+    datetime_hack,
 )
 from .common import Common, SessionAwareDialog
 from .termui.control import Border
@@ -171,6 +177,7 @@ class MFADialog(SessionAwareDialog):
         dimensions,
         *args,
         caller=None,
+        sets_context=True,
         **kwargs,
     ):
         self.accepts_inputs = True
@@ -182,6 +189,7 @@ class MFADialog(SessionAwareDialog):
         )
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
+        self.sets_context = sets_context
         super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
         self.set_title_label(
             f"Enter MFA token code for {Common.Session.context_data['mfa_device']}"
@@ -224,7 +232,69 @@ class MFADialog(SessionAwareDialog):
         )
 
         self.accepts_inputs = False
-        Common.Session.context = Common.Session.context
+        if self.sets_context:
+            Common.Session.context = Common.Session.context
+        self.close()
+
+    def close(self):
+        if self.caller is not None:
+            self.caller.reload_contexts()
+        super().close()
+
+
+class MFAOnAssumeRoleDialog(SessionAwareDialog):
+    """
+    Dialog control for multi-factor authentication.
+
+    Attributes
+    ----------
+    caller : awsc.termui.control.Control
+        Parent control which controls this dialog.
+    error_label : awsc.termui.dialog.DialogFieldLabel
+        Error label for displaying validation errors.
+    token_field : aws.termui.dialog.DialogFieldText
+        Field for entering the MFA token.
+    """
+
+    line_size = 20
+
+    def __init__(
+        self,
+        parent,
+        alignment,
+        dimensions,
+        *args,
+        caller=None,
+        source_context=None,
+        **kwargs,
+    ):
+        self.accepts_inputs = True
+        kwargs["border"] = Border(
+            Common.border("default"),
+            Common.color("modal_dialog_border"),
+            "Authenticate context",
+            Common.color("modal_dialog_border_title"),
+        )
+        kwargs["ok_action"] = self.accept_and_close
+        kwargs["cancel_action"] = self.close
+        super().__init__(parent, alignment, dimensions, caller=caller, *args, **kwargs)
+        self.source_context = source_context
+        self.set_title_label(
+            f"Enter MFA token code for {source_context['data']['mfa_device']}"
+        )
+        self.token_field = DialogFieldText(
+            "MFA Token:", label_min=16, **_context_color_defaults()
+        )
+        self.add_field(self.token_field)
+
+    def accept_and_close(self):
+        if self.token_field.text == "":
+            self.error_label.text = "Token cannot be blank."
+            return
+        if not self.caller.execute_assume_role(self.token_field.text):
+            self.error_label.text = "Failed to acquire security credentials."
+            return
+        self.accepts_inputs = False
         self.close()
 
     def close(self):
@@ -473,6 +543,7 @@ class AddRoleContextDialog(SessionAwareDialog):
             default=role,
             label_min=16,
             **_context_color_defaults(),
+            primary_key="arn",
         )
         self.add_field(self.role_field)
         self.caller = caller
@@ -498,6 +569,10 @@ class AddRoleContextDialog(SessionAwareDialog):
         if self.source_field.text == "":
             self.error_label.text = "Source context cannot be blank."
             return
+        sctx = Common.Session.retrieve_context(self.source_field.text)
+        if sctx["data"]["role"] != "":
+            self.error_label.text = "Source context cannot be a role context."
+            return
         if self.role_field.text == "":
             self.error_label.text = "IAM Role cannot be blank."
             return
@@ -522,6 +597,21 @@ class AddRoleContextDialog(SessionAwareDialog):
         super().close()
 
 
+class ContextDescriber(GenericDescriber):
+    def __init__(self, *args, selection, **kwargs):
+        context = selection["name"]
+        data = Common.Session.retrieve_context(context)
+        if "secret" in data["auth"]:
+            data["auth"]["secret"] = "*" * len(data["auth"]["secret"])
+        content = json.dumps(data, default=datetime_hack, indent=2, sort_keys=True)
+        super().__init__(
+            *args,
+            describing="context",
+            content=content,
+            **kwargs,
+        )
+
+
 class ContextList(OpenableListControl):
     """
     Lister control for contexts.
@@ -529,6 +619,8 @@ class ContextList(OpenableListControl):
 
     prefix = "context_list"
     title = "Contexts"
+    describer = ContextDescriber.opener
+    override_enter = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -539,6 +631,7 @@ class ContextList(OpenableListControl):
         self.jump_cursor = True
         self.reload_contexts()
         self.jump_cursor = False
+        self.role_assumption = None
 
         if self.selector_cb is None:
             if Common.Session.context != "":
@@ -556,19 +649,30 @@ class ContextList(OpenableListControl):
                     context,
                     **{
                         "account id": data["account_id"],
-                        "default": "✓"
-                        if context == Common.Configuration["default_context"]
-                        else " ",
+                        "default": (
+                            "✓"
+                            if context == Common.Configuration["default_context"]
+                            else " "
+                        ),
                         "type": "key pair" if data["role"] == "" else "role",
                     },
                 )
             )
-            if self.jump_cursor and context == Common.Configuration["default_context"]:
+            if self.jump_cursor and context == Common.Session.context:
                 self.selected = idx
             idx += 1
         if 0 <= self.selected < len(self.entries):
             return
         self.selected = 0
+
+    @OpenableListControl.Autohotkey("v", "View current context")
+    def view_current_context(self, _):
+        """
+        Hotkey callback for describing the current context.
+        """
+        Common.Session.push_frame(
+            self.describer(selection={"name": Common.Session.context})
+        )
 
     @OpenableListControl.Autohotkey("a", "Add key context")
     def add_new_context(self, _):
@@ -728,15 +832,110 @@ class ContextList(OpenableListControl):
         Common.Configuration.write_config()
         self.reload_contexts()
 
+    def execute_assume_role(self, mfa_token=None):
+        """
+        Executes a stored assume role operation.
+
+        This mechanism is required in order to be able to query the user for an MFA token in the workflow.
+
+        On success, the role credentials are written to the temporary credentials of the context, and the active context
+        becomes the assumed role context.
+
+        Parameters
+        ----------
+        mfa_token : None | str
+            The MFA token associated with the MFA device of the source context of the role assumption.
+            If None, no MFA is performed.
+
+        Returns
+        -------
+        bool
+            Whether the role assumption operation succeeded.
+        """
+        if self.role_assumption is None:
+            Common.Session.set_message(
+                "Internal error, no role to assume", Common.color("message_error")
+            )
+            return False
+        session_id = "".join(random.choice(string.ascii_letters) for i in range(10))
+        parameters = {
+            "DurationSeconds": 3600,
+            "RoleArn": self.role_assumption["destination_context"]["data"]["role"],
+            "RoleSessionName": f"awsc-session-{session_id}",
+        }
+        if mfa_token is not None:
+            parameters["SerialNumber"] = self.role_assumption["source_context"]["data"][
+                "mfa_device"
+            ]
+            parameters["TokenCode"] = mfa_token
+        keys = self.role_assumption["source_context"]["perm"]
+        resp = Common.generic_api_call(
+            "sts",
+            "assume_role",
+            parameters,
+            "Assume role",
+            "STS",
+            keys=keys,
+        )
+        if not resp["Success"]:
+            Common.Session.set_message(
+                "Error fetching security credentials", Common.color("message_error")
+            )
+            return False
+        creds = resp["Response"]["Credentials"]
+        Common.Configuration.keystore.set_temp(
+            self.role_assumption["destination_name"],
+            {
+                "access": creds["AccessKeyId"],
+                "secret": creds["SecretAccessKey"],
+                "session": creds["SessionToken"],
+                "expiry": creds["Expiration"].timestamp(),
+            },
+        )
+        Common.Session.context = self.role_assumption["destination_name"]
+        self.role_assumption = {}
+        return True
+
+    def on_become_frame(self):
+        super().on_become_frame()
+        self.on_become_frame_hooks.clear()
+
     @OpenableListControl.Autohotkey("KEY_ENTER", "Select", True)
     def select_context(self, _, initial=False):
         """
         Hotkey callback for setting the active context.
         """
         if self.selection["type"] == "role":
-            Common.Session.set_message(
-                "Cannot assume roles yet", Common.color("message_error")
-            )
+            if initial:
+                return
+            destination_context = Common.Session.retrieve_context(self.selection.name)
+            try:
+                source_context = Common.Session.retrieve_context(
+                    destination_context["data"]["source"]
+                )
+            except KeyError:
+                Common.Session.set_message(
+                    f"Context '{destination_context['data']['source']}' does not exist.",
+                    Common.color("message_error"),
+                )
+                return
+            self.role_assumption = {
+                "destination_context": destination_context,
+                "source_context": source_context,
+                "source_name": destination_context["data"]["source"],
+                "destination_name": self.selection.name,
+            }
+            if source_context["data"]["mfa_device"] != "" and (
+                "mfa_device" not in source_context["auth"]
+                or source_context["auth"]["mfa_device"]
+                != source_context["data"]["mfa_device"]
+                or "expiry" not in source_context["auth"]
+                or datetime.datetime.now()
+                > datetime.datetime.fromtimestamp(source_context["auth"]["expiry"])
+            ):
+                MFAOnAssumeRoleDialog.opener(caller=self, source_context=source_context)
+            else:
+                self.execute_assume_role()
             return
         Common.Session.context = self.selection.name
         if Common.Session.context_data["mfa_device"] != "" and (

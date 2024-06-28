@@ -2,6 +2,7 @@
 Module which defines the base controls for awsc. Ideally, all resource specific controls should inherit these and be created with as little
 effort as possible.
 """
+
 import datetime
 import json
 import threading
@@ -27,6 +28,29 @@ from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldTex
 from .termui.list_control import ListControl, ListEntry
 from .termui.text_browser import TextBrowser
 from .termui.ui import ControlCodes
+
+
+def boolean_determiner_generator(field_name):
+    """
+    Generator function for creating boolean path callbacks for top-level booleans.
+
+    Parameters
+    ----------
+    field_name : str
+        Name of the top-level boolean JSON field from the AWS API response.
+
+    Returns
+    -------
+    callable
+        A function that can be passed to the path field of the columns definition.
+    """
+
+    def fn(row):
+        if row[field_name]:
+            return "✓"
+        return ""
+
+    return fn
 
 
 def generic_confirm_template(
@@ -207,7 +231,7 @@ def tag_finder_generator(tagname, default="", taglist_key="Tags"):
         A function which finds a tag in a dict-like object when called.
     """
 
-    def fn(entry, *args):
+    def fn(entry, **kwargs):
         if taglist_key in entry:
             for tag in entry[taglist_key]:
                 if tag["Key"] == tagname:
@@ -304,6 +328,7 @@ class OpenableListControl(ListControl):
     prefix = "CHANGEME"
     title = "CHANGEME"
     describer: None | Callable[[], None] = None
+    override_enter = False
 
     @classmethod
     def opener(cls, **kwargs):
@@ -348,7 +373,7 @@ class OpenableListControl(ListControl):
         self.hotkey_display = HotkeyDisplay.opener(caller=self)
         if selector_cb is not None:
             self.add_hotkey("KEY_ENTER", self.select_and_close, "Select and close")
-        elif self.describer is not None:
+        elif self.describer is not None and not self.override_enter:
             self.add_hotkey("KEY_ENTER", self.describe, "Describe")
         if self.describer is not None:
             self.add_hotkey("d", self.describe, "Describe")
@@ -368,6 +393,25 @@ class OpenableListControl(ListControl):
         if self.selection is not None and self.selector_cb is not None:
             self.selector_cb(self.selection["name"])
             Common.Session.pop_frame()
+
+
+class NextMarkerInitial:
+    pass
+
+
+def next_marker_end(next_marker, next_marker_behaviour):
+    if next_marker is NextMarkerInitial:
+        return False
+    if next_marker == "" or next_marker is None:
+        return True
+    if isinstance(next_marker, str):
+        return False
+    for elem in next_marker:
+        if elem is None:
+            continue
+        if next_marker_behaviour == "str" and elem != "":
+            return False
+    return True
 
 
 # TODO: Reimplement resource listers as subclasses of OpenableListControl for consistency.
@@ -408,6 +452,8 @@ class ResourceListerBase(ListControl):
             self.next_marker = None
         if not hasattr(self, "next_marker_arg"):
             self.next_marker_arg = None
+        if not hasattr(self, "next_marker_behaviour"):
+            self.next_marker_behaviour = "omit"
         self.auto_refresh_last = datetime.datetime.now()
         super().__init__(*args, **kwargs)
 
@@ -485,6 +531,11 @@ class ResourceListerBase(ListControl):
                     not hasattr(self, "primary_key") or self.primary_key is None
                 ):
                     self.thread_share["clear"] = True
+                if (
+                    "debug_one" in self.thread_share
+                    and self.thread_share["debug_one"] is True
+                ):
+                    kwargs["debug_one"] = True
 
             for data in fn(*args, **kwargs):
                 with self.mutex:
@@ -495,9 +546,9 @@ class ResourceListerBase(ListControl):
         except (
             Exception
         ) as error:  # pylint: disable=broad-except # Purpose of this function is extremely generic, needs a catch-all
-            self.thread_share[
-                "thread_error"
-            ] = f"Refresh thread execution failed: {type(error).__name__}: {str(error)}"
+            self.thread_share["thread_error"] = (
+                f"Refresh thread execution failed: {type(error).__name__}: {str(error)}"
+            )
             Common.error(
                 f"Refresh thread execution failed: {type(error).__name__}: {str(error)}\n{traceback.format_exc()}",
                 "Refresh Thread Error",
@@ -507,6 +558,10 @@ class ResourceListerBase(ListControl):
             Common.Session.set_message(
                 "Refresh thread execution failed", Common.color("message_error")
             )
+        finally:
+            with self.mutex:
+                if "debug_one" in self.thread_share:
+                    del self.thread_share["debug_one"]
         with self.mutex:
             self.thread_share["updating"] = False
             self.thread_share["finalize"] = True
@@ -549,6 +604,8 @@ class ResourceListerBase(ListControl):
         next_marker_name,
         next_marker_arg,
         *args,
+        next_marker_behaviour="omit",
+        debug_one=False,
     ):
         """
         Generic data retrieval function designed to interact with the AWS API.
@@ -593,13 +650,23 @@ class ResourceListerBase(ListControl):
         if callable(list_kwargs):
             list_kwargs = list_kwargs()
         ret = []
-        next_marker = None
-        while next_marker != "":
+        next_marker = NextMarkerInitial
+        while not next_marker_end(next_marker, next_marker_behaviour):
             if self.closed:
                 raise StopLoadingData
             it_list_kwargs = list_kwargs.copy()
-            if next_marker is not None and next_marker_arg is not None:
-                it_list_kwargs[next_marker_arg] = next_marker
+            if (
+                next_marker is not NextMarkerInitial
+                and next_marker is not None
+                and next_marker_arg is not None
+            ):
+                if isinstance(next_marker_arg, str):
+                    it_list_kwargs[next_marker_arg] = next_marker
+                else:
+                    for idx, elem in enumerate(next_marker_arg):
+                        if next_marker[idx] is None and next_marker_behaviour == "omit":
+                            continue
+                        it_list_kwargs[elem] = next_marker[idx]
             try:
                 response = getattr(provider, list_method)(**it_list_kwargs)
             except botoerror.ClientError as error:
@@ -614,6 +681,19 @@ class ResourceListerBase(ListControl):
                 )
                 # pylint: disable=raise-missing-from # StopLoadingData is a special exception to stop this generator from being used.
                 raise StopLoadingData
+
+            if debug_one is True:
+                Common.info(
+                    "Info in api_response",
+                    "Debug List Resources",
+                    "Core",
+                    subcategory="ResourceListerBase",
+                    api_provider=resource_key,
+                    api_method=list_method,
+                    api_kwargs=it_list_kwargs,
+                    api_response=response,
+                    set_message=False,
+                )
 
             items = (
                 Common.Session.jq(item_path)
@@ -640,7 +720,7 @@ class ResourceListerBase(ListControl):
                 init = {}
                 for column, path in {**column_paths, **hidden_columns}.items():
                     if callable(path):
-                        init[column] = path(item)
+                        init[column] = path(item, caller=self)
                     else:
                         try:
                             init[column] = Common.Session.jq(path).input(item).first()
@@ -656,8 +736,18 @@ class ResourceListerBase(ListControl):
             if self.closed:
                 raise StopLoadingData
             self.load_counter += 1
-            if next_marker_name is not None and next_marker_name in response:
-                next_marker = response[next_marker_name]
+            if next_marker_name is not None:
+                if isinstance(next_marker_name, str) and next_marker_name in response:
+                    next_marker = response[next_marker_name]
+                elif not isinstance(next_marker_name, str):
+                    next_marker = []
+                    for idx, elem in enumerate(next_marker_name):
+                        append = None
+                        if next_marker_behaviour == "str":
+                            append = ""
+                        next_marker.append(
+                            append if elem not in response else response[elem]
+                        )
                 ret = []
             else:
                 next_marker = ""
@@ -1022,7 +1112,7 @@ class SelectionAttribute:
         The name of the column (attribute) to use from the ListEntry for templating.
     """
 
-    def __init__(self, attribute):
+    def __init__(self, attribute, cast=None):
         """
         Initializes a SelectionAttribute.
 
@@ -1032,6 +1122,7 @@ class SelectionAttribute:
             The name of the column (attribute) to use from the ListEntry for templating.
         """
         self.attribute = attribute
+        self.cast = cast
 
     def resolve(self, selection, **kwargs):
         """
@@ -1050,6 +1141,8 @@ class SelectionAttribute:
             The type of the returned value matches the type of value stored in the ListEntry. This is ideally,
             but not guaranteed to be a string.
         """
+        if self.cast is not None:
+            return self.cast(selection[self.attribute])
         return selection[self.attribute]
 
 
@@ -1621,9 +1714,9 @@ class ResourceLister(ResourceListerBase):
             if "sort_weight" in spec:
                 self.sort_order.append(name)
         self.column_order.sort(
-            key=lambda x: self.columns[x]["weight"]
-            if "weight" in self.columns[x]
-            else 0
+            key=lambda x: (
+                self.columns[x]["weight"] if "weight" in self.columns[x] else 0
+            )
         )
         self.sort_order.sort(key=lambda x: self.columns[x]["sort_weight"])
 
@@ -1676,6 +1769,7 @@ class ResourceLister(ResourceListerBase):
                     command_spec["tooltip"],
                 )
         self.add_hotkey(ControlCodes.R, self.refresh_data, "Refresh")
+        self.add_hotkey(ControlCodes.P, self.refresh_data_debug)
         if "arn" in self.column_paths or "arn" in self.hidden_columns:
             self.add_hotkey("r", self.copy_arn, "Copy ARN")
         self.hotkey_display = HotkeyDisplay.opener(caller=self)
@@ -1790,6 +1884,8 @@ class ResourceLister(ResourceListerBase):
             self.hidden_columns,
             self.next_marker,
             self.next_marker_arg,
+            next_marker_behaviour=self.next_marker_behaviour,
+            **kwargs,
         ):
             yield y
 
@@ -1812,6 +1908,17 @@ class ResourceLister(ResourceListerBase):
             self.thread_share["acquired"] = []
         self.auto_refresh_last = datetime.datetime.now()
         self.asynch(self.get_data)
+
+    def refresh_data_debug(self, *args, **kwargs):
+        """
+        Performs a full refresh asynchronously, fetching all data again and updating all entries as required.
+        """
+        Common.Session.set_message(
+            "Refreshing with debug...", Common.color("message_info")
+        )
+        with self.mutex:
+            self.thread_share["debug_one"] = True
+        self.refresh_data(*args, **kwargs)
 
     def sort(self):
         for sort_field in reversed(self.sort_order):
@@ -2802,9 +2909,11 @@ class ListResourceDocumentEditor:
             Return value of display_content on the fetched data.
         """
         r_kwargs = {
-            self.retrieve_entry_name_arg: [selection[self.entry_key]]
-            if self.retrieve_entry_name_is_list
-            else selection[self.entry_key]
+            self.retrieve_entry_name_arg: (
+                [selection[self.entry_key]]
+                if self.retrieve_entry_name_is_list
+                else selection[self.entry_key]
+            )
         }
         response = self.retrieve(**r_kwargs)
         return self.display_content(response)
@@ -2854,9 +2963,9 @@ class ListResourceDocumentEditor:
             u_kwargs = (
                 {
                     self.update_entry_name_arg: selection[self.entry_key],
-                    self.update_document_arg: json.loads(newcontent)
-                    if self.as_json
-                    else newcontent,
+                    self.update_document_arg: (
+                        json.loads(newcontent) if self.as_json else newcontent
+                    ),
                 }
                 if self.update_document_arg is not None
                 else json.loads(newcontent)

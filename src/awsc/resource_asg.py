@@ -1,6 +1,7 @@
 """
 AWS Autoscaling Group resource controls.
 """
+
 from .base_control import Describer, ResourceLister, SelectionAttribute, TemplateDict
 from .common import Common, SessionAwareDialog
 from .termui.control import Border
@@ -8,7 +9,7 @@ from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldTex
 from .termui.ui import ControlCodes
 
 
-def _asg_determine_launch_info(asg):
+def _asg_determine_launch_info(asg, **kwargs):
     """
     Column callback for determining the name of the launch configuration or launch template associated with an autoscaling group.
 
@@ -29,7 +30,7 @@ def _asg_determine_launch_info(asg):
     return ""
 
 
-def _asg_determine_instance_count(asg):
+def _asg_determine_instance_count(asg, **kwargs):
     """
     Column callback for determining the number of healthy and total instances in an autoscaling group.
 

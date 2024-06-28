@@ -1,6 +1,7 @@
 """
 Module for security group resources.
 """
+
 from .base_control import Describer, MultiLister, ResourceLister
 from .common import Common
 from .resource_common import multilister_with_compare_path
@@ -47,11 +48,11 @@ class SGRelated(MultiLister):
         super().__init__(*args, **kwargs)
 
 
-def _sg_determine_ingress_rules(self, result):
+def _sg_determine_ingress_rules(result, **kwargs):
     return len(result["IpPermissions"])
 
 
-def _sg_determine_egress_rules(self, result):
+def _sg_determine_egress_rules(result, **kwargs):
     return len(result["IpPermissionsEgress"])
 
 
@@ -146,7 +147,7 @@ _sg_well_known = {
 }
 
 
-def _sg_rule_determine_name(self, rule):
+def _sg_rule_determine_name(rule, **kwargs):
     if rule["IpProtocol"] == "-1":
         return "<all>"
     if rule["FromPort"] != rule["ToPort"]:
@@ -156,25 +157,25 @@ def _sg_rule_determine_name(self, rule):
     return _sg_well_known[rule["FromPort"]]
 
 
-def _sg_rule_determine_protocol(self, rule):
+def _sg_rule_determine_protocol(rule, **kwargs):
     if rule["IpProtocol"] == "-1" or rule["IpProtocol"] == -1:
         return "<all>"
     return rule["IpProtocol"]
 
 
-def _sg_rule_determine_ips(self, rule):
+def _sg_rule_determine_ips(rule, **kwargs):
     if "IpRanges" not in rule:
         return ""
     return ",".join(cidrs["CidrIp"] for cidrs in rule["IpRanges"])
 
 
-def _sg_rule_determine_sgs(self, rule):
+def _sg_rule_determine_sgs(rule, **kwargs):
     if "UserIdGroupPairs" not in rule:
         return ""
     return ",".join(pair["GroupId"] for pair in rule["UserIdGroupPairs"])
 
 
-def _sg_rule_determine_port_range(self, rule):
+def _sg_rule_determine_port_range(rule, **kwargs):
     if rule["IpProtocol"] == "-1":
         return "0-65535"
     if rule["FromPort"] != rule["ToPort"]:

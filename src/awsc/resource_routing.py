@@ -1,6 +1,7 @@
 """
 Module for VPC routing resources.
 """
+
 import json
 
 from .base_control import (
@@ -12,7 +13,7 @@ from .base_control import (
 from .common import Common
 
 
-def _route_determine_gateway_type(self, entry):
+def _route_determine_gateway_type(entry, **kwargs):
     """
     Column callback for determining the type of a gateway at the tail end of a route.
     """
@@ -35,7 +36,7 @@ def _route_determine_gateway_type(self, entry):
     return "Internet"
 
 
-def _route_determine_gateway(self, entry):
+def _route_determine_gateway(entry, **kwargs):
     """
     Column callback for determining the gateway ID at the tail end of a route.
     """
@@ -155,7 +156,7 @@ class RouteTableDescriber(Describer):
     default_entry_key = "id"
 
 
-def _route_table_determine_subnet_association(self, result, *args):
+def _route_table_determine_subnet_association(result, **kwargs):
     if "Associations" not in result or len(result["Associations"]) == 0:
         return "<none>"
     if len(result["Associations"]) > 1:

@@ -1,6 +1,7 @@
 """
 Module for EC2 instance class resources.
 """
+
 from .base_control import Describer, ResourceLister
 
 

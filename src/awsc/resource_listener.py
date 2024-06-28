@@ -1,6 +1,7 @@
 """
 Module for ELB v2 listener resources.
 """
+
 from .arn import ARN
 from .base_control import Describer, ResourceLister, ResourceRefByClass
 
@@ -24,7 +25,7 @@ class ListenerActionDescriber(Describer):
     default_entry_key = "arn"
 
 
-def _listener_action_determine_condition(result, *args):
+def _listener_action_determine_condition(result, **kwargs):
     """
     Column callback for determining conditions on listener rules.
     """
@@ -54,7 +55,7 @@ def _listener_action_determine_condition(result, *args):
     return "<always>"
 
 
-def _listener_action_determine_action_type(result, *args):
+def _listener_action_determine_action_type(result, **kwargs):
     """
     Column callback for determining types on listener rules.
     """
@@ -64,7 +65,7 @@ def _listener_action_determine_action_type(result, *args):
     return "N/A"
 
 
-def _listener_action_determine_target(result, *args):
+def _listener_action_determine_target(result, **kwargs):
     """
     Column callback for determining targetss on listener rules.
     """
@@ -176,7 +177,7 @@ class ListenerDescriber(Describer):
     object_path = ".Listeners[0]"
 
 
-def _listener_determine_ssl_policy(self, result, *args):
+def _listener_determine_ssl_policy(result, **kwargs):
     """
     Column callback which returns SSL Policy when it can exist.
     """

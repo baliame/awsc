@@ -1,6 +1,7 @@
 """
 Module for informational display controls.
 """
+
 from typing import Callable
 
 from .termui.common import Commons, column_sizer
@@ -101,9 +102,11 @@ class InfoDisplay(Control):
             Commons.UIInstance.print(
                 text,
                 xy=(x + longest[col], y),
-                color=self.generic_color
-                if name not in self.special_colors
-                else self.special_colors[name],
+                color=(
+                    self.generic_color
+                    if name not in self.special_colors
+                    else self.special_colors[name]
+                ),
             )
             y += 1
             if y > y1:

@@ -1,6 +1,7 @@
 """
 Module for route 53 resources.
 """
+
 import datetime
 import json
 
@@ -48,21 +49,32 @@ class R53RecordDescriber(Describer):
         return f"{self.record_type} {self.record_name}"
 
 
-def _r53_record_is_alias(result):
+def _r53_record_is_alias(result, **kwargs):
     return "AliasTarget" in result and result["AliasTarget"]["DNSName"] != ""
 
 
-def _r53_record_determine_records(result):
+def _r53_record_determine_records(result, **kwargs):
     if _r53_record_is_alias(result):
         return result["AliasTarget"]["DNSName"]
     return ",".join([record["Value"] for record in result["ResourceRecords"]])
 
 
-def _r53_record_determine_name(result):
+def _r53_record_determine_hosted_zone(result, caller, **kwargs):
+    """
+    Column callback for the name of a route 53 record.
+    """
+    return caller.r53_entry["id"]
+
+
+def _r53_record_determine_name(result, **kwargs):
     """
     Column callback for the name of a route 53 record.
     """
     return result["Name"].replace("\\052", "*")
+
+
+def _r53_record_determine_complex_id(result, **kwargs):
+    return f'{result["Type"]} {result["Name"]}'
 
 
 class R53RecordLister(ResourceLister):
@@ -102,9 +114,14 @@ class R53RecordLister(ResourceLister):
             "size": 5,
             "weight": 3,
         },
+        "hosted_zone_id": {"path": _r53_record_determine_hosted_zone, "hidden": True},
+        "complex": {"path": _r53_record_determine_complex_id, "hidden": True},
     }
-    primary_key = "name"
+    primary_key = "complex"
     describe_command = R53RecordDescriber.opener
+    next_marker = ("NextRecordName", "NextRecordType", "NextRecordIdentifier")
+    next_marker_arg = ("StartRecordName", "StartRecordType", "StartRecordIdentifier")
+    next_marker_behaviour = "omit"
 
     def title_info(self):
         return self.r53_entry["name"]
@@ -134,6 +151,7 @@ class R53RecordLister(ResourceLister):
                                     "ResourceRecords": SelectionControllerDataAttribute(
                                         "ResourceRecords"
                                     ),
+                                    "TTL": SelectionAttribute("ttl", cast=int),
                                 },
                             }
                         ]
@@ -212,12 +230,14 @@ class R53Describer(Describer):
     prefix = "r53_browser"
     title = "Route53 Hosted Zone"
 
-    def __init__(self, *args, entry_key="id", **kwargs):
-        self.resource_key = "route53"
-        self.describe_method = "get_hosted_zone"
-        self.describe_kwarg_name = "Id"
-        self.object_path = "."
-        super().__init__(*args, entry_key=entry_key, **kwargs)
+    resource_type = "hosted zone"
+    main_provider = "route53"
+    category = "Route 53"
+    subcategory = "Hosted Zones"
+    describe_method = "get_hosted_zone"
+    describe_kwarg_name = "Id"
+    object_path = "."
+    default_entry_key = "id"
 
 
 class R53ResourceLister(ResourceLister):
@@ -265,7 +285,7 @@ class R53ResourceLister(ResourceLister):
         Hotkey callback for deleting a hosted zone.
         """
         self.confirm_template(
-            "delete_hosted_Zone",
+            "delete_hosted_zone",
             TemplateDict(
                 {
                     "Id": SelectionAttribute("id"),
@@ -280,7 +300,7 @@ class R53ResourceLister(ResourceLister):
         """
         ListResourceDocumentCreator(
             "route53",
-            "created_hosted_zone",
+            "create_hosted_zone",
             None,
             initial_document={
                 "Name": "",
@@ -331,7 +351,7 @@ class R53RecordCreator(ListResourceDocumentCreator):
         }
 
 
-def _r53_healthcheck_determine_uri(result):
+def _r53_healthcheck_determine_uri(result, **kwargs):
     """
     Column callback for fetching the URI for a route 53 healtcheck.
     """
@@ -368,7 +388,7 @@ def _r53_healthcheck_determine_uri(result):
     return f"{protocol}://{host}:{hcc['Port']}{hcc['ResourcePath']}"
 
 
-def _r53_healthcheck_determine_status(result):
+def _r53_healthcheck_determine_status(result, **kwargs):
     """
     Column callback for determining a healthcheck status.
     """

@@ -1,6 +1,7 @@
 """
 Module for subnet resources.
 """
+
 from .base_control import Describer, ResourceLister, tagged_column_generator
 from .common import Common
 
@@ -24,7 +25,7 @@ class SubnetDescriber(Describer):
     default_entry_key = "id"
 
 
-def _subnet_determine_public(self, subnet, *args):
+def _subnet_determine_public(subnet, **kwargs):
     if subnet["MapPublicIpOnLaunch"]:
         return "✓"
     return ""

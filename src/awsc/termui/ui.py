@@ -1,6 +1,7 @@
 """
 This module defines the UI handler class, which is where all the magic happens.
 """
+
 import shutil
 import signal
 import tempfile

@@ -1,6 +1,7 @@
 """
 Definition snippets that may be used by other code.
 """
+
 from copy import deepcopy
 
 from .base_control import tag_finder_generator

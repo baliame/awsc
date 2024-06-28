@@ -1,6 +1,7 @@
 """
 This module defines base controls, which are interactive blocks.
 """
+
 import threading
 from typing import Any, Dict
 
@@ -221,9 +222,11 @@ class Border:
                         Commons.UIInstance.print(
                             self.title_info,
                             xy=(corners[0][0] + length, i),
-                            color=self.title_color
-                            if self.title_info_color is None
-                            else self.title_info_color,
+                            color=(
+                                self.title_color
+                                if self.title_info_color is None
+                                else self.title_info_color
+                            ),
                             bold=True,
                         )
                         length += len(self.title_info)

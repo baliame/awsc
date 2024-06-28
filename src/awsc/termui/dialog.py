@@ -1,6 +1,7 @@
 """
 This module defines dialogs, which are modal controls designed to be displayed as topmost blocks for inputting data.
 """
+
 from .color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold
 from .common import Commons
 from .control import Control

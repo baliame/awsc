@@ -1,6 +1,7 @@
 """
 Module containing dashboard elements.
 """
+
 from datetime import datetime, timedelta
 from threading import Lock, Thread
 from typing import Any, Dict, List, Type

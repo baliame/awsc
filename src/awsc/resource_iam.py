@@ -1,6 +1,7 @@
 """
 Module for common elements for IAM resources.
 """
+
 from copy import deepcopy
 
 from botocore import exceptions as botoerror

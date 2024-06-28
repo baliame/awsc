@@ -1,6 +1,7 @@
 """
 Module for keypair resources.
 """
+
 from pathlib import Path
 
 from .base_control import Describer, ResourceLister
@@ -29,7 +30,7 @@ class KeyPairDescriber(Describer):
     default_entry_key = "id"
 
 
-def _keypair_determine_association(entry):
+def _keypair_determine_association(entry, **kwargs):
     return Common.Session.get_keypair_association(entry["KeyPairId"])
 
 

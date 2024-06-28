@@ -1,6 +1,7 @@
 """
 This module defines a bar graph control that can be used to display timeseries.
 """
+
 import datetime
 
 from .color import ColorDarkGreen, ColorGold

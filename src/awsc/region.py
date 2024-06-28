@@ -1,6 +1,7 @@
 """
 Module for region-related resources.
 """
+
 from .base_control import OpenableListControl
 from .common import Common
 from .termui.list_control import ListEntry
@@ -25,9 +26,11 @@ class RegionList(OpenableListControl):
                     region,
                     **{
                         "usage frequency": 0,
-                        "default": "✓"
-                        if region == Common.Configuration["default_region"]
-                        else " ",
+                        "default": (
+                            "✓"
+                            if region == Common.Configuration["default_region"]
+                            else " "
+                        ),
                     }
                 )
             )

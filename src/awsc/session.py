@@ -1,6 +1,8 @@
 """
 Session manager module.
 """
+
+import datetime
 import json
 import os
 import subprocess
@@ -109,6 +111,7 @@ class Session:
                 "MFA",
                 "SSH Key",
                 "Default SSH username",
+                "Session duration",
             ],
             weight=-10,
         )
@@ -321,6 +324,37 @@ class Session:
                     label.texts = []
         if hasattr(self.resource_main, "auto_refresh"):
             self.resource_main.auto_refresh()
+        auth = self.context_auth
+        if auth is not None:
+            try:
+                del self.info_display.special_colors["Session duration"]
+            except KeyError:
+                pass
+            if "expiry" in auth:
+                expires_at = datetime.datetime.fromtimestamp(auth["expiry"])
+                now = datetime.datetime.now()
+                if expires_at > now:
+                    delta = expires_at - now
+                    hours = delta.seconds // 3600
+                    minutes = (delta.seconds - (hours * 3600)) // 60
+                    seconds = delta.seconds - (hours * 3600) - (minutes * 60)
+                    self.info_display["Session duration"] = (
+                        f"{hours:02}:{minutes:02}:{seconds:02}"
+                    )
+                else:
+                    self.info_display.special_colors["Session duration"] = (
+                        self.common.color("error")
+                    )
+                    self.info_display["Session duration"] = "Expired"
+            else:
+                if auth["access"] == "" or auth["secret"] == "":
+                    self.info_display.special_colors["Session duration"] = (
+                        self.common.color("error")
+                    )
+                    self.info_display["Session duration"] = "Expired"
+                    return
+
+                self.info_display["Session duration"] = "Permanent"
 
     @property
     def context(self):
@@ -342,6 +376,32 @@ class Session:
         )
         for elem in self.context_update_hooks:
             elem()
+
+    def retrieve_context(self, name):
+        """
+        Returns the details of a specific context.
+
+        Parameters
+        ----------
+        name : str
+            The context for which details should be retrieved.
+
+        Returns
+        -------
+        object
+            An object with three keys.
+            - The data key contains the non-sensitive context data.
+              Equivalent to Session.context_data with the context as the active context.
+            - The auth key contains the sensitive authentication context data.
+              Equivalent to Session.context_auth with the context as the active context.
+            - The perm key contains the sensitive permanent authentication context data.
+              Equivalent to Session.context_perm_auth with the context as the active context.
+        """
+        return {
+            "data": self.config["contexts"][name],
+            "auth": self.config.keystore[name],
+            "perm": self.config.keystore.get_permanent_credentials(name),
+        }
 
     @property
     def context_data(self):

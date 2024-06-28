@@ -1,17 +1,18 @@
 """
 Module for EBS volumes.
 """
+
 from .base_control import Describer, ResourceLister, tagged_column_generator
 
 
-def _ebs_determine_size(entry):
+def _ebs_determine_size(entry, **kwargs):
     """
     Column callback for returning the size of an EBS volume in a nice format.
     """
     return f"{entry['Size']} GiB"
 
 
-def _ebs_determine_attachment(self, entry):
+def _ebs_determine_attachment(entry, **kwargs):
     """
     Column callback for figuring out which instance an EBS volume is attached to.
     """

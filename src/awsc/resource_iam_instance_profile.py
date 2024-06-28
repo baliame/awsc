@@ -38,7 +38,7 @@ class InstanceProfileDescriber(Describer):
         super().__init__(*args, entry=entry, entry_key=entry_key, **kwargs)
 
 
-def _instance_profile_determine_role_count(instanceprofile):
+def _instance_profile_determine_role_count(instanceprofile, **kwargs):
     return str(len(instanceprofile["Roles"])) if "Roles" in instanceprofile else 0
 
 
