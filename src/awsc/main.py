@@ -19,8 +19,10 @@ from .context import ContextList
 from .dashboard import Dashboard
 from .log import LogLister
 from .meta import CommanderOptionsLister
+from .port_forward import PortForwardList
 from .region import RegionList
 from .ssh import SSHList
+from .sso import SSOList
 from .termui.alignment import Dimension, TopLeftAnchor
 from .termui.control import Border
 
@@ -90,7 +92,7 @@ def main(*args, **kwargs):
             sys.stderr = log_file_handle
         Common.Session.service_provider = AWS()
         Common.post_initialize()
-        if Common.Session.context == "":
+        if not Common.Session.context_is_valid:
             Common.Session.replace_frame(ContextList.opener())
         else:
             if Common.Session.context_data["mfa_device"] != "":
@@ -105,9 +107,12 @@ def main(*args, **kwargs):
         Common.Session.commander_options["context"] = ContextList.opener
         Common.Session.commander_options["region"] = RegionList.opener
         Common.Session.commander_options["ssh"] = SSHList.opener
+        Common.Session.commander_options["sso"] = SSOList.opener
         Common.Session.commander_options["logs"] = LogLister.opener
         Common.Session.commander_options["?"] = CommanderOptionsLister.opener
         Common.Session.commander_options["help"] = CommanderOptionsLister.opener
+        Common.Session.commander_options["pf"] = PortForwardList.opener
+        Common.Session.commander_options["portforward"] = PortForwardList.opener
 
         Common.main()
     finally:

@@ -45,15 +45,7 @@ def _s3_object_determine_is_dir(entry, **kwargs):
 def _s3_object_determine_size(entry, **kwargs):
     if "Prefix" in entry:
         return ""
-    b_prefix = ["", "Ki", "Mi", "Gi", "Ti", "Ei"]
-    b_idx = 0
-    size = float(entry["Size"])
-    while size >= 1024:
-        b_idx += 1
-        size /= 1024
-        if b_idx == len(b_prefix) - 1:
-            break
-    return f"{size:.2f} {b_prefix[b_idx]}B"
+    return Common.human_readable_size(entry["size"])
 
 
 def _s3_object_determine_icon(entry, **kwargs):

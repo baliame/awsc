@@ -105,6 +105,19 @@ class DialogFieldLabel(DialogField):
             self.texts = value
         else:
             self.texts = [(value, self.default_color)]
+    
+    def modify_segment(self, idx, text, color=None):
+        if len(self.texts) <= idx:
+            return
+
+        if color is None:
+            try:
+                color = self.texts[idx][1]
+            except IndexError:
+                color = self.default_color
+        
+        self.texts[idx] = (text, color)
+
 
     def add_text(self, text, color=None):
         """
@@ -416,7 +429,7 @@ class DialogControl(Control):
         A callable that does nothing, for the purpose of having such a callable.
         """
 
-    def add_field(self, field):
+    def add_field(self, field, index=None):
         """
         Inserts a new field into the dialog. This will be inserted as the last field before the confirm and cancel buttons.
 
@@ -424,8 +437,12 @@ class DialogControl(Control):
         ----------
         field : awsc.termui.dialog.DialogField
             The field to insert.
+        index : int | None
+            The index to insert the field to, or as a new field before the confirm and cancel buttons if None.
         """
-        self.fields.insert(self.bookmark, field)
+        if index is not None and index > self.bookmark:
+            raise RuntimeError(f"Cannot insert a field to index {index}, higher than highest available index {self.bookmark}")
+        self.fields.insert(self.bookmark if index is None else index, field)
         self.bookmark += 1
         for i, elem in enumerate(self.fields):
             if elem.highlightable:

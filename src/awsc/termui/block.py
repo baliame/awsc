@@ -45,6 +45,7 @@ class Block:
             Tags allow grouping sibling Blocks, and removing them together.
         """
         self.blocks = []
+        self.rejected = False
         self.weight = weight
         if parent is not None:
             parent.add_block(self)

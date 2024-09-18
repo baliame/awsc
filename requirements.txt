@@ -2,9 +2,9 @@ blessed==1.17.12
 cryptography>=39.0.2
 python-magic==0.4.27
 chardet==5.0.0
-pyyaml==5.3.1
+pyyaml
 boto3==1.17.59
-jq==1.4.0
+jq==1.8.0a2
 pyperclip==1.8.1
 pygments>=2.14.0
 numpy

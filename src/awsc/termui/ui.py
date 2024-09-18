@@ -2,17 +2,17 @@
 This module defines the UI handler class, which is where all the magic happens.
 """
 
+import json
 import shutil
 import signal
 import tempfile
-import termios
 import threading
 import time
-import tty
+#import tty
 from pathlib import Path
 
 import chardet
-import magic
+import puremagic as magic
 from blessed import Terminal
 
 from .alignment import Dimension, TopLeftAnchor
@@ -26,6 +26,19 @@ FRAMERATE = 0.02
 Defines at most how often should a new frame be generated, in seconds. This is a terminal application, we really don't need more than 50 FPS.
 """
 
+
+class UIDebugException(Exception):
+    def __init__(self, top_block, *args, **kwargs):
+        self.top_block = top_block
+        self.context = {"args": args, "kwargs": kwargs}
+    
+    def __str__(self):
+        context_data = {
+            "context": self.context,
+            "blocks": self.top_block.blocks,
+            "hotkeys": [block.hotkeys for block in self.top_block.blocks if hasattr(block, "hotkeys")]
+        }
+        return f"UIDebugException:\n{json.dumps(context_data)}"
 
 class ControlCodes:
     """
@@ -135,6 +148,7 @@ class UI:
             None, TopLeftAnchor(0, 0), Dimension("100%", "100%"), tag="top"
         )
         self.last_paint = time.time()
+        self.last_tick = time.time()
         self.last_size_refresh = time.time()
         self.term = Terminal()
         self._w = self.term.width
@@ -147,7 +161,6 @@ class UI:
         self.mutex = threading.Lock()
         self.input_buffer = []
         self.dirty = False
-        self.restore = None
         self.suspend_input_buffer = False
 
     @staticmethod
@@ -321,10 +334,14 @@ class UI:
         Based on profiling, retrieving the blessed terminal width and height is a rather expensive operation, which is why this is
         strictly rate limited and cached. Besides, the user is very unlikely to repeatedly and rapidly resize the terminal.
         """
-        if self.last_paint - self.last_size_refresh > 1:
-            self.last_size_refresh = self.last_paint
-            self._w = self.term.width
-            self._h = self.term.height
+        if self.last_tick - self.last_size_refresh > 0.2:
+            self.last_size_refresh = self.last_tick
+            w = self.term.width
+            h = self.term.height
+            if w != self._w or h != self._h:
+                self.dirty = True
+            self._w = w
+            self._h = h
 
     @property
     def width(self):
@@ -382,6 +399,7 @@ class UI:
         """
         Pre-paint hook for the UI. Executes the pre-paint hooks of all blocks within the UI.
         """
+        self.refresh_size()
         self.top_block.before_paint()
 
     def progress_bar_paint(self, perc):
@@ -447,10 +465,6 @@ class UI:
             A map of keyword arguments to pass to the command.
         """
         # pylint: disable=protected-access
-        termios.tcflush(self.term._keyboard_fd, termios.TCIOFLUSH)
-        # pylint: disable=protected-access
-        termios.tcsetattr(self.term._keyboard_fd, termios.TCSAFLUSH, self.restore)
-        # pylint: disable=protected-access
         # termios.tcsetattr(self.term._keyboard_fd, termios.TCSANOW, self.restore)
         # pylint: disable=protected-access
         self.term._line_buffered = True
@@ -460,8 +474,6 @@ class UI:
         self.term.stream.flush()
         self.suspend_input_buffer = True
         time.sleep(FRAMERATE * 10)
-        # pylint: disable=protected-access
-        termios.tcflush(self.term._keyboard_fd, termios.TCIOFLUSH)
         try:
             return cmd(*args, **kwargs)
         finally:
@@ -471,7 +483,7 @@ class UI:
             self.term.stream.flush()
             self.suspend_input_buffer = False
             # pylint: disable=protected-access
-            tty.setraw(self.term._keyboard_fd, termios.TCSANOW)
+            #tty.setraw(self.term._keyboard_fd, termios.TCSANOW)
             # pylint: disable=protected-access
             self.term._line_buffered = False
 
@@ -505,7 +517,10 @@ class UI:
                 self.input_buffer = self.input_buffer[1:]
                 if key == "\x03":
                     raise KeyboardInterrupt
-                self.top_block.input(key)
+                try:
+                    self.top_block.input(key)
+                except TypeError:
+                    raise UIDebugException(self.top_block, key=key)
                 curr_time = time.time()
                 if curr_time - start_time > FRAMERATE - 0.02:
                     return
@@ -519,7 +534,6 @@ class UI:
         rendered.
         """
         # pylint: disable=protected-access
-        self.restore = termios.tcgetattr(self.term._keyboard_fd)
         try:
             with self.term.fullscreen():
                 with self.term.hidden_cursor():
@@ -529,6 +543,7 @@ class UI:
                         while not self.exit:
                             # print(self.term.clear())
                             start_time = time.time()
+                            self.last_tick = start_time
                             self.process_input_buffer(start_time)
                             for func in self.tickers:
                                 func()

@@ -79,7 +79,7 @@ class LogLister(OpenableListControl):
                     "type": entry["type"],
                     "timestamp": datetime.datetime.utcfromtimestamp(
                         entry["timestamp"]
-                    ).strftime("%Y-%m-%d %H:%M:%S"),
+                    ).strftime("%Y-%m-%d %H:%M:%S UTC"),
                     "raw_timestamp": entry["timestamp"],
                     "message": entry["message"],
                     "context": entry["context"] if "context" in entry else {},

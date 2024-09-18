@@ -2,6 +2,7 @@
 Session manager module.
 """
 
+import atexit
 import datetime
 import json
 import os
@@ -129,10 +130,12 @@ class Session:
             color=generic_color,
             weight=-10,
         )
+        self.common = common
         self._message_labels = [DialogFieldLabel(""), DialogFieldLabel("")]
         for elem in self._message_labels:
             self.message_display.add_field(elem)
         self._context = None
+        self.context_is_valid = False
         self.context = config["default_context"]
         self.region = config["default_region"]
         self.ssh_key = config["default_ssh_key"]
@@ -144,11 +147,15 @@ class Session:
         self.last_tick = time.time()
         self.ui.tickers.append(self.tick)
 
+        self.process_check_interval = 0.1
+        self.next_process_check = time.time()
+        self.port_forwards = {}
+
         self.filterer = None
         self.commander = None
         self.commander_options = {}
         self.control_registry = {}
-        self.common = common
+        atexit.register(self.cleanup_port_forwards)
 
         self.set_version_information()
 
@@ -229,6 +236,7 @@ class Session:
         drop_stack : bool
             If set, drop the entire stack of frames while doing it.
         """
+
         for elem in self.stack_frame:
             elem.parent.remove_block(elem)
         if drop_stack:
@@ -251,6 +259,7 @@ class Session:
         new_frame : list
             The new stack frame to add.
         """
+            
         self.stack.append(self.stack_frame[:])
         self.replace_frame(new_frame, drop_stack=False)
         if hasattr(new_frame[0], "add_hotkey"):
@@ -311,11 +320,38 @@ class Session:
                     return
         self.ui.dirty = True
 
+    def add_port_forward(self, proc, host, local_port, remote_port):
+        key = f'{local_port}:{host}:{remote_port}'
+        self.port_forwards[key] = {"proc": proc, "host": host, "local_port": local_port, "remote_port": remote_port}
+
+    def terminate_port_forward(self, key):
+        if key in self.port_forwards:
+            pf = self.port_forwards[key]
+            proc = pf['proc']
+            proc.kill()
+            message = f"Port forward process to {pf['host']}:{pf['remote_port']} on localhost:{pf['local_port']} has been terminated"
+            self.common.log(
+                message,
+                "SSM tunnel terminated",
+                "SSM",
+                "info",
+                subcategory="SSM Tunnel",
+                resource=None,
+                set_message=True,
+            )
+            del self.port_forwards[key]
+
+
+    def cleanup_port_forwards(self):
+        for key in {} | self.port_forwards:
+            self.terminate_port_forward(key)
+
     def tick(self):
         """
         Ticker function. Called on every main loop cycle.
         """
-        delta = time.time() - self.last_tick
+        now = time.time()
+        delta = now - self.last_tick
         self.last_tick += delta
         if self.message_time > 0:
             self.message_time -= delta
@@ -324,6 +360,26 @@ class Session:
                     label.texts = []
         if hasattr(self.resource_main, "auto_refresh"):
             self.resource_main.auto_refresh()
+        if now > self.next_process_check:
+            self.next_process_check = now + self.process_check_interval
+            eject = []
+            for k, pf in self.port_forwards.items():
+                proc = pf['proc']
+                retcode = proc.poll()
+                if retcode is not None:
+                    message = f"Port forward process to {pf['host']}:{pf['remote_port']} on localhost:{pf['local_port']} exited with code {retcode}"
+                    self.common.log(
+                        message,
+                        "SSM tunnel exited",
+                        "SSM",
+                        "info",
+                        subcategory="SSM Tunnel",
+                        resource=None,
+                        set_message=True,
+                    )
+                    eject.append(k)
+            for k in eject:
+                del self.port_forwards[k]
         auth = self.context_auth
         if auth is not None:
             try:
@@ -365,17 +421,23 @@ class Session:
 
     @context.setter
     def context(self, value):
-        self._context = value
-        self.info_display["Context"] = value
-        data = self.context_data
-        auth = self.context_auth
-        self.info_display["MFA"] = (
-            "Disabled"
-            if data["mfa_device"] == ""
-            else ("Authenticated" if "session" in auth else "Unauthenticated")
-        )
-        for elem in self.context_update_hooks:
-            elem()
+        if value == '' or value is None:
+            self._context = None
+            self.info_display["Context"] = "<No context>"
+            self.context_is_valid = False
+        else:
+            self._context = value
+            self.context_is_valid = True
+            self.info_display["Context"] = value
+            data = self.context_data
+            auth = self.context_auth
+            self.info_display["MFA"] = (
+                "Disabled"
+                if "mfa_device" not in data or data["mfa_device"] == ""
+                else ("Authenticated" if "session" in auth else "Unauthenticated")
+            )
+            for elem in self.context_update_hooks:
+                elem()
 
     def retrieve_context(self, name):
         """
@@ -398,7 +460,7 @@ class Session:
               Equivalent to Session.context_perm_auth with the context as the active context.
         """
         return {
-            "data": self.config["contexts"][name],
+            "data": self.config.enumerated_contexts()[name],
             "auth": self.config.keystore[name],
             "perm": self.config.keystore.get_permanent_credentials(name),
         }
@@ -408,8 +470,8 @@ class Session:
         """
         Property. Directly accesses context data for convenience.
         """
-        if self._context != "":
-            return self.config["contexts"][self._context]
+        if self.context_is_valid:
+            return self.config.enumerated_contexts()[self._context]
         return {}
 
     @property
@@ -417,7 +479,7 @@ class Session:
         """
         Property. Directly accesses context keystore for convenience.
         """
-        if self._context != "":
+        if self.context_is_valid:
             return self.config.keystore[self._context]
         return {}
 
@@ -426,7 +488,7 @@ class Session:
         """
         Property. Directly accesses context keystore for convenience.
         """
-        if self._context != "":
+        if self.context_is_valid:
             return self.config.keystore.get_permanent_credentials(self._context)
         return {}
 
@@ -458,6 +520,10 @@ class Session:
             if value in self.config["default_ssh_usernames"]
             else ""
         )
+
+    @property
+    def ephemeral(self):
+        return self.common.Configuration.context_is_ephemeral(self.context)
 
     def get_keypair_association(self, keypair_id):
         """

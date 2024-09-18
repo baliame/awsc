@@ -114,20 +114,23 @@ class EKSResourceLister(ResourceLister):
                 if elem["name"] == cluster_arn:
                     idx = cidx
                     break
+            args = [
+                "--region",
+                cluster_arn_parsed.region,
+                "eks",
+                "get-token",
+                "--cluster-name",
+                cluster_arn_parsed.resource_id_first,
+                "--output",
+                "json",
+            ]
+            if not Common.Session.ephemeral:
+                args.extend(["--profile", Common.Session.context])
             user = {
                 "exec": {
                     "apiVersion": "client.authentication.k8s.io/v1beta1",
                     "command": "aws",
-                    "args": [
-                        "--region",
-                        cluster_arn_parsed.region,
-                        "eks",
-                        "get-token",
-                        "--cluster-name",
-                        cluster_arn_parsed.resource_id_first,
-                        "--profile",
-                        Common.Session.context,
-                    ],
+                    "args": args,
                 }
             }
             if idx == -1:
@@ -151,6 +154,8 @@ class EKSResourceLister(ResourceLister):
     @ResourceLister.Autohotkey("9", "k9s", True)
     def open_k9s(self, _):
         if self.fetch_kubecontext(_):
+            if Common.Session.ephemeral:
+                Common.Session.service_provider.set_env()
             exit_code = Common.Session.ui.unraw(
                 subprocess.run,
                 [
@@ -161,3 +166,5 @@ class EKSResourceLister(ResourceLister):
                 f"k9s exited with code {exit_code.returncode}",
                 Common.color("message_info"),
             )
+            if Common.Session.ephemeral:
+                Common.Session.service_provider.clear_env()

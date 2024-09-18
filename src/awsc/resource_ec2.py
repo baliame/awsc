@@ -2,6 +2,7 @@
 Module for EC2 instance resources.
 """
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -293,19 +294,6 @@ class EC2ResourceLister(ResourceLister):
             )
         )
 
-    # @ResourceLister.Autohotkey("n", "Launch new instance")
-    # def new_instance(self, _):
-    #    """
-    #    Hotkey callback for launching a new instance.
-    #    """
-    #    EC2LaunchDialog(
-    #        self.parent,
-    #        CenterAnchor(0, 0),
-    #        Dimension("80%|40", "20"),
-    #        caller=self,
-    #        weight=-500,
-    #    )
-
     @ResourceLister.Autohotkey("s", "SSH", True)
     def ssh(self, _):
         """
@@ -346,6 +334,68 @@ class EC2ResourceLister(ResourceLister):
                     instance_entry=self.selection,
                     caller=self,
                 )
+    
+    @ResourceLister.Autohotkey("m", "SSM Connect", True)
+    def ssm(self, _):
+        """
+        Hotkey callback for SSHing to an instance over SSM.
+        """
+        if self.selection is None:
+            return
+        instances_call = Common.generic_api_call(
+            "ssm",
+            "describe_instance_information",
+            {"Filters": [{"Key": "InstanceIds", "Values": [self.selection["instance id"]]}]},
+            "Describe instance information",
+            "SSM",
+            subcategory="SSM Agent",
+            resource=self.selection["instance id"],
+        )
+        passed = False
+        if instances_call["Success"]:
+            instances_response = instances_call["Response"]
+            if len(instances_response["InstanceInformationList"]) > 0:
+                if instances_response["InstanceInformationList"][0]["PingStatus"] == 'Online':
+                    passed = True
+        if not passed:
+            Common.Session.set_message(
+                "Selected instance is not ready to accept SSM connections", Common.color("message_error")
+            )
+            return
+        
+        ssm_call = Common.generic_api_call(
+            "ssm",
+            "start_session",
+            {"Target": self.selection["instance id"], "DocumentName": "SSM-SessionManagerRunShell", "Reason": "AWSC SSH session"},
+            "SSM Connect",
+            "SSM",
+            subcategory="SSM Connect",
+            resource=self.selection["instance id"]
+        )
+
+        if ssm_call['Success']:
+            Common.Session.service_provider.set_env()
+            try:
+                exit_code = Common.Session.ui.unraw(
+                    subprocess.run,
+                    [
+                        "session-manager-plugin",
+                        json.dumps(ssm_call['Response']),
+                        Common.Session.region,
+                        'StartSession',
+                        '',
+                        json.dumps({"Target": self.selection["instance id"]}),
+                        f'https://ssm.{Common.Session.region}.amazonaws.com'
+                    ],
+                )
+            except subprocess.CalledProcessError as e:
+                if e.returncode != 255:
+                    raise
+                Common.Session.set_message("SSM session manager plugin (session-manager-plugin) not found in PATH!", Common.color("message_error"))
+            finally:
+                Common.Session.service_provider.clear_env()
+        else:
+            Common.Session.set_message("SSM connect to instance failed.", Common.color("message_error"))
 
 
 class EC2SSHDialog(SessionAwareDialog):

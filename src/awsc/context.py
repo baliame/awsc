@@ -388,7 +388,7 @@ class AddContextDialog(SessionAwareDialog):
         mfa_device = (
             ""
             if existing_context is None
-            else Common.Configuration["contexts"][existing_context]["mfa_device"]
+            else Common.Configuration.enumerated_contexts()[existing_context]["mfa_device"]
         )
         self.mfa_device_field = DialogFieldResourceListSelector(
             MFADeviceLister,
@@ -535,7 +535,7 @@ class AddRoleContextDialog(SessionAwareDialog):
         role = (
             ""
             if existing_context is None
-            else Common.Configuration["contexts"][existing_context]["role"]
+            else Common.Configuration.enumerated_contexts()[existing_context]["role"]
         )
         self.role_field = DialogFieldResourceListSelector(
             RoleLister,
@@ -600,7 +600,7 @@ class AddRoleContextDialog(SessionAwareDialog):
 class ContextDescriber(GenericDescriber):
     def __init__(self, *args, selection, **kwargs):
         context = selection["name"]
-        data = Common.Session.retrieve_context(context)
+        data = {} | Common.Session.retrieve_context(context)
         if "secret" in data["auth"]:
             data["auth"]["secret"] = "*" * len(data["auth"]["secret"])
         content = json.dumps(data, default=datetime_hack, indent=2, sort_keys=True)
@@ -626,6 +626,7 @@ class ContextList(OpenableListControl):
         super().__init__(*args, **kwargs)
         self.add_column("account id", 12)
         self.add_column("default", 7)
+        self.add_column("ephemeral", 7)
         self.add_column("type", 4)
 
         self.jump_cursor = True
@@ -643,7 +644,7 @@ class ContextList(OpenableListControl):
         """
         self.entries = []
         idx = 0
-        for context, data in Common.Configuration["contexts"].items():
+        for context, data in Common.Configuration.enumerated_contexts().items():
             self.add_entry(
                 ListEntry(
                     context,
@@ -652,6 +653,11 @@ class ContextList(OpenableListControl):
                         "default": (
                             "✓"
                             if context == Common.Configuration["default_context"]
+                            else " "
+                        ),
+                        "ephemeral": (
+                            "✓"
+                            if Common.Configuration.context_is_ephemeral(context)
                             else " "
                         ),
                         "type": "key pair" if data["role"] == "" else "role",
@@ -698,6 +704,11 @@ class ContextList(OpenableListControl):
                 "Cannot edit localstack context", Common.color("message_error")
             )
             return
+        if Common.Configuration.context_is_ephemeral(self.selection["name"]):
+            Common.Session.set_message(
+                "Cannot edit ephemeral context", Common.color("message_error")
+            )
+            return
         if self.selection["type"] == "key pair":
             AddContextDialog.opener(
                 caller=self, existing_context=self.selection["name"]
@@ -712,7 +723,12 @@ class ContextList(OpenableListControl):
         """
         Hotkey callback for exporting a context to .aws credentials. Performs MFA if necessary to export an authenticated context.
         """
-        mfa_device = Common.Configuration["contexts"][self.selection["name"]][
+        if Common.Configuration.context_is_ephemeral(self.selection["name"]):
+            Common.Session.set_message(
+                "Cannot export ephemeral context", Common.color("message_error")
+            )
+            return
+        mfa_device = Common.Configuration.enumerated_contexts()[self.selection["name"]][
             "mfa_device"
         ]
         extra_fields = {
@@ -763,7 +779,7 @@ class ContextList(OpenableListControl):
         if parser.has_section(self.selection["name"]):
             parser.remove_section(self.selection["name"])
         parser.add_section(self.selection["name"])
-        mfa_device = Common.Configuration["contexts"][self.selection["name"]][
+        mfa_device = Common.Configuration.enumerated_contexts()[self.selection["name"]][
             "mfa_device"
         ]
         if mfa_device != "":
@@ -826,6 +842,11 @@ class ContextList(OpenableListControl):
             Common.Session.set_message(
                 "Cannot set a role as a default context, sorry",
                 Common.color("message_error"),
+            )
+            return
+        if Common.Configuration.context_is_ephemeral(self.selection["name"]):
+            Common.Session.set_message(
+                "Cannot set ephemeral context as default", Common.color("message_error")
             )
             return
         Common.Configuration["default_context"] = self.selection.name

@@ -3,15 +3,16 @@ Module for the configuration parser object.
 """
 
 import sys
+import time
+import yaml
+
 from pathlib import Path
 from urllib import parse as urlparse
-
-import yaml
 
 from .scheme import Scheme
 from .storage import Keystore
 
-LAST_CONFIG_VERSION = 20
+LAST_CONFIG_VERSION = 22
 
 
 class Config:
@@ -65,6 +66,8 @@ class Config:
             18: self._update_18,
             19: self._update_19,
             20: self._update_20,
+            21: self._update_21,
+            22: self._update_22,
         }
         if path is None:
             path = Path.home() / ".config" / "awsc"
@@ -75,6 +78,7 @@ class Config:
         self.path = path
         self.keystore = Keystore(self)
         self.scheme = Scheme(self)
+        self.ephemeral_contexts = {}
 
         self.config_path = self.path / "config.yaml"
 
@@ -274,6 +278,22 @@ class Config:
                 # Unset ref and use blank keys instead. API will error out, which is the preferred behaviour if the role session expires.
                 self.keystore.set_key(context, "", "")
 
+    def _update_21(self):
+        """
+        Version 21 configuration update.
+
+        Do not call.
+        """
+        self.config["sso"] = {}
+
+    def _update_22(self):
+        """
+        Version 21 configuration update.
+
+        Do not call.
+        """
+        self.config["keycloak"] = {}
+
     def update_version(self):
         """
         Main configuration update sequence. Always called by initialize(), not required to call separately.
@@ -303,9 +323,12 @@ class Config:
                 "localstack": {
                     "endpoint_url": "https://localhost.localstack.cloud:4566",
                     "account_id": "localhost",
+                    "role": "",
+                    "mfa_device": "",
                 }
             },
-            "default_context": "",
+            "sso": {},
+            "default_context": "localstack",
             "default_region": "us-east-1",
             "default_ssh_key": "id_rsa",
             "default_ssh_usernames": {},
@@ -372,6 +395,64 @@ class Config:
         """
         with self.config_path.open("r", encoding="utf-8") as file:
             self.config = yaml.safe_load(file.read())
+    
+    def housekeeping(self):
+        """
+        Ejects expired ephemeral contexts.
+        """
+        ct = time.time()
+        to_del = []
+        for key, context in self.ephemeral_contexts.items():
+            if ct > context['expires_at']:
+                to_del.append(key)
+        for key in to_del:
+            del self.ephemeral_contexts[key]
+
+    def enumerated_contexts(self):
+        """
+        Collects permanent and ephemeral contexts and returns them as one dict.
+
+        Returns
+        -------
+        dict
+            A dict of context objects, keyed by context name.
+        """
+        self.housekeeping()
+        return self.config['contexts'] | self.ephemeral_contexts
+
+    def context_is_ephemeral(self, context):
+        """
+        Checks if a context is ephemeral.
+
+        Returns
+        -------
+        bool
+            True if context is ephemeral, False otherwise.
+        """
+        return context not in self.config['contexts']
+
+    def add_or_edit_ephemeral_context(self, name, acctid, access, secret, session_token, expires_at=time.time() + 3600):
+        """
+        Upserts a context into the configuration.
+
+        Parameters
+        ----------
+        name : str
+            The name of the context. If it already exists, it will be overwritten.
+        acctid : str
+            The account number of the context, usually acquired through Common.Session.whoami()
+        access : str
+            The access key which belongs to the account.
+        secret : str
+            The secret key which belongs to the account.
+        """
+        self.ephemeral_contexts[name] = {
+            "account_id": acctid,
+            "mfa_device": "",
+            "role": "",
+            "expires_at": expires_at,
+        }
+        self.keystore.set_ephemeral_key(name, access, secret, session_token, expires_at)
 
     def add_or_edit_context(self, name, acctid, access, secret, mfa_device=""):
         """
@@ -422,26 +503,38 @@ class Config:
         # self.keystore.set_ref(name, source)
         self.write_config()
 
-    def add_or_edit_sso_context(self, name, start_url, source, role, mfa_device=""):
+    def add_or_edit_sso(self, name, sso_id):
         """
-        Upserts a context into the configuration.
+        Upserts an SSO into the configuration.
 
         Parameters
         ----------
         name : str
             The name of the context. If it already exists, it will be overwritten.
-        acctid : str
-            The account number of the context, usually acquired through Common.Session.whoami()
-        access : str
-            The access key which belongs to the account.
-        secret : str
-            The secret key which belongs to the account.
+        sso_id : str
+            The ID of the awsapps SSO, from the URL.
         """
-        parsed_url = urlparse.urlparse(start_url)
-        domain = parsed_url.hostname.split(".")[0]
-        self.config["contexts"][name] = {
-            "account_id": f"SSO:{domain}",
-            "mfa_enabled": mfa_device,
+        #sso_url = f"https://{sso_id}.awsapps.com/start"
+        self.config["sso"][name] = {
+            "sso_id": sso_id,
+        }
+        # self.keystore.set_ref(name, source)
+        self.write_config()
+    
+    def add_or_edit_keycloak(self, name, auth_url):
+        """
+        Upserts an SSO into the configuration.
+
+        Parameters
+        ----------
+        name : str
+            The name of the context. If it already exists, it will be overwritten.
+        sso_id : str
+            The ID of the awsapps SSO, from the URL.
+        """
+        #sso_url = f"https://{sso_id}.awsapps.com/start"
+        self.config["sso"][name] = {
+            "sso_id": sso_id,
         }
         # self.keystore.set_ref(name, source)
         self.write_config()
@@ -460,4 +553,16 @@ class Config:
             if len(self.config["contexts"]):
                 self.config["default_context"] = list(self.config["contexts"].keys())[0]
         self.keystore.delete_key(name)
+        self.write_config()
+
+    def delete_sso(self, name):
+        """
+        Deletes an sso from the configuration.
+
+        Parameters
+        ----------
+        name : str
+            The name of the context.
+        """
+        del self.config["sso"][name]
         self.write_config()

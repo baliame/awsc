@@ -362,6 +362,12 @@ class MFADeviceLister(ResourceLister):
         """
         Associates the MFA devices with the currently enabled context.
         """
+        if Common.Session.ephemeral:
+            Common.Session.set_message(
+                "Cannot associate MFA with current ephemeral context.",
+                Common.color("message_error"),
+            )
+            return
         Common.Configuration["contexts"][Common.Session.context]["mfa_device"] = (
             self.selection["serial number"]
         )

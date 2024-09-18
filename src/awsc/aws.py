@@ -2,6 +2,7 @@
 Module for working with the AWS API.
 """
 
+import os
 import boto3
 from botocore import config as botoconf
 from botocore import exceptions as botoerror
@@ -60,6 +61,33 @@ class AWS:
         """
         return boto3.Session()
 
+    def set_env(self):
+        """
+        Pushes AWS creds to os env.
+        """
+        if Common.Session.context not in Common.Configuration.keystore:
+            return
+        keys = Common.Configuration.keystore[Common.Session.context]
+        os.environ["AWS_ACCESS_KEY_ID"] = keys['access']
+        os.environ["AWS_SECRET_ACCESS_KEY"] = keys['secret']
+        if 'session' in keys:
+            os.environ["AWS_SESSION_TOKEN"] = keys['session']
+    
+    def clear_env(self):
+        try:
+            del os.environ["AWS_ACCESS_KEY_ID"]
+        except KeyError:
+            pass
+        try:
+            del os.environ["AWS_SECRET_ACCESS_KEY"]
+        except KeyError:
+            pass
+        try:
+            del os.environ["AWS_SESSION_TOKEN"]
+        except KeyError:
+            pass
+        
+
     def __call__(self, service, keys=None):
         """
         Shorthand for boto3.client().
@@ -78,6 +106,8 @@ class AWS:
             A boto3 client instance for the service.
         """
         config = self.conf(service)
+        if not Common.Session.context_is_valid:
+            return boto3.client(service)  # Let magic sort it out
         if keys is None:
             if Common.Session.context not in Common.Configuration.keystore:
                 return boto3.client(service)  # Let magic sort it out
@@ -88,8 +118,8 @@ class AWS:
         session = None
         if "session" in keys:
             session = keys["session"]
-        if "endpoint_url" in Common.Configuration["contexts"][Common.Session.context]:
-            endpoint = Common.Configuration["contexts"][Common.Session.context][
+        if "endpoint_url" in Common.Configuration.enumerated_contexts()[Common.Session.context]:
+            endpoint = Common.Configuration.enumerated_contexts()[Common.Session.context][
                 "endpoint_url"
             ]
         client = boto3.client(
@@ -117,7 +147,14 @@ class AWS:
         object
             The API response for GetCallerIdentity.
         """
-        return self("sts", keys).get_caller_identity()
+        try:
+            return self("sts", keys).get_caller_identity()
+        except botoerror.NoCredentialsError:
+            return {
+                "UserId": "<UNAUTHENTICATED>",
+                "Account": "<UNAUTHENTICATED>",
+                "Arn": "arn:aws::::<UNAUTHENTICATED>",
+            }
 
     def list_regions(self):
         """

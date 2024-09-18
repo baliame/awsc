@@ -47,6 +47,8 @@ class Keystore:
         self.keylist_cipher = None
         self.nonce = os.urandom(16)
         self.keys = {}
+        self.eph = {}
+        self.tok = {}
 
     def do_unlock(self, password):
         """
@@ -125,6 +127,10 @@ class Keystore:
         dict
             A dict containing the access and secret keys.
         """
+        if item in self.eph:
+            return self.eph[item]
+        if item not in self.keys:
+            return {"access": "", "secret": ""}
         while key := self.keys[item]:
             if "temp" in key:
                 if (
@@ -151,6 +157,8 @@ class Keystore:
         dict
             A dict containing the access and secret keys.
         """
+        if item in self.eph:
+            return self.eph[item]
         while key := self.keys[item]:
             if "ref" in key:
                 item = key["ref"]
@@ -177,6 +185,8 @@ class Keystore:
         dict
             Gets the permanent credentials associated with a context.
         """
+        if item in self.eph:
+            return self.eph[item]
         while key := self.keys[item]:
             if "ref" in key:
                 item = key["ref"]
@@ -216,7 +226,36 @@ class Keystore:
         return targets
 
     def __contains__(self, item):
-        return item in self.keys
+        return item in self.eph or item in self.keys
+    
+    def set_ephemeral_key(self, name, access, secret, session_token, expires_at):
+        """
+        Upserts a key into the process key storage. Does not write the added key to disk.
+
+        Parameters
+        ----------
+        name : str
+            The name of the keypair.
+        access : str
+            The access key of the keypair.
+        secret : str
+            The secret key of the keypair.
+        session_token: str
+            The session token of the ephemeral access key.
+        """
+        self.eph[name] = {"access": access, "secret": secret, "session": session_token, "expiry": expires_at}
+    
+    def set_ephemeral_device_token(self, name, access, expires_at, refresh_token):
+        self.tok[name] = {"access": access, "expiry": expires_at, "refresh": refresh_token}
+    
+    def get_ephemeral_device_token(self, name):
+        if name in self.tok:
+            return self.tok[name]
+        return None
+
+    def clear_ephemeral_device_token(self, name):
+        if name in self.tok:
+            del self.tok[name]
 
     def set_key(self, name, access, secret):
         """
@@ -260,6 +299,15 @@ class Keystore:
             The temporary data of the keypair.
         """
         self.keys[name]["temp"] = data
+        self.write_keylist()
+
+    def get_sso_client(self, name):
+        key = f"!_SSO-CLIENT-{name}"
+        return self[key] if key in self.keys else None
+
+    def set_sso_client(self, name, sso_client):
+        key = f"!_SSO-CLIENT-{name}"
+        self.keys[key] = sso_client
         self.write_keylist()
 
     def delete_key(self, name):

@@ -29,6 +29,7 @@ from .resource_r53 import *
 from .resource_r53domains import *
 from .resource_rds import *
 from .resource_routing import *
+from .resource_secrets import *
 from .resource_s3 import *
 from .resource_sg import *
 from .resource_sqs import *

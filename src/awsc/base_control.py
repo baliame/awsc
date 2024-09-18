@@ -22,7 +22,7 @@ from .common import (
 )
 from .hotkey import HotkeyDisplay
 from .termui.alignment import CenterAnchor, Dimension
-from .termui.color import ColorBlackOnGold, ColorBlackOnOrange, ColorGold
+from .termui.color import ColorBlackOnGold, ColorBlackOnGray, ColorBlackOnOrange, ColorGold
 from .termui.control import Border
 from .termui.dialog import DialogFieldCheckbox, DialogFieldLabel, DialogFieldText
 from .termui.list_control import ListControl, ListEntry
@@ -30,7 +30,7 @@ from .termui.text_browser import TextBrowser
 from .termui.ui import ControlCodes
 
 
-def boolean_determiner_generator(field_name):
+def boolean_determiner_generator(field_name, fail_gracefully=False):
     """
     Generator function for creating boolean path callbacks for top-level booleans.
 
@@ -45,7 +45,9 @@ def boolean_determiner_generator(field_name):
         A function that can be passed to the path field of the columns definition.
     """
 
-    def fn(row):
+    def fn(row, **kwargs):
+        if field_name not in row and fail_gracefully:
+            return ""
         if row[field_name]:
             return "✓"
         return ""
@@ -330,6 +332,9 @@ class OpenableListControl(ListControl):
     describer: None | Callable[[], None] = None
     override_enter = False
 
+    auto_refresh_interval = 30
+    auto_refresher = None
+
     @classmethod
     def opener(cls, **kwargs):
         """
@@ -377,6 +382,17 @@ class OpenableListControl(ListControl):
             self.add_hotkey("KEY_ENTER", self.describe, "Describe")
         if self.describer is not None:
             self.add_hotkey("d", self.describe, "Describe")
+        self.auto_refresh_last = datetime.datetime.now()
+    
+    def before_paint_critical(self):
+        self.run_auto_refresh()
+        return super().before_paint_critical()
+
+    def run_auto_refresh(self):
+        if self.auto_refresher is not None:
+            if self.auto_refresh_last + datetime.timedelta(seconds=self.auto_refresh_interval) < datetime.datetime.now():
+                self.auto_refresh_last = datetime.datetime.now()
+                self.auto_refresher()
 
     def describe(self, _):
         """
@@ -393,6 +409,17 @@ class OpenableListControl(ListControl):
         if self.selection is not None and self.selector_cb is not None:
             self.selector_cb(self.selection["name"])
             Common.Session.pop_frame()
+
+
+class StaticValueList(OpenableListControl):
+    prefix = "static_value_lsit"
+    title = "SSO Logins"
+
+    def __init__(self, *args, values, title="Options", **kwargs):
+        self.title = title
+        super().__init__(*args, **kwargs)
+        for value in values:
+            self.create_entry(value)
 
 
 class NextMarkerInitial:
@@ -562,9 +589,9 @@ class ResourceListerBase(ListControl):
             with self.mutex:
                 if "debug_one" in self.thread_share:
                     del self.thread_share["debug_one"]
-        with self.mutex:
-            self.thread_share["updating"] = False
-            self.thread_share["finalize"] = True
+            with self.mutex:
+                self.thread_share["updating"] = False
+                self.thread_share["finalize"] = True
 
     def handle_finalization_critical(self):
         """
@@ -737,8 +764,11 @@ class ResourceListerBase(ListControl):
                 raise StopLoadingData
             self.load_counter += 1
             if next_marker_name is not None:
-                if isinstance(next_marker_name, str) and next_marker_name in response:
-                    next_marker = response[next_marker_name]
+                if isinstance(next_marker_name, str):
+                    if next_marker_name in response:
+                        next_marker = response[next_marker_name]
+                    else:
+                        next_marker = ""
                 elif not isinstance(next_marker_name, str):
                     next_marker = []
                     for idx, elem in enumerate(next_marker_name):
@@ -811,6 +841,10 @@ class DialogFieldResourceListSelector(DialogFieldText):
         label_color=ColorGold,
         label_min=0,
         primary_key=None,
+        disabled_color=ColorBlackOnGray,
+        disabled=False,
+        selector_cb_callable=None,
+        additional_kwa = {}
     ):
         super().__init__(
             label,
@@ -823,6 +857,10 @@ class DialogFieldResourceListSelector(DialogFieldText):
             accepted_inputs=None,
         )
         self.selector_class = selector_class
+        self.additional_kwa = additional_kwa
+        self.disabled_color = disabled_color
+        self.disabled = disabled
+        self.selector_cb_callable = selector_cb_callable
         self.primary_key = primary_key
 
     def selector_callback(self, entry):
@@ -835,6 +873,8 @@ class DialogFieldResourceListSelector(DialogFieldText):
             The entry that was selected in the lister.
         """
         self.text = entry
+        if self.selector_cb_callable is not None:
+            self.selector_cb_callable(entry)
 
     def input(self, inkey):
         if inkey.is_sequence:
@@ -848,8 +888,8 @@ class DialogFieldResourceListSelector(DialogFieldText):
                 "KEY_DELETE",
             ):
                 return super().input(inkey)
-            if inkey.name == "KEY_ENTER":
-                kwa = {}
+            if inkey.name == "KEY_ENTER" and not self.disabled:
+                kwa = {} | self.additional_kwa
                 if self.primary_key is not None:
                     kwa["primary_key"] = self.primary_key
                 Common.Session.push_frame(
@@ -873,7 +913,7 @@ class DialogFieldResourceListSelector(DialogFieldText):
             )
         ]
         Common.Session.ui.print(
-            text, xy=(x, y), color=self.selected_color if selected else self.color
+            text, xy=(x, y), color=self.disabled_color if self.disabled else (self.selected_color if selected else self.color)
         )
 
 
@@ -2421,6 +2461,12 @@ class Describer(TextBrowser):
     object_path: str | FString = ".ChangeMe"
     default_entry_key = "name"
 
+    def pre_display_transform(self, data):
+        """
+        Allows transformation on the AWS response before committing it to text.
+        """
+        return data
+
     @classmethod
     def opener(cls, **kwargs):
         """
@@ -2624,12 +2670,12 @@ class Describer(TextBrowser):
                 api_kwargs=self.describe_kwargs,
             )
             return
+        parsed_data = Common.Session.jq(self.object_path).input(text=json.dumps(response, default=datetime_hack)).first()
+        parsed_data = self.pre_display_transform(parsed_data)
         self.clear()
         self.add_text(
             json.dumps(
-                Common.Session.jq(self.object_path)
-                .input(text=json.dumps(response, default=datetime_hack))
-                .first(),
+                parsed_data,
                 sort_keys=True,
                 indent=2,
             )
@@ -2761,7 +2807,7 @@ class DeleteResourceDialog(SessionAwareDialog):
         self.close()
 
 
-def format_timedelta(delta):
+def format_timedelta(delta, pad=0):
     """
     Timedelta formatter. Outputs a time difference in terms of the two highest time units for which it contains at least one.
 
@@ -2779,15 +2825,17 @@ def format_timedelta(delta):
     minutes = int(delta.seconds / 60) - hours * 60
     seconds = delta.seconds - hours * 3600 - minutes * 60
     if delta.days > 0:
-        return f"{delta.days}d{hours}h ago"
-    if hours > 0:
-        return f"{hours}h{minutes}m ago"
-    if minutes > 0:
-        return f"{minutes}m{seconds}s ago"
-    if seconds > 0:
-        return f"{seconds}s ago"
-    return "<1s ago"
-
+        value = f"{delta.days}d{hours}h ago"
+    elif hours > 0:
+        value = f"{hours}h{minutes}m ago"
+    elif minutes > 0:
+        value = f"{minutes}m{seconds}s ago"
+    elif seconds > 0:
+        value = f"{seconds}s ago"
+    else:
+        value = "<1s ago"
+    padding = " "*pad
+    return f"{padding}{value}"
 
 def isdumpable(obj):
     """

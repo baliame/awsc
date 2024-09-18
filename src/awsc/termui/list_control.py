@@ -96,6 +96,9 @@ class ListControl(HotkeyControl):
         self.selected = 0
         self._cache = None
 
+    def create_entry(self, name, **kwargs):
+        self.add_entry(ListEntry(name, **kwargs))
+
     def add_entry(self, entry):
         """
         Adds a new entry to the ListControl.
@@ -217,6 +220,20 @@ class ListControl(HotkeyControl):
         y0 = corners[1][0] + (0 if self.border is None else 1)
         y1 = corners[1][1] - (0 if self.border is None else 1)
         return y1 - y0
+
+    def hide_name_column(self):
+        """
+        Hides the name column from the list. For use with non-ResourceListers which have a more sophisticated hidden column system.
+        """
+        try:
+            self.column_order.remove("name")
+            del self.column_titles["name"]
+        except KeyError:
+            pass
+        except ValueError:
+            pass
+        self.calculated = 0
+        Commons.UIInstance.dirty = True
 
     def add_column(self, column, min_size=0, index=None):
         """

@@ -165,6 +165,8 @@ class SessionAwareDialog(DialogControl):
         kwargs["ok_action"] = self.accept_and_close
         kwargs["cancel_action"] = self.close
         super().__init__(*args, **kwargs)
+        if hasattr(self, 'reject_dialog') and self.reject_dialog:
+            return
         Common.Session.extend_frame(self)
         self.title_label = DialogFieldLabel("TITLE")
         self.add_field(self.title_label)
@@ -787,6 +789,18 @@ class Common:
             cls.color(f"{prefix}_border_title_info", "border_title_info"),
         )
 
+    @classmethod
+    def human_readable_size(cls, size_in_bytes):
+        b_prefix = ["", "Ki", "Mi", "Gi", "Ti", "Ei"]
+        b_idx = 0
+        size = float(size_in_bytes)
+        while size >= 1024:
+            b_idx += 1
+            size /= 1024
+            if b_idx == len(b_prefix) - 1:
+                break
+        return f"{size:.2f} {b_prefix[b_idx]}B"
+
 
 class LogHolder:
     """
@@ -816,6 +830,8 @@ class LogHolder:
         if file.exists():
             with file.open("r") as file:
                 self.raw_entries = yaml.safe_load(file.read())
+            if self.raw_entries is None:
+                self.raw_entries = []
         else:
             self.raw_entries = []
         self.parse_raw_entries()
