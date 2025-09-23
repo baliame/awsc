@@ -334,17 +334,13 @@ class Common:
                 )
                 continue
             except exceptions.EndpointConnectionError as error:
-                cls.clienterror(
-                    error,
+                cls.error(
+                    str(error),
                     "Verify Credentials",
                     "Bootstrap",
                     subcategory="Credentials Import",
                     resource=section,
                     set_message=False,
-                    api_provider="sts",
-                    api_method="get_caller_identity",
-                    api_keypair=api_keypair,
-                    api_args={},
                     credentials_section=section,
                 )
                 continue
